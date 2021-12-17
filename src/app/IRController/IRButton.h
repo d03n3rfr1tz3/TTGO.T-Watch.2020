@@ -76,15 +76,15 @@
             size_t page;
             char name[16];
             Button uiButton;
-            InfraCommand* commands = nullptr;
-            size_t commandCount = 0;
+            InfraCommand** commands = (InfraCommand**)MALLOC(sizeof( InfraCommand* ));
+            size_t commandCount = 1;
 
-            void loadFrom(JsonObject& source) {
-                commandCount = 1;
-                commands = (InfraCommand*)MALLOC(sizeof( InfraCommand ) * commandCount);
-
+            void loadFrom(JsonObject& sourceObject) {
                 if (commands) {
-                    commands[0].loadFrom(source);
+                    void* pointer = MALLOC(sizeof(InfraCommand));
+                    InfraCommand* command = new (pointer) InfraCommand();
+                    command->loadFrom(sourceObject);
+                    commands[0] = command;
                 }
                 else {
                     log_e("alloc infrared commands failed");
@@ -92,14 +92,19 @@
                 }
             }
 
-            void loadFrom(JsonArray& source) {
-                commandCount = source.size();
-                commands = (InfraCommand*)MALLOC(sizeof( InfraCommand ) * commandCount);
+            void loadFrom(JsonArray& sourceArray) {
+                if (commands != nullptr) free(commands);
+                commandCount = sourceArray.size();
+                commands = (InfraCommand**)MALLOC(sizeof( InfraCommand* ) * commandCount);
 
                 if (commands) {
                     for (size_t i = 0; i < commandCount; i++) {
-                        JsonObject sourceObject = source[i].as<JsonObject>();
-                        commands[i].loadFrom(sourceObject);
+                        JsonObject sourceObject = sourceArray[i].as<JsonObject>();
+                        
+                        void* pointer = MALLOC(sizeof(InfraCommand));
+                        InfraCommand* command = new (pointer) InfraCommand();
+                        command->loadFrom(sourceObject);
+                        commands[i] = command;
                         
                         // Process renaming property for compatibility reasons
                         if (sourceObject.containsKey("rn")) {

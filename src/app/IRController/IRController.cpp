@@ -146,47 +146,47 @@
                 auto command = config->commands[i];
                 if (i > 0) delay(100);
                 
-                switch (command.mode)
+                switch (command->mode)
                 {
                     case RC5:
-                        irsend.sendRC5(command.code);
+                        irsend.sendRC5(command->code);
                         break;
                     case RC6:
-                        irsend.sendRC6(command.code);
+                        irsend.sendRC6(command->code);
                         break;
                     case NEC:
-                        irsend.sendNEC(command.code);
+                        irsend.sendNEC(command->code);
                         break;
                     case SONY:
-                        if (command.bits > 0)
-                            irsend.sendSony(command.code, command.bits);
+                        if (command->bits > 0)
+                            irsend.sendSony(command->code, command->bits);
                         else
-                            irsend.sendSony(command.code);
+                            irsend.sendSony(command->code);
                         break;
                     case PANASONIC:
-                        irsend.sendPanasonic64(command.code);
+                        irsend.sendPanasonic64(command->code);
                         break;
                     case JVC:
-                        irsend.sendJVC(command.code);
+                        irsend.sendJVC(command->code);
                         break;
                     case SAMSUNG:
-                        irsend.sendSAMSUNG(command.code);
+                        irsend.sendSAMSUNG(command->code);
                         break;
                     case SAMSUNG36:
-                        irsend.sendSamsung36(command.code);
+                        irsend.sendSamsung36(command->code);
                         break;
                     case LG:
-                        irsend.sendLG(command.code);
+                        irsend.sendLG(command->code);
                         break;
                     case SHARP:
-                        irsend.sendSharpRaw(command.code);
+                        irsend.sendSharpRaw(command->code);
                         break;
                     case RAW:
-                        if (command.raw != nullptr && command.rawLength > 0)
-                            irsend.sendRaw(command.raw, command.rawLength, 38);
+                        if (command->raw != nullptr && command->rawLength > 0)
+                            irsend.sendRaw(command->raw, command->rawLength, 38);
                         break;
                     default:
-                        log_e("IR Protocol %d not supported, please add it first!", (int)command.mode);
+                        log_e("IR Protocol %d not supported, please add it first!", (int)command->mode);
                         break;
                 }
             }

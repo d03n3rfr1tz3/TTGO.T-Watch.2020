@@ -22,8 +22,8 @@
                 void del(size_t page, const char* name);
                 InfraButton* get(size_t page, const char* name);
 
-                InfraButton* get(int id) { return &buttons[id]; }
-                int totalCount() { return count; }
+                InfraButton* get(int id) { return buttons[id]; }
+                int totalCount() { return buttonCount; }
 
                 void sendListNames(BluetoothJsonResponse& target);
                 void sendButtonEdit(BluetoothJsonResponse& target, size_t page, const char* name);
@@ -33,7 +33,6 @@
                 int defBtnHeight = 33;
                 int defSpacing = 3;
                 size_t pageCount = 1;
-                size_t buttonCount = 0;
 
                 protected:
                 virtual bool onSave(JsonDocument& document);
@@ -42,8 +41,8 @@
                 virtual size_t getJsonBufferSize() { return 48000; }
 
                 protected:
-                InfraButton* buttons = (InfraButton*)MALLOC(sizeof( InfraButton ) * IR_BUTTONS_START);
-                int count = 0;
+                InfraButton** buttons = (InfraButton**)MALLOC(sizeof( InfraButton* ) * IR_BUTTONS_START);
+                size_t buttonCount = 0;
             };
         #else
             /**

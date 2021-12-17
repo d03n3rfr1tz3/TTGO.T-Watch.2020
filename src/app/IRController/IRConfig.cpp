@@ -8,24 +8,25 @@
     #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
         #include <IRremoteESP8266.h>
         IRConfig::IRConfig() : BaseJsonConfig("ir-remote.json") {
-            count = 0;
-            // This file is too big for that!
-            prettyJson = false;
+            buttonCount = 0;
+            prettyJson = false; // This file is too big for that!
         }
 
         InfraButton* IRConfig::add(size_t page, const char* name) {
-            auto btn = buttons[count++];
-            btn.page = page;
-            strncpy( btn.name, name, sizeof( btn.name ) );
-            return &btn;
+            void* pointer = MALLOC(sizeof(InfraButton));
+            InfraButton* btn = new (pointer) InfraButton();
+            btn->page = page;
+            strncpy( btn->name, name, sizeof( btn->name ) );
+            buttons[buttonCount++] = btn;
+            return btn;
         }
 
         void IRConfig::del(size_t page, const char* name) {
             bool found = false;
-            for (int i = 0; i < count; i++) {
-                if (buttons[i].page == page && buttons[i].name == name) {
-                if (buttons[i].uiButton.isCreated()) {
-                    buttons[i].uiButton.free();
+            for (int i = 0; i < buttonCount; i++) {
+                if (buttons[i]->page == page && buttons[i]->name == name) {
+                if (buttons[i]->uiButton.isCreated()) {
+                    buttons[i]->uiButton.free();
                 }
                 delete &buttons[i];
                 found = true;
@@ -34,21 +35,21 @@
                 buttons[i] = buttons[i+1];
             }
             if (found)
-                count--;
+                buttonCount--;
         }
 
         InfraButton* IRConfig::get(size_t page, const char* name) {
-            for (int i = 0; i < count; i++) {
-                if (buttons[i].page == page && buttons[i].name == name)
-                return &buttons[i];
+            for (int i = 0; i < buttonCount; i++) {
+                if (buttons[i]->page == page && buttons[i]->name == name)
+                return buttons[i];
             }
             return nullptr;
         }
 
         void IRConfig::sendListNames(BluetoothJsonResponse& response) {
             auto nestedArray = response.createNestedArray("v");
-            for (int i = 0; i < count; i++) {
-                nestedArray.add(buttons[i].name);
+            for (int i = 0; i < buttonCount; i++) {
+                nestedArray.add(buttons[i]->name);
             }
             response.send();
         }
@@ -58,13 +59,13 @@
 
             auto command = btn->commands[0];
             response["v"] = btn->name;
-            response["m"] = (int)command.mode;
-            if (command.mode == decode_type_t::RAW) {
+            response["m"] = (int)command->mode;
+            if (command->mode == decode_type_t::RAW) {
                 auto nestedArray = response.createNestedArray("raw");
-                for (int i = 0; i < command.rawLength; i++)
-                    nestedArray.add(command.raw[i]);
+                for (int i = 0; i < command->rawLength; i++)
+                    nestedArray.add(command->raw[i]);
             } else {
-                response["hex"] = String(command.code, 16);
+                response["hex"] = String(command->code, 16);
             }
             response.send();
         }
@@ -73,38 +74,38 @@
             auto pagesArray = document.createNestedArray("pages");
             auto main = pagesArray.createNestedObject();
 
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < buttonCount; i++) {
                 auto button = buttons[i];
-                auto commands = button.commands;
-                if (button.commandCount > 1) {
-                    JsonArray btnRecords = main.createNestedArray(buttons[i].name);
-                    for (size_t j = 0; j < count; j++) {
+                auto commands = button->commands;
+                if (button->commandCount > 1) {
+                    JsonArray btnRecords = main.createNestedArray(buttons[i]->name);
+                    for (size_t j = 0; j < buttonCount; j++) {
                         JsonObject btnRecord = btnRecords.createNestedObject();
-                        btnRecord["m"] = commands[j].mode;
-                        String hex((uint32_t)commands[j].code, 16);
+                        btnRecord["m"] = commands[j]->mode;
+                        String hex((uint32_t)commands[j]->code, 16);
                         btnRecord["hex"] = hex;
-                        if (commands[j].bits > 0 && commands[j].mode == decode_type_t::SONY) {
-                            btnRecord["bits"] = commands[j].bits;
+                        if (commands[j]->bits > 0 && commands[j]->mode == decode_type_t::SONY) {
+                            btnRecord["bits"] = commands[j]->bits;
                         }
-                        if (commands[j].mode == decode_type_t::RAW) {
+                        if (commands[j]->mode == decode_type_t::RAW) {
                             auto rawArray = btnRecord.createNestedArray("raw");
-                            for (int j = 0; j < commands[j].rawLength; j++)
-                                rawArray.add(commands[j].raw[j]);
+                            for (int j = 0; j < commands[j]->rawLength; j++)
+                                rawArray.add(commands[j]->raw[j]);
                         }
                     }
                     
                 } else {
-                    JsonObject btnRecord = main.createNestedObject(buttons[i].name);
-                    btnRecord["m"] = commands[0].mode;
-                    String hex((uint32_t)commands[0].code, 16);
+                    JsonObject btnRecord = main.createNestedObject(buttons[i]->name);
+                    btnRecord["m"] = commands[0]->mode;
+                    String hex((uint32_t)commands[0]->code, 16);
                     btnRecord["hex"] = hex;
-                    if (commands[0].bits > 0 && commands[0].mode == decode_type_t::SONY) {
-                        btnRecord["bits"] = commands[0].bits;
+                    if (commands[0]->bits > 0 && commands[0]->mode == decode_type_t::SONY) {
+                        btnRecord["bits"] = commands[0]->bits;
                     }
-                    if (commands[0].mode == decode_type_t::RAW) {
+                    if (commands[0]->mode == decode_type_t::RAW) {
                         auto rawArray = btnRecord.createNestedArray("raw");
-                        for (int j = 0; j < commands[0].rawLength; j++)
-                            rawArray.add(commands[0].raw[j]);
+                        for (int j = 0; j < commands[0]->rawLength; j++)
+                            rawArray.add(commands[0]->raw[j]);
                     }
                 }
             }
@@ -125,18 +126,18 @@
         JsonArray pages = document["pages"].as<JsonArray>();
         if (pages.isNull() || pages.size() < 1) return false;
         
-        buttonCount = 0;
+        size_t jsonButtonCount = 0;
         pageCount = pages.size();
         for (size_t i = 0; i < pageCount; i++) {
-            buttonCount += pages[i].size();
+            jsonButtonCount += pages[i].size();
         }
 
         // Increase buttons treshold further and leave space for adding buttons via bluetooth
-        if (buttonCount > IR_BUTTONS_START - IR_BUTTONS_TRESHOLD) {
+        if (jsonButtonCount > IR_BUTTONS_START - IR_BUTTONS_TRESHOLD) {
             free(buttons);
-            buttons = (InfraButton*)MALLOC(sizeof( InfraButton ) * (buttonCount + IR_BUTTONS_TRESHOLD));
+            buttons = (InfraButton**)MALLOC(sizeof( InfraButton* ) * (jsonButtonCount + IR_BUTTONS_TRESHOLD));
             if (buttons) {
-                log_d("alloc more infrared buttons from %d to %d successful", IR_BUTTONS_START, (buttonCount + IR_BUTTONS_TRESHOLD));
+                log_d("alloc more infrared buttons from %d to %d successful", IR_BUTTONS_START, (jsonButtonCount + IR_BUTTONS_TRESHOLD));
             }
             else {
                 log_e("alloc more infrared buttons failed");
