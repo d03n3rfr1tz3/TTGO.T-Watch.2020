@@ -23,6 +23,7 @@
             int bits = 0;
             uint16_t *raw = nullptr;
             int rawLength = 0;
+            bool toggle = false;
 
             void resize(int size)
             {
@@ -62,6 +63,10 @@
                         for (int i=0; i < arr.size(); i++)
                         raw[i] = arr[i].as<uint16_t>();
                     }
+                }
+
+                if (source.containsKey("t")) {
+                    toggle = source["t"].as<bool>();
                 }
             }
         };
