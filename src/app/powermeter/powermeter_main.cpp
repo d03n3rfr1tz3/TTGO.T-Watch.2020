@@ -97,6 +97,8 @@ void powermeter_main_task( lv_task_t * task );
         char *payload = (char *)msg->payload;
 #else
     void powermeter_message_cb(char* topic, byte* payload, unsigned int length) {
+        powermeter_config_t *powermeter_config = powermeter_get_config();
+        if (strncmp(topic, powermeter_config->topic, strlen(powermeter_config->topic) - 1) != 0) return;
 #endif
     /**
      * alloc a msg buffer and copy payload and terminate it with '\0';

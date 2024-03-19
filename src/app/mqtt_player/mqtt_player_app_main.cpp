@@ -43,7 +43,10 @@ lv_style_t mqtt_player_main_style;
 
 lv_task_t * _mqtt_player_task;
 
+lv_obj_t *mqtt_player_exit_btn = NULL;
+lv_obj_t *mqtt_player_setup_btn = NULL;
 lv_obj_t *mqtt_player_play = NULL;
+lv_obj_t *mqtt_player_pause = NULL;
 lv_obj_t *mqtt_player_prev = NULL;
 lv_obj_t *mqtt_player_next = NULL;
 lv_obj_t *mqtt_player_title = NULL;
@@ -61,6 +64,7 @@ LV_IMG_DECLARE(down_32px);
 LV_FONT_DECLARE(Ubuntu_16px);
 LV_FONT_DECLARE(Ubuntu_32px);
 
+static void mqtt_player_setup_activate_callback ( void );
 static void exit_mqtt_player_main_event_cb( lv_obj_t * obj, lv_event_t event );
 static void enter_mqtt_player_setup_event_cb( lv_obj_t * obj, lv_event_t event );
 static void mqtt_player_volume_up_event_cb( lv_obj_t * obj, lv_event_t event );
@@ -74,6 +78,8 @@ void mqtt_player_task( lv_task_t * task );
 
 void mqtt_player_main_setup( uint32_t tile_num ) {
 
+    // Player Tile
+    mainbar_add_tile_activate_cb( tile_num, mqtt_player_setup_activate_callback );
     mqtt_player_main_tile = mainbar_get_tile_obj( tile_num );
     lv_style_copy( &mqtt_player_main_style, ws_get_mainbar_style() );
 
@@ -81,14 +87,18 @@ void mqtt_player_main_setup( uint32_t tile_num ) {
     lv_style_set_text_font( &mqtt_player_main_style, LV_STATE_DEFAULT, &Ubuntu_16px);
     lv_obj_add_style( mqtt_player_main_tile, LV_OBJ_PART_MAIN, &mqtt_player_main_style );
 
-    lv_obj_t * exit_btn = wf_add_exit_button( mqtt_player_main_tile, exit_mqtt_player_main_event_cb, &mqtt_player_main_style );
-    lv_obj_align(exit_btn, mqtt_player_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, 10, -10 );
+    mqtt_player_exit_btn = wf_add_exit_button( mqtt_player_main_tile, exit_mqtt_player_main_event_cb, &mqtt_player_main_style );
+    lv_obj_align(mqtt_player_exit_btn, mqtt_player_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, 10, -10 );
 
-    lv_obj_t * setup_btn = wf_add_setup_button( mqtt_player_main_tile, enter_mqtt_player_setup_event_cb, &mqtt_player_main_style );
-    lv_obj_align(setup_btn, mqtt_player_main_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -10, -10 );
+    mqtt_player_setup_btn = wf_add_setup_button( mqtt_player_main_tile, enter_mqtt_player_setup_event_cb, &mqtt_player_main_style );
+    lv_obj_align(mqtt_player_setup_btn, mqtt_player_main_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -10, -10 );
 
     mqtt_player_play = wf_add_image_button( mqtt_player_main_tile, play_64px, mqtt_player_play_event_cb, &mqtt_player_main_style );
     lv_obj_align( mqtt_player_play, mqtt_player_main_tile, LV_ALIGN_CENTER, 0, -20 );
+
+    mqtt_player_pause = wf_add_image_button( mqtt_player_main_tile, play_64px, mqtt_player_play_event_cb, &mqtt_player_main_style );
+    lv_obj_align( mqtt_player_pause, mqtt_player_main_tile, LV_ALIGN_CENTER, 0, -20 );
+    lv_obj_set_hidden( mqtt_player_pause, true );
 
     mqtt_player_next = wf_add_image_button( mqtt_player_main_tile, next_32px, mqtt_player_next_event_cb, &mqtt_player_main_style );
     lv_obj_align( mqtt_player_next, mqtt_player_play, LV_ALIGN_OUT_RIGHT_MID, 32, 0 );
@@ -124,6 +134,15 @@ void mqtt_player_main_setup( uint32_t tile_num ) {
 
     // create an task that runs every second
     _mqtt_player_task = lv_task_create( mqtt_player_task, 1000, LV_TASK_PRIO_MID, NULL );
+}
+
+static void mqtt_player_setup_activate_callback ( void ) {
+    wf_image_button_fade_in( mqtt_player_exit_btn, 300, 0 );
+    wf_image_button_fade_in( mqtt_player_setup_btn, 300, 0 );
+    wf_image_button_fade_in( mqtt_player_play, 300, 0 );
+    wf_image_button_fade_in( mqtt_player_pause, 300, 0 );
+    wf_image_button_fade_in( mqtt_player_prev, 300, 0 );
+    wf_image_button_fade_in( mqtt_player_next, 300, 0 );
 }
 
 static bool mqtt_player_mqtt_event_cb( EventBits_t event, void *arg ) {
@@ -173,17 +192,13 @@ static void mqtt_player_message_cb(char *topic, byte *payload, size_t length) {
     snprintf( topic_compare, sizeof( topic_size * sizeof(char) ), "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_state );
     if (strncmp(topic, topic_compare, strlen(topic_compare)) == 0) {
         if( !strcmp( payload_msg, "pause" ) || !strcmp( payload_msg, "stop" ) ) {
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_RELEASED, &play_64px);
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_PRESSED, &play_64px);
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_RELEASED, &play_64px);
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_PRESSED, &play_64px);
+            lv_obj_set_hidden( mqtt_player_play, false );
+            lv_obj_set_hidden( mqtt_player_pause, true );
             mqtt_player_play_state = false;
         }
         if( !strcmp( payload_msg, "play" ) ) {
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_RELEASED, &pause_64px);
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_PRESSED, &pause_64px);
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_RELEASED, &pause_64px);
-            lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_PRESSED, &pause_64px);                    
+            lv_obj_set_hidden( mqtt_player_play, true );
+            lv_obj_set_hidden( mqtt_player_pause, false );                       
             mqtt_player_play_state = true;
         }
     }
@@ -224,22 +239,17 @@ static void mqtt_player_play_event_cb( lv_obj_t * obj, lv_event_t event ) {
         case( LV_EVENT_CLICKED ):
             mqtt_player_config_t *mqtt_player_config = mqtt_player_get_config();
 
-            if( mqtt_player_play_state == true ) {
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_RELEASED, &play_64px);
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_PRESSED, &play_64px);
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_RELEASED, &play_64px);
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_PRESSED, &play_64px);
+            if ( mqtt_player_play_state == true ) {
+                lv_obj_set_hidden( mqtt_player_play, false );
+                lv_obj_set_hidden( mqtt_player_pause, true );
                 mqtt_player_play_state = false;
                 
                 char temp[64] = "";
                 snprintf( temp, sizeof( temp ), "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_cmd_pause );
                 mqtt_publish(temp, false, "pause\0");
-            }
-            else {
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_RELEASED, &pause_64px);
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_PRESSED, &pause_64px);
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_RELEASED, &pause_64px);
-                lv_imgbtn_set_src( mqtt_player_play, LV_BTN_STATE_CHECKED_PRESSED, &pause_64px);
+            } else {
+                lv_obj_set_hidden( mqtt_player_play, true );
+                lv_obj_set_hidden( mqtt_player_pause, false );  
                 mqtt_player_play_state = true;
                 
                 char temp[64] = "";
