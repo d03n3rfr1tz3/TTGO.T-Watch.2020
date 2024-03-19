@@ -49,9 +49,21 @@ LV_IMG_DECLARE(mqtt_player_64px);
 static void enter_mqtt_player_event_cb( lv_obj_t * obj, lv_event_t event );
 
 /*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &mqtt_player_app_setup, 16 );           /** @brief app autocall function */
+
+/*
  * setup routine for mqtt player
  */
 void mqtt_player_app_setup( void ) {
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
+    
     mqtt_player_load_config();
 
     // register 2 vertical tiles and get the first tile number and save it for later use

@@ -40,9 +40,21 @@ LV_IMG_DECLARE(info_1_16px);
 static void enter_ping_app_event_cb( lv_obj_t * obj, lv_event_t event );
 
 /*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &ping_app_setup, 18 );           /** @brief app autocall function */
+
+/*
  * setup routine for ping app
  */
 void ping_app_setup( void ) {
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
+    
     ping_app_main_tile_num = mainbar_add_app_tile( 1, 1, "ping app" );
 
     ping_app = app_register( "ping", &ping_app_64px, enter_ping_app_event_cb );

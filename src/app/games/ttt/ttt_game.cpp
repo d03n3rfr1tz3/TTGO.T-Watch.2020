@@ -24,6 +24,7 @@
 #include <memory>
 #include <utility>
 
+#include "gui/app.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/statusbar.h"
@@ -39,8 +40,20 @@ LV_IMG_DECLARE(ttt_64px);
 // The one and only.
 static TicTacToeIcon iconInstance;
 
+/*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &tic_tac_toe_game_setup, 20 );           /** @brief app autocall function */
+
 void tic_tac_toe_game_setup()
 {
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
+    
     iconInstance.RegisterAppIcon();
 }
 

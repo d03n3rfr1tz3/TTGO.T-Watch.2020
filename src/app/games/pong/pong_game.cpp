@@ -25,6 +25,7 @@
 #include <memory>
 #include <utility>
 
+#include "gui/app.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/statusbar.h"
@@ -41,6 +42,11 @@ LV_IMG_DECLARE(pong_64px);
 static PongIcon iconInstance;
 lv_task_t * _pong_app_task;
 
+/*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &pong_game_setup, 20 );           /** @brief app autocall function */
+
 void pong_app_task( lv_task_t * task )
 {
     if ( !iconInstance.IsActive ) return;
@@ -49,6 +55,13 @@ void pong_app_task( lv_task_t * task )
 
 void pong_game_setup()
 {
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
+    
     iconInstance.RegisterAppIcon();
     _pong_app_task = lv_task_create( pong_app_task, 50, LV_TASK_PRIO_HIGH, NULL );
 }

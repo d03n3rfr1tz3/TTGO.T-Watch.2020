@@ -60,9 +60,20 @@ static void enter_NetTools_event_cb( lv_obj_t * obj, lv_event_t event );
 void NetTools_load_config( void);
 
 /*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &NetTools_setup, 18 );           /** @brief app autocall function */
+
+/*
  * setup routine for example app
  */
 void NetTools_setup( void ) {
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
     
     NetTools_load_config();
     // register 2 vertical tiles and get the first tile number and save it for later use

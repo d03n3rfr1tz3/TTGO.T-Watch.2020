@@ -48,9 +48,21 @@ LV_IMG_DECLARE(weather_station_app_64px);
 static void enter_weather_station_app_event_cb( lv_obj_t * obj, lv_event_t event );
 
 /*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &weather_station_app_setup, 16 );           /** @brief app autocall function */
+
+/*
  * setup routine for example app
  */
 void weather_station_app_setup( void ) {
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
+    
     weather_station_load_config();
 
     // register 2 vertical tiles and get the first tile number and save it for later use

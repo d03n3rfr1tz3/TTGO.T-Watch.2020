@@ -70,12 +70,21 @@ static void enter_printer3d_app_event_cb( lv_obj_t * obj, lv_event_t event );
 static void enter_printer3d_widget_event_cb( lv_obj_t * obj, lv_event_t event );
 
 /*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &printer3d_app_setup, 16 );           /** @brief app autocall function */
+
+/*
  * setup routine for printer3d app
  */
 void printer3d_app_setup( void ) {
-    #if defined( ONLY_ESSENTIAL )
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
         return;
-    #endif
+    }
+    
     printer3d_load_config();
 
     // register 2 vertical tiles and get the first tile number and save it for later use

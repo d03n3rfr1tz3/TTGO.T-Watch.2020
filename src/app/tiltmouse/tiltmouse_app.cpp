@@ -39,9 +39,21 @@ icon_t *tiltmouse_app = NULL;
 LV_IMG_DECLARE(tiltmouse_app_64px);
 
 /*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &tiltmouse_app_setup, 16 );           /** @brief app autocall function */
+
+/*
  * setup routine for tiltmouse app
  */
 void tiltmouse_app_setup( void ) {
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
+    
     // register 2 vertical tiles and get the first tile number and save it for later use
     tiltmouse_app_main_tile_num = mainbar_add_app_tile( 1, 1, "tiltmouse app" );
 
