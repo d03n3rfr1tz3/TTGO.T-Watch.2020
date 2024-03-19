@@ -11,7 +11,7 @@ This repository only represents the state of my own T-Watch. I will implement so
 
 # My-TTGO-Watch
 
-A GUI named hedge for smartwatch like devices based on ESP32. Currently support for T-Watch2020 (V1,V2,V3), T-Watch2021, M5Paper, M5Core2 and native Linux support for testing.
+A GUI named hedge for smartwatch like devices based on ESP32. Currently support for T-Watch2020 (V1,V2,V3), T-Watch2021  (V1 and V2, no ota-updates), M5Paper, M5Core2, WT32-SC01 and native Linux support for testing.
 
 ## Features
 
@@ -53,36 +53,50 @@ A GUI named hedge for smartwatch like devices based on ESP32. Currently support 
 
 Clone this repository and open it with platformIO. Select the right env and then build and upload.
 Or follow the great step by step [tutorial](https://www.youtube.com/watch?v=wUGADCnerCs) from [ShotokuTech](https://github.com/ShotokuTech).
+
+Please check out
+    https://github.com/sharandac/My-TTGO-Watch/blob/709ed0c5863435aa966c1d6f44552ddc0909a57c/src/hardware/wifictl.cpp#L256-L261
+to setup your wifi when wps or input via display is not possible.
+
 If you are interested in native Linux support, please install sdl2, curl and mosquitto dev lib and change the env to emulator_* in platformIO.
 
 ```bash
 sudo apt-get install libsdl2-dev libcurl4-gnutls-dev libmosquitto-dev build-essential
 ```
 
-# Telegram chatgroup
-
-Telegram chatgroup is here:
-https://t.me/TTGO_Watch
-
-# known issues
+# Known issues
 
 * the webserver crashes the ESP32 really often
 * the battery indicator is not accurate, rather a problem with the power management unit ( axp202 )
 
-# how to use
+## Development on the Windows platform
+
+The development tools have a known issue with the size of the project on Windows platforms. When the program is built you may receive the following error:
+
+    xtensa-esp32-elf-g++: error: CreateProcess: No such file or directory
+    *** [.pio\build\t-watch2020-v1\firmware.elf] Error 1
+
+This issue has not been seen on Linux or other platforms. This is a linker issue and can be fixed by removing apps. To remove unneeded apps you can simply delete the appropriate directory in /src/app. Then simply recompile. App can be added in the same way. But note that the app must support autocall_function . This allows the automatic integration of apps without touching the rest of the code ( [the magic behind autocall_function](autocall.md) ).
+
+Since each app includes a different set of files, you may need to delete several apps to reduce it small enough for the Windows build.
+
+# How to use
 
 Cf. [Usage](USAGE.md)
 
 # Forks that are recommended
 
+[Pickelhaupt](https://github.com/Pickelhaupt/EUC-Dash-ESP32)<br>
 [FantasyFactory](https://github.com/FantasyFactory/My-TTGO-Watch)<br>
 [NorthernDIY](https://github.com/NorthernDIY/My-TTGO-Watch)<br>
 [linuxthor](https://github.com/linuxthor/Hackers-TTGO-Watch)<br>
 [d03n3rfr1tz3](https://github.com/d03n3rfr1tz3/TTGO.T-Watch.2020)<br>
+[lunokjod](https://github.com/lunokjod/watch)<br>
 
-# for the programmers
+# For the programmers
 
-Cf. [contribution guide](CONTRIBUTING.md)
+Cf. [contribution guide](CONTRIBUTING.md)<br>
+app autocall function [the magic behind autocall_function](autocall.md) or add a app without touching the rest
 
 # Interface
 
@@ -107,14 +121,20 @@ Cf. [contribution guide](CONTRIBUTING.md)
 ![screenshot](images/image2.png)
 ![screenshot](images/image3.png)
 
-## M5Core2 ( experimental )
+## M5Core2
 
 ![screenshot](images/m5core2_img1.png)
 ![screenshot](images/m5core2_img2.png)
 ![screenshot](images/m5core2_img3.png)
 ![screenshot](images/m5core2_img4.png)
 
-## TTGO T-Watch 2021 ( experimental )
+## WT32-SC01
+
+![screenshot](images/WT32_SC01_img1.png)
+![screenshot](images/WT32_SC01_img2.png)
+![screenshot](images/WT32_SC01_img3.png)
+
+## TTGO T-Watch 2021
 
 ![screenshot](images/twatch2021_img1.png)
 ![screenshot](images/twatch2021_img2.png)
@@ -135,8 +155,9 @@ Special thanks to the following people for their help:
 [JoanMCD](https://github.com/JoanMCD)<br>
 [NorthernDIY](https://github.com/NorthernDIY)<br>
 [Neuroplant](https://github.com/Neuroplant)<br>
-[rnisthal](https://github.com/rnisthal)<br>
 [paulstueber](https://github.com/paulstueber)<br>
+[pavelmachek](https://github.com/pavelmachek)<br>
+[rnisthal](https://github.com/rnisthal)<br>
 [ssspeq](https://github.com/ssspeq)<br>
 
 and the following projects:
@@ -148,7 +169,9 @@ and the following projects:
 [ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio)<br>
 [ESPAsyncWebServer](https://github.com/me-no-dev/ESPAsyncWebServer)<br>
 [LVGL](https://github.com/lvgl)<br>
+[NimBLE-Arduino]()h2zero/NimBLE-Arduino<br>
 [pubsubclient](https://github.com/knolleary/pubsubclient)<br>
+[TinyGPSPlus](mikalhart/TinyGPSPlus)<br>
 [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI)<br>
 [TTGO_TWatch_Library](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library)<br>
 

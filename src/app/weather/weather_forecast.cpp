@@ -24,6 +24,7 @@
 #include "weather_fetch.h"
 #include "weather_forecast.h"
 #include "images/resolve_owm_icon.h"
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/statusbar.h"
@@ -33,10 +34,10 @@
 #include "hardware/powermgm.h"
 #include "hardware/wifictl.h"
 #include "utils/alloc.h"
-#include "gui/mainbar/mainbar.h"
 
 #ifdef NATIVE_64BIT
     #include "utils/logging.h"
+    #include "utils/millis.h"
 #else
     #include <Arduino.h>
     #include "esp_task_wdt.h"
@@ -47,6 +48,9 @@
 
 lv_obj_t *weather_forecast_tile = NULL;
 uint32_t weather_forecast_tile_num;
+lv_obj_t * exit_btn = NULL;
+lv_obj_t * setup_btn = NULL;
+lv_obj_t * reload_btn = NULL;
 
 lv_obj_t *weather_forecast_location_label = NULL;
 lv_obj_t *weather_forecast_update_label = NULL;
@@ -56,10 +60,12 @@ lv_obj_t *weather_forecast_temperature_label[ WEATHER_MAX_FORECAST ];
 lv_obj_t *weather_forecast_wind_label[ WEATHER_MAX_FORECAST ];
 
 static weather_forcast_t *weather_forecast = NULL;
+static uint64_t weather_last_update = 0;
 
 LV_IMG_DECLARE(refresh_32px);
 LV_IMG_DECLARE(owm01d_64px);
 
+static void weather_forecast_activate_cb( void );
 bool weather_button_event_cb( EventBits_t event, void *arg );
 void weather_forecast_sync_Task( void * pvParameters );
 bool weather_forecast_wifictl_event_cb( EventBits_t event, void *arg );
@@ -69,23 +75,19 @@ static void refresh_weather_widget_event_cb( lv_obj_t * obj, lv_event_t event );
 
 void weather_forecast_tile_setup( uint32_t tile_num ) {
 
-    weather_forecast = (weather_forcast_t*)CALLOC( sizeof( weather_forcast_t ) * WEATHER_MAX_FORECAST , 1 );
-    if( !weather_forecast ) {
-      log_e("weather forecast calloc faild");
-      while(true);
-    }
+    weather_forecast = (weather_forcast_t*)CALLOC_ASSERT( sizeof( weather_forcast_t ) * WEATHER_MAX_FORECAST , 1, "weather forecast calloc faild" );
 
     weather_forecast_tile_num = tile_num;
     weather_forecast_tile = mainbar_get_tile_obj( weather_forecast_tile_num );
 
-    lv_obj_t * exit_btn = wf_add_exit_button( weather_forecast_tile, exit_weather_widget_event_cb );
-    lv_obj_align(exit_btn, weather_forecast_tile, LV_ALIGN_IN_BOTTOM_LEFT, 10, -10 );
+    exit_btn = wf_add_exit_button( weather_forecast_tile, exit_weather_widget_event_cb );
+    lv_obj_align(exit_btn, weather_forecast_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_PADDING, -THEME_PADDING );
 
-    lv_obj_t * setup_btn = wf_add_setup_button( weather_forecast_tile, setup_weather_widget_event_cb );
-    lv_obj_align(setup_btn, weather_forecast_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -10, -10 );
+    setup_btn = wf_add_setup_button( weather_forecast_tile, setup_weather_widget_event_cb );
+    lv_obj_align(setup_btn, weather_forecast_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_PADDING, -THEME_PADDING );
 
-    lv_obj_t * reload_btn = wf_add_refresh_button( weather_forecast_tile, refresh_weather_widget_event_cb );
-    lv_obj_align(reload_btn, weather_forecast_tile, LV_ALIGN_IN_TOP_RIGHT, -10 , 10 );
+    reload_btn = wf_add_refresh_button( weather_forecast_tile, refresh_weather_widget_event_cb );
+    lv_obj_align(reload_btn, weather_forecast_tile, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING , THEME_PADDING );
 
     weather_forecast_location_label = lv_label_create( weather_forecast_tile , NULL);
     lv_label_set_text( weather_forecast_location_label, "n/a");
@@ -93,7 +95,7 @@ void weather_forecast_tile_setup( uint32_t tile_num ) {
     #if defined( ROUND_DISPLAY )
         lv_obj_align( weather_forecast_location_label, weather_forecast_tile, LV_ALIGN_IN_TOP_MID, 0, 10 );
     #else
-        lv_obj_align( weather_forecast_location_label, weather_forecast_tile, LV_ALIGN_IN_TOP_LEFT, 10, 10 );
+        lv_obj_align( weather_forecast_location_label, weather_forecast_tile, LV_ALIGN_IN_TOP_LEFT, THEME_PADDING, THEME_PADDING );
     #endif
 
     weather_forecast_update_label = lv_label_create( weather_forecast_tile , NULL);
@@ -111,7 +113,7 @@ void weather_forecast_tile_setup( uint32_t tile_num ) {
     lv_obj_align( weater_forecast_cont, weather_forecast_tile, LV_ALIGN_CENTER, 0, 0 );
 
     for ( int i = 0 ; i < WEATHER_MAX_FORECAST && i < WEATHER_MAX_FORECAST_ICON; i++ ) {
-        weather_forecast_icon_imgbtn[ i ] = wf_add_image_button( weater_forecast_cont, owm01d_64px, NULL, APP_STYLE );
+        weather_forecast_icon_imgbtn[ i ] = wf_add_image_button_old( weater_forecast_cont, owm01d_64px, NULL, APP_STYLE );
         lv_obj_align( weather_forecast_icon_imgbtn[ i ], weater_forecast_cont, LV_ALIGN_IN_LEFT_MID, ( WEATHER_FORCAST_ICON_SPACE / 2 ) + ( i * WEATHER_ICON_SIZE + WEATHER_FORCAST_ICON_SPACE ) , 0 );
 
         weather_forecast_temperature_label[ i ] = lv_label_create( weater_forecast_cont , NULL);
@@ -130,6 +132,23 @@ void weather_forecast_tile_setup( uint32_t tile_num ) {
         lv_obj_align( weather_forecast_time_label[ i ], weather_forecast_icon_imgbtn[ i ], LV_ALIGN_OUT_TOP_MID, 0, 0);
     }
     mainbar_add_tile_button_cb( weather_forecast_tile_num, weather_button_event_cb );
+    mainbar_add_tile_activate_cb( weather_forecast_tile_num, weather_forecast_activate_cb );
+}
+
+static void weather_forecast_activate_cb( void ) {
+    wf_image_button_fade_in( exit_btn, 500, 0 );
+    wf_image_button_fade_in( setup_btn, 500, 100 );
+    wf_image_button_fade_in( reload_btn, 500, 200 );
+    if( weather_last_update != 0 ) {
+        if( weather_last_update <= millis() - ( 15 * 60 * 1000 ) ) {
+            weather_sync_request();
+            weather_last_update = millis();
+        }
+    }
+    else {
+        weather_sync_request();
+        weather_last_update = millis();
+    }
 }
 
 bool weather_button_event_cb( EventBits_t event, void *arg ) {
@@ -176,6 +195,8 @@ void weather_forecast_sync( void  ) {
         struct tm info;
         char buf[64];
 
+        gui_take();
+
         lv_label_set_text( weather_forecast_location_label, weather_forecast[ 0 ].name );
         #if defined( ROUND_DISPLAY )
             lv_obj_align( weather_forecast_location_label, weather_forecast_tile, LV_ALIGN_IN_TOP_MID, 0, 10 );
@@ -216,5 +237,7 @@ void weather_forecast_sync( void  ) {
             lv_obj_align( weather_forecast_update_label, weather_forecast_location_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0 );
         #endif
         lv_obj_invalidate( lv_scr_act() );
+
+        gui_give();
     }
 }

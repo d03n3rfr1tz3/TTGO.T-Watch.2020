@@ -25,6 +25,7 @@
 #include "watchface_manager.h"
 #include "watchface_setup.h"
 #include "watchface_tile.h"
+#include "config/watchface_expr.h"
 
 #include "gui/mainbar/mainbar.h"
 #include "gui/statusbar.h"
@@ -55,7 +56,7 @@ static void enter_watchface_setup_event_cb( lv_obj_t * obj, lv_event_t event );
  * setup routine for watchface manager app
  */
 void watchface_manager_setup( void ) {
-    #if defined( ONLY_ESSENTIAL )
+    #if defined( NO_WATCHFACE )
         return;
     #endif
     /**
@@ -74,6 +75,7 @@ void watchface_manager_setup( void ) {
     watchface_manager_app_setup( watchface_manager_app_main_tile_num );
     watchface_tile_setup();
     watchface_setup_tile_setup( watchface_setup_tile_num );
+    watchface_expr_setup();
 }
 
 uint32_t watchface_manager_get_app_tile_num( void ) {
@@ -86,16 +88,14 @@ uint32_t watchface_manager_get_setup_tile_num( void ) {
 
 static void enter_watchface_manager_app_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( watchface_manager_app_main_tile_num, LV_ANIM_OFF );
-                                        statusbar_hide( true );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( watchface_manager_app_main_tile_num, LV_ANIM_OFF, true );
                                         break;
     }    
 }
 
 static void enter_watchface_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( watchface_setup_tile_num, LV_ANIM_OFF );
-                                        statusbar_hide( false );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( watchface_setup_tile_num, LV_ANIM_OFF, true );
                                         break;
     }    
 }

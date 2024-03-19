@@ -37,8 +37,9 @@
         #include <TTGO.h>
     #elif defined( LILYGO_WATCH_2021 )
         #include <twatch2021_config.h>
+    #elif defined( WT32_SC01 )
     #else
-        #error "no hardware driver for display"
+        #error "no hardware driver for display, please setup minimal drivers ( display/framebuffer/touch )"
     #endif
 #endif
 
@@ -48,9 +49,11 @@ callback_t *display_callback = NULL;
 static uint8_t dest_brightness = 0;
 static uint8_t brightness = 0;
 
-bool display_powermgm_event_cb( EventBits_t event, void *arg );
-bool display_powermgm_loop_cb( EventBits_t event, void *arg );
-bool display_send_event_cb( EventBits_t event, void *arg );
+static bool display_powermgm_event_cb( EventBits_t event, void *arg );
+static bool display_powermgm_loop_cb( EventBits_t event, void *arg );
+static bool display_send_event_cb( EventBits_t event, void *arg );
+static void display_standby( void );
+static void display_wakeup( bool silence );
 
 void display_setup( void ) {
     /**
@@ -78,6 +81,13 @@ void display_setup( void ) {
             ledcSetup(0, 4000, 8);
             ledcAttachPin(TFT_LED, 0);
             ledcWrite(0, 0XFF);
+        #elif defined( WT32_SC01 )
+            pinMode(TFT_LED, OUTPUT);
+            ledcSetup(0, 4000, 8);
+            ledcAttachPin(TFT_LED, 0);
+            ledcWrite(0, 0x0 );
+        #else
+            #error "no display init function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
     /**
@@ -87,12 +97,12 @@ void display_setup( void ) {
     /**
      * register powermgm and pwermgm loop callback functions
      */
-//    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP, display_powermgm_event_cb, "powermgm display" );
-    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP, display_powermgm_event_cb, "powermgm display" );
+    powermgm_register_cb_with_prio( POWERMGM_STANDBY, display_powermgm_event_cb, "powermgm display", CALL_CB_FIRST );
+    powermgm_register_cb_with_prio( POWERMGM_SILENCE_WAKEUP | POWERMGM_WAKEUP, display_powermgm_event_cb, "powermgm display", CALL_CB_LAST );
     powermgm_register_loop_cb( POWERMGM_WAKEUP, display_powermgm_loop_cb, "powermgm display loop" );
 }
 
-bool display_powermgm_event_cb( EventBits_t event, void *arg ) {
+static bool display_powermgm_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
         case POWERMGM_STANDBY:          display_standby();
                                         break;
@@ -104,18 +114,37 @@ bool display_powermgm_event_cb( EventBits_t event, void *arg ) {
     return( true );
 }
 
-bool display_powermgm_loop_cb( EventBits_t event, void *arg ) {
-    display_loop();
-    return( true );
-}
+static bool display_powermgm_loop_cb( EventBits_t event, void *arg ) {
+    bool retval = false;
 
-void display_loop( void ) {
     #ifdef NATIVE_64BIT
     #else
         #if defined( M5PAPER )
 
         #elif defined( M5CORE2 )
+            if ( dest_brightness != brightness ) {
+                if ( brightness < dest_brightness ) {
+                    brightness++;
+                    M5.Axp.SetLcdVoltage( 2532 + brightness );
+                }
+                else {
+                    brightness--;
+                    M5.Axp.SetLcdVoltage( 2532 + brightness );
+                }
+            }
+            /**
+             * check timeout
+             */
+            if ( display_get_timeout() != DISPLAY_MAX_TIMEOUT ) {
+                if ( lv_disp_get_inactive_time(NULL) > ( ( display_get_timeout() * 1000 ) - display_get_brightness() * 8 ) ) {
+                    dest_brightness = ( ( display_get_timeout() * 1000 ) - lv_disp_get_inactive_time( NULL ) ) / 8 ;
+                }
+                else {
+                    dest_brightness = display_get_brightness();
+                }
+            }
 
+            retval = true;
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
             TTGOClass *ttgo = TTGOClass::getWatch();
             /**
@@ -142,6 +171,8 @@ void display_loop( void ) {
                     dest_brightness = display_get_brightness();
                 }
             }
+
+            retval = true;
         #elif defined( LILYGO_WATCH_2021 )   
             /**
              * check if backlight adjust has change
@@ -167,8 +198,41 @@ void display_loop( void ) {
                     dest_brightness = display_get_brightness();
                 }
             }
+
+            retval = true;
+        #elif defined( WT32_SC01 )
+            /**
+             * check if backlight adjust has change
+             */
+            if ( dest_brightness != brightness ) {
+                if ( brightness < dest_brightness ) {
+                    brightness++;
+                    ledcWrite(0, brightness );
+                }
+                else {
+                    brightness--;
+                    ledcWrite(0, brightness );
+                }
+            }
+            /**
+             * check timeout
+             */
+            if ( display_get_timeout() != DISPLAY_MAX_TIMEOUT ) {
+                if ( lv_disp_get_inactive_time(NULL) > ( ( display_get_timeout() * 1000 ) - display_get_brightness() * 8 ) ) {
+                    dest_brightness = ( ( display_get_timeout() * 1000 ) - lv_disp_get_inactive_time( NULL ) ) / 8 ;
+                }
+                else {
+                    dest_brightness = display_get_brightness();
+                }
+            }
+
+            retval = true;
+        #else
+            #error "no display init function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
+
+    return( retval );
 }
 
 bool display_register_cb( EventBits_t event, CALLBACK_FUNC callback_func, const char *id ) {
@@ -182,11 +246,11 @@ bool display_register_cb( EventBits_t event, CALLBACK_FUNC callback_func, const 
     return( callback_register( display_callback, event, callback_func, id ) );
 }
 
-bool display_send_event_cb( EventBits_t event, void *arg ) {
+static bool display_send_event_cb( EventBits_t event, void *arg ) {
     return( callback_send( display_callback, event, arg ) );
 }
 
-void display_standby( void ) {
+static void display_standby( void ) {
     #ifdef NATIVE_64BIT
     #else
         #if defined( M5PAPER )
@@ -208,12 +272,16 @@ void display_standby( void ) {
             #endif
         #elif defined( LILYGO_WATCH_2021 )   
             ledcWrite( 0, 0 );
+        #elif defined( WT32_SC01 )
+            ledcWrite( 0, 0 );
+        #else
+            #error "no display statndby function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
-    log_i("go standby");
+    log_d("go standby");
 }
 
-void display_wakeup( bool silence ) {
+static void display_wakeup( bool silence ) {
     /**
      * wakeup with or without display
      */
@@ -224,6 +292,9 @@ void display_wakeup( bool silence ) {
                 M5.enableEPDPower();
                 delay(25);
             #elif defined( M5CORE2 )
+                M5.Axp.SetLcdVoltage( 2532 + display_get_brightness() );
+                brightness = 0;
+                dest_brightness = 0;
             #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
                 TTGOClass *ttgo = TTGOClass::getWatch();
                 #if defined( LILYGO_WATCH_2020_V2 )
@@ -241,9 +312,15 @@ void display_wakeup( bool silence ) {
                 ledcWrite( 0, 0 );
                 brightness = 0;
                 dest_brightness = 0;
+            #elif defined( WT32_SC01 )
+                ledcWrite( 0, 0 );
+                brightness = 0;
+                dest_brightness = 0;
+            #else
+                #error "no silence display wakeup function implemented, please setup minimal drivers ( display/framebuffer/touch )"
             #endif
         #endif
-        log_i("go silence wakeup");
+        log_d("go silence wakeup");
     }
     else {
         #ifdef NATIVE_64BIT
@@ -271,10 +348,16 @@ void display_wakeup( bool silence ) {
             #elif defined( LILYGO_WATCH_2021 )   
                 ledcWrite( 0, 0 );
                 brightness = 0;
-                dest_brightness = display_get_brightness();;
+                dest_brightness = display_get_brightness();
+            #elif defined( WT32_SC01 )
+                ledcWrite( 0, 0 );
+                brightness = 0;
+                dest_brightness = display_get_brightness();
+            #else
+                #error "no display wakeup function implemented, please setup minimal drivers ( display/framebuffer/touch )"
             #endif
         #endif
-        log_i("go wakeup");
+        log_d("go wakeup");
     }
 }
 
@@ -292,7 +375,7 @@ uint32_t display_get_timeout( void ) {
 
 void display_set_timeout( uint32_t timeout ) {
     display_config.timeout = timeout;
-    display_send_event_cb( DISPLAYCTL_TIMEOUT, (void *)timeout );
+    display_send_event_cb( DISPLAYCTL_TIMEOUT, (void *)&display_config.timeout );
 }
 
 uint32_t display_get_brightness( void ) {
@@ -309,7 +392,7 @@ void display_set_brightness( uint32_t brightness ) {
         M5.Axp.SetLcdVoltage( 2532 + display_get_brightness() );
         #endif
     #endif
-    display_send_event_cb( DISPLAYCTL_BRIGHTNESS, (void *)brightness );
+    display_send_event_cb( DISPLAYCTL_BRIGHTNESS, (void *)&display_config.brightness );
 }
 
 uint32_t display_get_rotation( void ) {
@@ -345,15 +428,16 @@ void display_set_rotation( uint32_t rotation ) {
     #else
         #if defined( M5PAPER )
         #elif defined( M5CORE2 )
-            M5.Lcd.setRotation( rotation / 90 );
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
             TTGOClass *ttgo = TTGOClass::getWatch();
             display_config.rotation = rotation;
             ttgo->tft->setRotation( rotation / 90 );
+        #elif defined( WT32_SC01 )
+        #else
+            #warning "no display set rotation function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
     display_config.rotation = rotation;
-    lv_obj_invalidate( lv_scr_act() );
 }
 
 uint32_t display_get_background_image( void ) {

@@ -56,13 +56,19 @@
         #include <twatch2021_config.h>
 
         TFT_eSPI tft = TFT_eSPI();
+    #elif defined( WT32_SC01 )
+        #include "TFT_eSPI.h"
+
+        TFT_eSPI tft = TFT_eSPI();
     #else
-        #error "no hardware driver for framebuffer, please setup minimal drivers ( framebuffer/touch )"
+        #error "no hardware driver for framebuffer, please setup minimal drivers ( display/framebuffer/touch )"
     #endif
 #endif
 
+static bool framebuffer_drawing = true;                             /** @brief disable */
 static bool framebuffer_use_dma = false;
-lv_color_t *framebuffer = NULL;                                     /** @brief pointer to a full size framebuffer */
+lv_color_t *framebuffer_1 = NULL;                                     /** @brief pointer to a full size framebuffer */
+lv_color_t *framebuffer_2 = NULL;                                     /** @brief pointer to a full size framebuffer */
 uint32_t framebuffer_size = FRAMEBUFFER_BUFFER_SIZE;                /** @brief framebuffer size */
 
 bool framebuffer_powermgm_event_cb( EventBits_t event, void *arg );
@@ -112,53 +118,76 @@ void framebuffer_setup( void ) {
                 ttgo->tft->initDMA();
             }
         #elif defined( LILYGO_WATCH_2021 )
-            pinMode(TFT_LED, OUTPUT);
-            ledcSetup(0, 4000, 8);
-            ledcAttachPin(TFT_LED, 0);
-            ledcWrite(0, 0);
+            framebuffer_use_dma = true;
+
+            pinMode( TFT_LED, OUTPUT );
+            ledcSetup( 0, 4000, 8 );
+            ledcAttachPin( TFT_LED, 0 );
+            ledcWrite( 0, 0 );
 
             tft.init();
-            tft.setRotation(0);
-            tft.setTextSize(1);
-            tft.setTextColor(TFT_GREEN, TFT_BLACK);
+            tft.fillScreen( TFT_BLACK );
             tft.initDMA();
-
+        #elif defined( WT32_SC01 )
             framebuffer_use_dma = true;
+            tft.init();
+            tft.setSwapBytes( true );
+            tft.fillScreen( TFT_BLACK );
+            tft.initDMA();
+            tft.setRotation( 1 );
+            ledcWrite(0, 0xff );
+        #else
+            #error "no framebuffer init function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
     /*
      * allocate new framebuffer
      */
-    if ( !framebuffer ) {
+    if ( !framebuffer_1 ) {
         if ( framebuffer_use_dma ) {
-            framebuffer = (lv_color_t*)calloc( sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
+            framebuffer_1 = (lv_color_t*)calloc( sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
         }
         else {
-            framebuffer = (lv_color_t*)CALLOC( sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
+            framebuffer_1 = (lv_color_t*)CALLOC( sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
         }
-        if ( framebuffer == NULL ) {
-            log_e("framebuffer malloc failed");
-            while( 1 );
+        ASSERT( framebuffer_1, "framebuffer malloc failed" );
+        /**
+         * log info about framebuffer
+         */
+        #ifdef NATIVE_64BIT
+            log_d("framebuffer 1: 0x%p (%ld bytes, %dx%dpx)", framebuffer_1, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H * sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W, FRAMEBUFFER_BUFFER_H );
+        #else
+            log_i("framebuffer 1: 0x%p (%d bytes, %dx%dpx)", framebuffer_1, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H * sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W, FRAMEBUFFER_BUFFER_H );
+        #endif
+    }
+    if ( !framebuffer_2 ) {
+        if ( framebuffer_use_dma ) {
+            framebuffer_2 = (lv_color_t*)calloc( sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
         }
+        else {
+            framebuffer_2 = (lv_color_t*)CALLOC( sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
+        }
+        ASSERT( framebuffer_2, "framebuffer malloc failed" );
+        /**
+         * log info about framebuffer
+         */
+        #ifdef NATIVE_64BIT
+            log_d("framebuffer 2: 0x%p (%ld bytes, %dx%dpx)", framebuffer_2, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H * sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W, FRAMEBUFFER_BUFFER_H );
+        #else
+            log_i("framebuffer 2: 0x%p (%d bytes, %dx%dpx)", framebuffer_2, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H * sizeof(lv_color_t), FRAMEBUFFER_BUFFER_W, FRAMEBUFFER_BUFFER_H );
+        #endif
     }
     /*
      * set LVGL driver
      */
-    lv_disp_buf_init( &disp_buf, framebuffer, NULL, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
+    lv_disp_buf_init( &disp_buf, framebuffer_1, framebuffer_2, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H );
     lv_disp_drv_init( &disp_drv );
     disp_drv.flush_cb = framebuffer_flush_cb;
     disp_drv.buffer = &disp_buf;
     disp_drv.hor_res = RES_X_MAX;
     disp_drv.ver_res = RES_Y_MAX;
     lv_disp_drv_register( &disp_drv );
-    /**
-     * log info about framebuffer
-     */
-    #ifdef NATIVE_64BIT
-        log_i("framebuffer: 0x%p (%ld bytes, %dx%dpx)", framebuffer, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H * sizeof(lv_color_t), disp_drv.hor_res, disp_drv.ver_res );
-    #else
-        log_i("framebuffer: 0x%p (%d bytes, %dx%dpx)", framebuffer, FRAMEBUFFER_BUFFER_W * FRAMEBUFFER_BUFFER_H * sizeof(lv_color_t), disp_drv.hor_res, disp_drv.ver_res );
-    #endif
+
     /**
      * setup powermgm events and loop
      */
@@ -168,12 +197,15 @@ void framebuffer_setup( void ) {
 
 bool framebuffer_powermgm_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
-        case POWERMGM_STANDBY:          log_i("go standby, refresh framebuffer");
+        case POWERMGM_STANDBY:          log_d("go standby, refresh framebuffer");
                                         framebuffer_refresh();
+                                        framebuffer_drawing = false;
                                         break;
-        case POWERMGM_WAKEUP:           log_i("go wakeup");
+        case POWERMGM_WAKEUP:           log_d("go wakeup");
+                                        framebuffer_drawing = true;
                                         break;
-        case POWERMGM_SILENCE_WAKEUP:   log_i("go wakeup");
+        case POWERMGM_SILENCE_WAKEUP:   log_d("go wakeup");
+                                        framebuffer_drawing = false;
                                         break;
     }
     return( true );
@@ -213,7 +245,12 @@ bool framebuffer_powermgm_loop_cb( EventBits_t event, void *arg ) {
                     max_y = 0;
                 }
             }
+        #elif defined( M5CORE2 )
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( LILYGO_WATCH_2021 )
+        #elif defined( WT32_SC01 )
+        #else
+            #error "no framebuffer powermgm loop event function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
     return( true );
@@ -234,12 +271,20 @@ void framebuffer_refresh( void ) {
             max_x = 0;
             min_y = FRAMEBUFFER_BUFFER_H;
             max_y = 0;
+        #elif defined( M5CORE2 )
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( LILYGO_WATCH_2021 )
+        #elif defined( WT32_SC01 )
+        #else
+            #error "no framebuffer refresh function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
 }
 
 static void framebuffer_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p) {
+    if( !framebuffer_drawing )
+            lv_disp_flush_ready( disp_drv );
+
     #ifdef NATIVE_64BIT
         /**
          * flush SDL screen
@@ -344,13 +389,41 @@ static void framebuffer_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area,
              * and start DMA transfer if enabled
              * stop transmission
              */
-            tft.startWrite();
-            tft.setAddrWindow(area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1)); /* set the working window */
-            if ( framebuffer_use_dma )
-                tft.pushPixelsDMA(( uint16_t *)color_p, size);
-            else
-                tft.pushPixels(( uint16_t *)color_p, size);
-            tft.endWrite();
+            if ( framebuffer_use_dma ) {
+                tft.endWrite();
+                tft.startWrite();
+                tft.pushImageDMA( area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1), ( uint16_t *)color_p );
+            }
+            else {
+                tft.startWrite();
+                tft.pushImage( area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1), ( uint16_t *)color_p );
+                tft.flush();
+                tft.endWrite();
+            }
+        #elif defined( WT32_SC01 )
+            /**
+             * get buffer size
+             */
+            uint32_t size = (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1) ;
+            /**
+             * stop/wait last transmission
+             * start data trnsmission
+             * set the working window
+             * and start DMA transfer if enabled
+             */
+            if ( framebuffer_use_dma ) {
+                tft.endWrite();
+                tft.startWrite();
+                tft.pushImageDMA( area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1), ( uint16_t *)color_p );
+            }
+            else {
+                tft.startWrite();
+                tft.pushImage( area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1), ( uint16_t *)color_p );
+                tft.flush();
+                tft.endWrite();
+            }
+        #else
+            #error "no LVGL display driver function implemented, please setup minimal drivers ( display/framebuffer/touch )"
         #endif
     #endif
     lv_disp_flush_ready( disp_drv );

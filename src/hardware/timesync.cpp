@@ -30,7 +30,8 @@
     #include "utils/logging.h"
 #else  
     #include "wifictl.h"
-    #include "blectl.h"
+    #include "hardware/ble/gadgetbridge.h"
+    #include "hardware/blectl.h"
     #include "rtcctl.h"
 
     EventGroupHandle_t time_event_handle = NULL;
@@ -60,7 +61,7 @@ void timesync_setup( void ) {
         * register wigi, ble and powermgm callback function
         */
         wifictl_register_cb( WIFICTL_CONNECT, timesync_wifictl_event_cb, "wifictl timesync" );
-        blectl_register_cb( BLECTL_MSG, timesync_blectl_event_cb, "blectl timesync" );
+        gadgetbridge_register_cb( GADGETBRIDGE_MSG, timesync_blectl_event_cb, "blectl timesync" );
     #endif
     powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP, timesync_powermgm_event_cb, "powermgm timesync" );
     /*
@@ -97,7 +98,7 @@ bool timesync_powermgm_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
         case POWERMGM_STANDBY:          
 #ifdef NATIVE_64BIT
-            log_i("go standby");
+            log_d("go standby");
 #else
             /*
              * only update rtc time when an NTP timesync was success
@@ -105,10 +106,10 @@ bool timesync_powermgm_event_cb( EventBits_t event, void *arg ) {
             if ( xEventGroupGetBits( time_event_handle ) & TIME_SYNC_OK ) {
                 timesyncToRTC();
                 xEventGroupClearBits( time_event_handle, TIME_SYNC_OK );
-                log_i("go standby, timesync to RTC");
+                log_d("go standby, timesync to RTC");
             }
             else {
-                log_i("go standby");
+                log_d("go standby");
             }
 #endif
             break;
@@ -116,14 +117,14 @@ bool timesync_powermgm_event_cb( EventBits_t event, void *arg ) {
             /*
              * sync time from rtc to system after wakeup
              */
-            log_i("go wakeup");
+            log_d("go wakeup");
             timesyncToSystem();
             break;
         case POWERMGM_SILENCE_WAKEUP:   
             /*
              * sync time from rtc to system after silence wakeup
              */
-            log_i("go silence wakeup");
+            log_d("go silence wakeup");
             timesyncToSystem();
             break;
     }
@@ -171,16 +172,16 @@ bool timesync_blectl_event_cb( EventBits_t event, void *arg ) {
 
 #ifndef NATIVE_64BIT
     switch( event ) {
-        case BLECTL_MSG:
+        case GADGETBRIDGE_MSG:
             settime_str = strstr( (const char*)arg, "setTime(" );
-            if ( settime_str ) {
+            if ( settime_str && blectl_get_timesync() ) {
                 settime_str = settime_str + 8;
                 time( &now );
-                log_i("old time: %d", now );
+                log_d("old time: %d", now );
                 new_now.tv_sec = atol( settime_str );
                 new_now.tv_usec = 0;
                 if ( settimeofday(&new_now, NULL) == 0 ) {
-                    log_i("new time: %d", new_now.tv_sec );
+                    log_d("new time: %d", new_now.tv_sec );
                 }
                 else {
                     log_e("set new time failed, errno = %d", errno );
@@ -277,7 +278,7 @@ void timesyncToSystem( void ) {
     /**
      * set back TZ to local settings
      */
-    log_i("TZ rule: %s", timesync_config.timezone_rule );
+    log_d("TZ rule: %s", timesync_config.timezone_rule );
     setenv("TZ", timesync_config.timezone_rule, 1);
     tzset();
 }
@@ -296,7 +297,7 @@ void timesyncToRTC( void ) {
     /**
      * set back TZ to local settings
      */
-    log_i("TZ rule: %s", timesync_config.timezone_rule );
+    log_d("TZ rule: %s", timesync_config.timezone_rule );
     setenv("TZ", timesync_config.timezone_rule, 1);
     tzset();
     timesync_send_event_cb( TIME_SYNC_OK, (void *)NULL );
@@ -305,7 +306,7 @@ void timesyncToRTC( void ) {
 
 void timesync_Task( void * pvParameters ) {
 #ifndef NATIVE_64BIT
-  log_i("start time sync task, heap: %d", ESP.getFreeHeap() );
+    log_i("start time sync task, heap: %d", ESP.getFreeHeap() );
 
     if ( xEventGroupGetBits( time_event_handle ) & TIME_SYNC_REQUEST ) { 
         struct tm info;

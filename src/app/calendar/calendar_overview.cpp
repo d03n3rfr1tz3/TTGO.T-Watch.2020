@@ -33,6 +33,7 @@
     #include "utils/logging.h"
     #include "utils/millis.h"
     #include <string>
+    #include <time.h>
 
     using namespace std;
     #define String string
@@ -47,15 +48,19 @@ uint32_t calendar_ovreview_tile_num;                                            
 /**
  * calendar icon and fonts
  */
+LV_FONT_DECLARE(Ubuntu_48px);                                                       /** @brief calendar font */
 LV_FONT_DECLARE(Ubuntu_32px);                                                       /** @brief calendar font */
 LV_FONT_DECLARE(Ubuntu_16px);                                                       /** @brief calendar font */
 LV_FONT_DECLARE(Ubuntu_12px);                                                       /** @brief calendar font */
 
 #if defined( BIG_THEME )
+    lv_font_t *calandar_header_font = &Ubuntu_48px;
     lv_font_t *calandar_font = &Ubuntu_32px;
 #elif defined( MID_THEME )
+    lv_font_t *calandar_header_font = &Ubuntu_24px;
     lv_font_t *calandar_font = &Ubuntu_16px;
 #else
+    lv_font_t *calandar_header_font = &Ubuntu_16px;
     lv_font_t *calandar_font = &Ubuntu_12px;
 #endif
 
@@ -78,12 +83,11 @@ static int calendar_day = 0;                                                    
 static void calendar_overview_exit_event_cb( lv_obj_t * obj, lv_event_t event );
 static void calendar_overview_date_event_cb( lv_obj_t * obj, lv_event_t event );
 static int calendar_overview_highlight_day_callback( void *data, int argc, char **argv, char **azColName );
-int calendar_overview_highlight_day( int year, int month );
-void calendar_overview_build_ui( void );
-void calendar_overview_refresh_showed_ui( void );
-void calendar_overview_refresh_today_ui( void );
-void calendar_overview_activate_cb( void );
-void calendar_overview_hibernate_cb( void );
+static int calendar_overview_highlight_day( int year, int month );
+static void calendar_overview_build_ui( void );
+static void calendar_overview_refresh_today_ui( void );
+static void calendar_overview_activate_cb( void );
+static void calendar_overview_hibernate_cb( void );
 /**
  * setup routine for application
  */
@@ -106,21 +110,15 @@ void calendar_overview_setup( void ) {
     /**
      * alloc highlighted days table
      */
-    calendar_overview_highlighted_days = (lv_calendar_date_t*)MALLOC( sizeof( lv_calendar_date_t ) * CALENDAR_HIGHLIGHTED_DAYS );
-    if ( calendar_overview_highlighted_days ) {
-        for( int i = 0 ; i < CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
-            calendar_overview_highlighted_days[ i ].year = 0;
-            calendar_overview_highlighted_days[ i ].month = 0;
-            calendar_overview_highlighted_days[ i ].day = 0;
-        }
-    }
-    else {
-        log_e("alloac highlighted days table failed");
-        while( true );
+    calendar_overview_highlighted_days = (lv_calendar_date_t*)MALLOC_ASSERT( sizeof( lv_calendar_date_t ) * CALENDAR_HIGHLIGHTED_DAYS, "alloac highlighted days table failed" );
+    for( int i = 0 ; i < CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
+        calendar_overview_highlighted_days[ i ].year = 0;
+        calendar_overview_highlighted_days[ i ].month = 0;
+        calendar_overview_highlighted_days[ i ].day = 0;
     }
 }
 
-void calendar_overview_build_ui( void ) {
+static void calendar_overview_build_ui( void ) {
     /**
      * get calendar object from tile number
      */
@@ -132,7 +130,7 @@ void calendar_overview_build_ui( void ) {
     lv_style_set_radius( &calendar_overview_style, LV_OBJ_PART_MAIN, 0 );
     lv_style_set_border_width( &calendar_overview_style, LV_OBJ_PART_MAIN, 0 );
     lv_style_set_bg_color( &calendar_overview_style, LV_OBJ_PART_MAIN, LV_COLOR_WHITE );
-    lv_style_set_bg_opa( &calendar_overview_style, LV_OBJ_PART_MAIN, LV_OPA_100 );
+    lv_style_set_bg_opa( &calendar_overview_style, LV_OBJ_PART_MAIN, LV_OPA_80 );
     /**
      * create calendar object
      */
@@ -144,12 +142,12 @@ void calendar_overview_build_ui( void ) {
     /**
      * Make the date number smaller to be sure they fit into their area
      */
-    lv_obj_set_style_local_text_font( calendar_overview, LV_CALENDAR_PART_HEADER, LV_STATE_DEFAULT, calandar_font );
+    lv_obj_set_style_local_text_font( calendar_overview, LV_CALENDAR_PART_HEADER, LV_STATE_DEFAULT, calandar_header_font );
     lv_obj_set_style_local_text_color( calendar_overview, LV_CALENDAR_PART_HEADER, LV_STATE_DEFAULT, LV_COLOR_BLACK );
     lv_obj_set_style_local_text_font( calendar_overview, LV_CALENDAR_PART_DATE, LV_STATE_DEFAULT, calandar_font );
     lv_obj_set_style_local_text_color( calendar_overview, LV_CALENDAR_PART_DATE, LV_STATE_DEFAULT, LV_COLOR_BLACK );
     lv_obj_set_style_local_bg_color( calendar_overview, LV_CALENDAR_PART_DATE, LV_STATE_CHECKED, LV_COLOR_RED );
-    lv_obj_set_style_local_bg_color( calendar_overview, LV_CALENDAR_PART_DATE, LV_STATE_FOCUSED, LV_COLOR_BLUE );
+    lv_obj_set_style_local_bg_color( calendar_overview, LV_CALENDAR_PART_DATE, LV_STATE_FOCUSED, LV_COLOR_GREEN );
     /**
      * add exit button
      */
@@ -178,7 +176,7 @@ void calendar_overview_refresh_showed_ui( void ) {
     lv_calendar_set_showed_date( calendar_overview, &today);
 }
 
-void calendar_overview_refresh_today_ui( void ) {
+static void calendar_overview_refresh_today_ui( void ) {
     /**
      * Set today's date
      */
@@ -195,7 +193,7 @@ void calendar_overview_refresh_today_ui( void ) {
     lv_calendar_set_today_date( calendar_overview, &today);
 }
 
-void calendar_overview_activate_cb( void ) {
+static void calendar_overview_activate_cb( void ) {
     /**
      * open calendar date base
      */
@@ -211,7 +209,7 @@ void calendar_overview_activate_cb( void ) {
     }
 }
 
-void calendar_overview_hibernate_cb( void ) {
+static void calendar_overview_hibernate_cb( void ) {
     /**
      * close calendar date base
      */
@@ -284,7 +282,7 @@ static int calendar_overview_highlight_day_callback( void *data, int argc, char 
     return 0;
 }
 
-int calendar_overview_highlight_day( int year, int month ) {
+static int calendar_overview_highlight_day( int year, int month ) {
     int hitcounter = 0;
     /**
      * clear calendar_overview_highlight_table table
@@ -295,7 +293,6 @@ int calendar_overview_highlight_day( int year, int month ) {
     /**
      * build sql query string
      */
-#ifdef NATIVE_64BIT
     char sql[ 512 ] = "";
     snprintf( sql, sizeof( sql ), "SELECT rowid, year, month, day, hour, min, content FROM calendar WHERE year == %d AND month == %d;", year, month );
     /**
@@ -315,25 +312,5 @@ int calendar_overview_highlight_day( int year, int month ) {
             }
         }
     }
-#else
-    String sql = (String) "SELECT rowid, year, month, day, hour, min, content FROM calendar WHERE year == " + year + " AND month == " + month + ";";
-    /**
-     * exec sql query
-     */
-    if ( calendar_db_exec( calendar_overview_highlight_day_callback, sql.c_str() ) ) {
-        /**
-         * count day with day and marked days with dates
-         */
-        for ( int i = 0 ; i < CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
-            if ( calendar_overview_highlight_table[ i ] ) {
-                CALENDAR_OVREVIEW_DEBUG_LOG("add year %d and month %d to highlight", year, month );
-                calendar_overview_highlighted_days[ hitcounter ].day = i;
-                calendar_overview_highlighted_days[ hitcounter ].month = month;
-                calendar_overview_highlighted_days[ hitcounter ].year = year;
-                hitcounter++;
-            }
-        }
-    }
-#endif
     return( hitcounter );
 }

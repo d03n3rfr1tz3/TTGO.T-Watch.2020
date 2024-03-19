@@ -28,7 +28,7 @@
 #include "gui/statusbar.h"
 #include "gui/widget_factory.h"
 #include "gui/widget_styles.h"
-#include "hardware/blectl.h"
+#include "hardware/ble/gadgetbridge.h"
 #include "hardware/powermgm.h"
 #include "hardware/motor.h"
 
@@ -83,7 +83,7 @@ void bluetooth_call_tile_setup( void ) {
     lv_obj_t * exit_btn = wf_add_exit_button( bluetooth_call_tile, exit_bluetooth_call_event_cb );
     lv_obj_align( exit_btn, bluetooth_call_tile, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING, THEME_PADDING );
 
-    blectl_register_cb( BLECTL_MSG_JSON, bluetooth_call_event_cb, "bluetooth_call" );
+    gadgetbridge_register_cb( GADGETBRIDGE_JSON_MSG, bluetooth_call_event_cb, "bluetooth_call" );
     styles_register_cb( STYLE_CHANGE, bluetooth_call_style_change_event_cb, "bluetooth call style" );
 }
 
@@ -98,7 +98,7 @@ bool bluetooth_call_style_change_event_cb( EventBits_t event, void *arg ) {
 
 bool bluetooth_call_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
-        case BLECTL_MSG_JSON:            
+        case GADGETBRIDGE_JSON_MSG:            
             bluetooth_call_msg_pharse( *(BluetoothJsonRequest*)arg );
             break;
     }
@@ -115,19 +115,18 @@ static void exit_bluetooth_call_event_cb( lv_obj_t * obj, lv_event_t event ) {
 
 void bluetooth_call_msg_pharse( BluetoothJsonRequest &doc ) {
     static bool standby = false;
-
     /*
      * check if type and cmd available
      */
-    if ( doc["t"] && doc["cmd"] ) {
+    if ( doc.containsKey("t") && doc.containsKey("cmd") ) {
+        log_i("incoming call, json");
         /*
          * check for an incoming call
          */
-        if( !strcmp( doc["t"], "call" ) && (!strcmp( doc["cmd"], "accept" ) || strlen(doc["cmd"]) == 0) ) {
+        if( !strcmp( doc["t"], "call" ) && !strcmp( doc["cmd"], "incoming" ) ) {
             /*
              * hide statusbar and save current powerstate for later use after a call
              */
-            statusbar_hide( true );
             if ( powermgm_get_event( POWERMGM_STANDBY ) ) {
                 standby = true;
             }
@@ -138,12 +137,12 @@ void bluetooth_call_msg_pharse( BluetoothJsonRequest &doc ) {
              * wake up and jup to call tile
              */
             powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
-            mainbar_jump_to_tilenumber( bluetooth_call_tile_num, LV_ANIM_OFF );
+            mainbar_jump_to_tilenumber( bluetooth_call_tile_num, LV_ANIM_OFF, true );
             /*
              * set caller information
              */
-            if ( doc["number"] ) {
-                if ( doc["name"] ) {
+            if ( doc.containsKey("number") ) {
+                if ( doc.containsKey("name") ) {
                     lv_label_set_text( bluetooth_call_number_label, doc["name"] );
                 }
                 else {
@@ -154,12 +153,12 @@ void bluetooth_call_msg_pharse( BluetoothJsonRequest &doc ) {
                 lv_label_set_text( bluetooth_call_number_label, "n/a" );
             }
             lv_obj_align( bluetooth_call_number_label, bluetooth_call_img, LV_ALIGN_OUT_BOTTOM_MID, 0, 5 );                
-            motor_vibe(100);            
+            motor_vibe(250);            
         }
-        else if( !strcmp( doc["t"], "call" ) && !strcmp( doc["cmd"], "start" ) ) {
+        else {
             /*
-                * restore last powerstate after call
-                */
+            * restore last powerstate after call
+            */
             if ( standby == true ) {
                 powermgm_set_event( POWERMGM_STANDBY_REQUEST );
             }

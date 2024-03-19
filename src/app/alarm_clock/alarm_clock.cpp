@@ -32,6 +32,7 @@
 #include "gui/statusbar.h"
 #include "gui/widget.h"
 #include "gui/widget_factory.h"
+#include "gui/app.h"
 #include "utils/json_psram_allocator.h"
 #include "hardware/powermgm.h"
 #include "hardware/rtcctl.h"
@@ -63,20 +64,28 @@ static icon_t *alarm_clock_widget = NULL;
 
 // declare callback functions
 static void enter_alarm_clock_event_cb( lv_obj_t * obj, lv_event_t event );
-
+/*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &alarm_clock_setup, 1 );           /** @brief app autocall function */
 
 static void create_alarm_app_icon(){
-    // create an app icon, label it and get the lv_obj_t icon container
+    /*
+     * create an app icon, label it and get the lv_obj_t icon container
+     */
     lv_obj_t * alarm_clock_icon_cont = app_tile_register_app( "alarm");
-    // set your own icon and register her callback to activate by an click
-    // remember, an app icon must have an size of 64x64 pixel with an alpha channel
-    // use https://lvgl.io/tools/imageconverter to convert your images and set "true color with alpha" to get fancy images
-    // the resulting c-file can put in /app/examples/images/
+    /*
+     * set your own icon and register her callback to activate by an click
+     * remember, an app icon must have an size of 64x64 pixel with an alpha channel
+     * use https://lvgl.io/tools/imageconverter to convert your images and set "true color with alpha" to get fancy images
+     * the resulting c-file can put in /app/examples/images/
+     */
     lv_obj_t * alarm_clock_icon = wf_add_image_button( alarm_clock_icon_cont, alarm_clock_64px, enter_alarm_clock_event_cb );
     lv_obj_reset_style_list( alarm_clock_icon, LV_OBJ_PART_MAIN );
     lv_obj_align( alarm_clock_icon , alarm_clock_icon_cont, LV_ALIGN_CENTER, 0, 0 );
-
-    // make app icon drag scroll the mainbar
+    /*
+     * make app icon drag scroll the mainbar
+     */
     mainbar_add_slide_element(alarm_clock_icon);
 }
 
@@ -116,7 +125,6 @@ static void remove_main_tile_widget(){
 static void add_main_tile_widget(){
     alarm_clock_widget = widget_register( alarm_clock_get_clock_label(true), &alarm_clock_48px, enter_alarm_clock_event_cb );
     widget_hide_indicator(alarm_clock_widget);
-    update_main_tile_widget_label();
 }
 
 static void setup_tile_hibernate_callback (){
@@ -124,6 +132,8 @@ static void setup_tile_hibernate_callback (){
     if (alarm_clock_setup_is_main_tile_switch_on() != properties.show_on_main_tile) {
         if (alarm_clock_setup_is_main_tile_switch_on()){
             add_main_tile_widget();
+            update_main_tile_widget_label();
+            
         }
         else{
             remove_main_tile_widget();
@@ -160,9 +170,15 @@ bool alarm_occurred_event_event_callback ( EventBits_t event, void *arg  ){
     return( true );
 }
 
-bool powermgmt_callback( EventBits_t event, void *arg  ){
+static bool powermgmt_callback( EventBits_t event, void *arg  ){
     switch( event ) {
+        case( POWERMGM_WAKEUP ):
+            rtcctl_set_alarm( alarm_clock_main_get_data_to_store() );
+            update_main_tile_widget_label();
+            break;
         case( POWERMGM_STANDBY ):
+            rtcctl_set_alarm( alarm_clock_main_get_data_to_store() );
+            update_main_tile_widget_label();
             alarm_in_progress_finish_alarm();
             break;
     }
@@ -171,9 +187,12 @@ bool powermgmt_callback( EventBits_t event, void *arg  ){
 
 // setup routine for example app
 void alarm_clock_setup( void ) {
-    #if defined( ONLY_ESSENTIAL )
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
         return;
-    #endif
+    }
 
     properties.load();
 
@@ -191,7 +210,10 @@ void alarm_clock_setup( void ) {
 
     rtcctl_register_cb( RTCCTL_ALARM_OCCURRED , alarm_occurred_event_event_callback, "alarm_clock");
     rtcctl_register_cb( RTCCTL_ALARM_ENABLED | RTCCTL_ALARM_DISABLED| RTCCTL_ALARM_TERM_SET , alarm_term_changed_cb, "alarm_clock");
-    powermgm_register_cb( POWERMGM_STANDBY, powermgmt_callback, "alarm_clock");
+    powermgm_register_cb_with_prio( POWERMGM_STANDBY | POWERMGM_WAKEUP, powermgmt_callback, "alarm_clock", CALL_CB_LAST );
+
+    alarm_clock_main_set_data_to_display( rtcctl_get_alarm_data(), timesync_get_24hr() );
+    rtcctl_set_alarm( alarm_clock_main_get_data_to_store() );
 }
 
 uint32_t alarm_clock_get_app_main_tile_num( void ) {
@@ -205,8 +227,7 @@ uint32_t alarm_clock_get_app_setup_tile_num( void ) {
 static void enter_alarm_clock_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):
-            mainbar_jump_to_tilenumber( main_tile_num, LV_ANIM_OFF );
-            statusbar_hide( true );
+            mainbar_jump_to_tilenumber( main_tile_num, LV_ANIM_OFF, true );
             break;
     }
 }

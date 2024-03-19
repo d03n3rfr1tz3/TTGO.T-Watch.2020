@@ -20,6 +20,7 @@
 #include "activity.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/widget_styles.h"
+#include "gui/app.h"
 #include "hardware/motion.h"
 // #include "hardware/blestepctl.h"
 #include "hardware/motor.h"
@@ -61,17 +62,16 @@ static lv_event_cb_t default_msgbox_cb;
 static void build_main_page();
 static void refresh_main_page();
 static void build_settings();
-
 static void activity_activate_cb();
 static void activity_reset_cb(lv_obj_t * obj, lv_event_t event);
-
+/*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &activity_app_setup, 8 );           /** @brief app autocall function */
 /*
  * setup routine for application
  */
 void activity_app_setup() {
-    #if defined( ONLY_ESSENTIAL )
-        return;
-    #endif
     // Create and register new application
     //   params: name, icon, auto add "refresh" button (this app will use synchronize function of the SynchronizedApplication class).
     //   Also, you can configure count of the required pages in the next two params (to have more app screens).
@@ -125,8 +125,8 @@ void build_main_page()
     arcStepcounter.start(0).end(0).rotation(90)
         .style(ws_get_arc_style(), LV_ARC_PART_INDIC, false )
         .style(ws_get_arc_bg_style(), LV_ARC_PART_BG, false )
-        .size(120, 120)
-        .alignInParentBottomLeft(0, -42);
+        .size(lv_disp_get_ver_res( NULL ) > lv_disp_get_hor_res( NULL ) ? lv_disp_get_hor_res( NULL ) / 2 : lv_disp_get_ver_res( NULL ) / 2, lv_disp_get_ver_res( NULL ) > lv_disp_get_hor_res( NULL ) ? lv_disp_get_hor_res( NULL ) / 2 : lv_disp_get_ver_res( NULL ) / 2 )
+        .alignInParentLeftMid(0, 0);
 
     lblStepcounter = Label(&screen);
     lblStepcounter.text("0")
@@ -142,8 +142,8 @@ void build_main_page()
     arcDistance.start(0).end(0).rotation(90)
         .style(ws_get_arc_style(), LV_ARC_PART_INDIC, false )
         .style(ws_get_arc_bg_style(), LV_ARC_PART_BG, false )
-        .size(120, 120)
-        .alignInParentBottomRight(0, -42);
+        .size(lv_disp_get_ver_res( NULL ) > lv_disp_get_hor_res( NULL ) ? lv_disp_get_hor_res( NULL ) / 2 : lv_disp_get_ver_res( NULL ) / 2, lv_disp_get_ver_res( NULL ) > lv_disp_get_hor_res( NULL ) ? lv_disp_get_hor_res( NULL ) / 2 : lv_disp_get_ver_res( NULL ) / 2 )
+        .alignInParentRightMid(0, 0);
 
     lblDistance = Label(&screen);
     lblDistance.text("0")

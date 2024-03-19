@@ -32,6 +32,7 @@
         #include <M5EPD.h>
     #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
     #elif defined( LILYGO_WATCH_2021 )    
+    #elif defined( WT32_SC01 )
     #else
         #warning "no hardware driver for sensor"
     #endif
@@ -52,6 +53,7 @@ void sensor_setup( void ) {
              */
             M5.SHT30.Begin();
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
     #endif
     /**
@@ -97,6 +99,8 @@ bool sensor_powermgm_loop_cb( EventBits_t event, void *arg ) {
             retval = true;
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
             retval = true;
+        #elif defined( WT32_SC01 )
+            retval = true;
         #else
             #warning "not sensor powermgm loop"
             retval = true;
@@ -114,25 +118,27 @@ bool sensor_powermgm_event_cb( EventBits_t event, void *arg ) {
     #else
         #ifdef M5PAPER
             switch( event ) {
-                case POWERMGM_STANDBY:              log_i("go standby");
+                case POWERMGM_STANDBY:              log_d("go standby");
                                                     retval = true;
                                                     break;
-                case POWERMGM_WAKEUP:               log_i("go wakeup");
+                case POWERMGM_WAKEUP:               log_d("go wakeup");
                                                     M5.SHT30.UpdateData();
                                                     retval = true;
                                                     break;
-                case POWERMGM_SILENCE_WAKEUP:       log_i("go silence wakeup");
+                case POWERMGM_SILENCE_WAKEUP:       log_d("go silence wakeup");
                                                     M5.SHT30.UpdateData();
                                                     retval = true;
                                                     break;
-                case POWERMGM_ENABLE_INTERRUPTS:    log_i("enable interrupts");
+                case POWERMGM_ENABLE_INTERRUPTS:    log_d("enable interrupts");
                                                     retval = true;
                                                     break;
-                case POWERMGM_DISABLE_INTERRUPTS:   log_i("disable interrupts");
+                case POWERMGM_DISABLE_INTERRUPTS:   log_d("disable interrupts");
                                                     retval = true;
                                                     break;
             }
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+            retval = true;
+        #elif defined( WT32_SC01 )
             retval = true;
         #else
             #warning "not sensor powermgm"
@@ -151,6 +157,7 @@ bool sensor_get_available( void ) {
         #ifdef M5PAPER
             retval = true;
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
     #endif
 
@@ -173,6 +180,7 @@ float sensor_get_temperature( void ) {
         #ifdef M5PAPER
             temperature = M5.SHT30.GetTemperature();
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
     #endif
 
@@ -195,6 +203,7 @@ float sensor_get_humidity( void ) {
         #ifdef M5PAPER
             humidity = M5.SHT30.GetAbsHumidity();
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
     #endif
 
@@ -217,6 +226,7 @@ float sensor_get_relativ_humidity( void ) {
         #ifdef M5PAPER
             relativ_humidity = M5.SHT30.GetRelHumidity();
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
     #endif
 
@@ -238,6 +248,7 @@ float sensor_get_pressure( void ) {
     #else
         #ifdef M5PAPER
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
     #endif
 

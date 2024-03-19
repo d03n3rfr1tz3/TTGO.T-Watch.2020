@@ -24,6 +24,7 @@
     #define _WIFICTLCONFIG_H
 
     #include "config.h"
+    #include "utils/alloc.h"
     #include "utils/basejsonconfig.h"
     #include "utils/webserver/webserver.h"
     #include "utils/ftpserver/ftpserver.h"
@@ -60,6 +61,15 @@
         char mqttpass[32] = "";                             /** @brief mqtt password*/
         wifictl_networklist* networklist = NULL;            /** @brief network list config pointer */
         wifictl_networklist* networklist_tried = NULL;      /** @brief network list config pointer of networks a connection was tried */
+
+        static void *operator new(size_t sz) {
+            void* m = MALLOC_ASSERT( sz, "new operator allocation failed" );
+            return m;
+        }
+
+        static void operator delete( void *m ){
+            free( m );
+        }
 
         protected:
         ////////////// Available for overloading: //////////////

@@ -27,6 +27,8 @@
 #include "gui/mainbar/note_tile/note_tile.h"
 #include "gui/mainbar/setup_tile/setup_tile.h"
 
+#include "utils/alloc.h"
+
 #ifdef NATIVE_64BIT
     #include "utils/logging.h"
 #else
@@ -35,7 +37,7 @@
 
 static bool apptile_init = false;
 
-icon_t app_entry[ MAX_APPS_ICON ];
+icon_t *app_entry = NULL;
 lv_obj_t *app_cont[ MAX_APPS_TILES ];
 uint32_t app_tile_num[ MAX_APPS_TILES ];
 
@@ -49,6 +51,7 @@ void app_tile_setup( void ) {
         log_e("apptile already initialized");
         return;
     }
+    app_entry = (icon_t*)MALLOC_ASSERT( sizeof( icon_t ) * MAX_APPS_ICON, "error while app_entry alloc" );
     /**
      * add tiles to to main tile
      */
@@ -60,7 +63,8 @@ void app_tile_setup( void ) {
     #elif defined( LILYGO_WATCH_2021 )
         app_tile_num[ tiles ] = mainbar_add_tile( 1 + tiles, 0, "app tile", ws_get_mainbar_style() );
     #else
-        #error "no app tiles setup"        
+        app_tile_num[ tiles ] = mainbar_add_tile( 1 + tiles, 0, "app tile", ws_get_mainbar_style() );
+        #warning "not app tile setup"
     #endif
         app_cont[ tiles ] = mainbar_get_tile_obj( app_tile_num[ tiles ] );
         mainbar_add_tile_button_cb( app_tile_num[ tiles ], app_tile_button_event_cb );
@@ -72,8 +76,8 @@ void app_tile_setup( void ) {
         /*
          * set x, y and mark it as inactive
          */
-        app_entry[ app ].x = APP_FIRST_X_POS + ( ( app % MAX_APPS_ICON_HORZ ) * ( APP_ICON_X_SIZE + APP_ICON_X_CLEARENCE ) );
-        app_entry[ app ].y = APP_FIRST_Y_POS + ( ( ( app % ( MAX_APPS_ICON_VERT * MAX_APPS_ICON_HORZ  ) ) / MAX_APPS_ICON_HORZ ) * ( APP_ICON_Y_SIZE + APP_ICON_Y_CLEARENCE ) );
+        app_entry[ app ].x = APP_FIRST_X_POS + ( ( app % MAX_APPS_ICON_HORZ ) * ( APP_ICON_X_SIZE + APP_ICON_X_CLEARENCE ) ) + APP_ICON_X_OFFSET;
+        app_entry[ app ].y = APP_FIRST_Y_POS + ( ( ( app % ( MAX_APPS_ICON_VERT * MAX_APPS_ICON_HORZ  ) ) / MAX_APPS_ICON_HORZ ) * ( APP_ICON_Y_SIZE + APP_ICON_Y_CLEARENCE ) ) + APP_ICON_Y_OFFSET;
         app_entry[ app ].active = false;
         /*
          * create app icon container
@@ -104,11 +108,13 @@ void app_tile_setup( void ) {
 
 static bool app_tile_button_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
-        case BUTTON_LEFT:   mainbar_jump_to_tilenumber( main_tile_get_tile_num(), LV_ANIM_OFF );
+        case BUTTON_LEFT:   mainbar_jump_to_tilenumber( main_tile_get_tile_num(), LV_ANIM_ON );
                             mainbar_clear_history();
                             break;
-        case BUTTON_RIGHT:  mainbar_jump_to_tilenumber( setup_get_tile_num(), LV_ANIM_OFF );
+        case BUTTON_RIGHT:  mainbar_jump_to_tilenumber( setup_get_tile_num(), LV_ANIM_ON );
                             mainbar_clear_history();
+                            break;
+        case BUTTON_EXIT:   mainbar_jump_to_maintile( LV_ANIM_ON );
                             break;
     }
     return( true );

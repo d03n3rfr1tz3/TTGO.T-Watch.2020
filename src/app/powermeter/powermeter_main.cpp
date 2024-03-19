@@ -44,12 +44,8 @@
 #ifdef NATIVE_64BIT
     #include "utils/logging.h"
     #include "utils/millis.h"
-    #include <string>
     #include <mosquitto.h>
-
-    using namespace std;
-    #define String string
-
+    
     struct mosquitto *mosq;
 #else
     #include <Arduino.h>
@@ -88,6 +84,7 @@ void powermeter_main_task( lv_task_t * task );
         if(reason_code != 0){
             mosquitto_disconnect(mosq);
         }
+        log_i("subscripe: %s", powermeter_config->topic );
         rc = mosquitto_subscribe(mosq, NULL, powermeter_config->topic, 1);
         if(rc != MOSQ_ERR_SUCCESS){
             log_i( "Error subscribing: %s\n", mosquitto_strerror( rc ) );
@@ -104,12 +101,7 @@ void powermeter_main_task( lv_task_t * task );
     /**
      * alloc a msg buffer and copy payload and terminate it with '\0';
      */
-    char *mqttmsg = NULL;
-    mqttmsg = (char*)CALLOC( length + 1, 1 );
-    if ( mqttmsg == NULL ) {
-        log_e("calloc failed");
-        return;
-    }
+    char *mqttmsg = (char*)CALLOC_ASSERT( length + 1, 1, "mqttmsg calloc failed" );
     memcpy( mqttmsg, payload, length );
 
     SpiRamJsonDocument doc( strlen( mqttmsg ) * 2 );
@@ -119,34 +111,40 @@ void powermeter_main_task( lv_task_t * task );
         log_e("powermeter message deserializeJson() failed: %s", error.c_str() );
     }
     else  {
-        if ( doc["id"] ) {
+        if ( doc.containsKey("id") ) {
             lv_label_set_text( id_label, doc["id"] );
         }
-        if ( doc["all"]["power"] ) {
-            char temp[16] = "";
-            snprintf( temp, sizeof( temp ), "%0.2fkW", atof( doc["all"]["power"] ) );
-            widget_set_label( powermeter_get_widget_icon(), temp );
+        if ( doc["all"].containsKey("power") ) {
+            const char * unit = "kW";
+            if( doc.containsKey("PowerUnit") )
+                unit = doc["PowerUnit"];
+            wf_label_printf( power_label, "%0.2fkW", atof( doc["all"]["power"] ), unit );
         }
-        if ( doc["channel0"]["power"] ) {
-            char temp[16] = "";
-            snprintf( temp, sizeof( temp ), "%0.2fkW", atof( doc["channel0"]["power"] ) );
-            lv_label_set_text( power_label, temp );
+        if ( doc["channel0"].containsKey("power") ) {
+            const char * unit = "kW";
+            if( doc.containsKey("PowerUnit") )
+                unit = doc["PowerUnit"];
+            wf_label_printf( power_label, "%0.2f%s", atof( doc["channel0"]["power"] ), unit );
         }
-        if ( doc["channel0"]["voltage"] ) {
-            char temp[16] = "";
-            snprintf( temp, sizeof( temp ), "%0.1fV", atof( doc["channel0"]["voltage"] ) );
-            lv_label_set_text( voltage_label, temp );
+        if ( doc["channel0"].containsKey("voltage") ) {
+            const char * unit = "V";
+            if( doc.containsKey("VoltageUnit") )
+                unit = doc["VoltageUnit"];
+            wf_label_printf( voltage_label, "%0.1f%s", atof( doc["channel0"]["voltage"] ), unit );
         }
-        if ( doc["channel0"]["current"] ) {
-            char temp[16] = "";
-            snprintf( temp, sizeof( temp ), "%0.1fA", atof( doc["channel0"]["current"] ) );
-            lv_label_set_text( current_label, temp );
+        if ( doc["channel0"].containsKey("current") ) {
+            const char * unit = "A";
+            if( doc.containsKey("CurrentUnit") )
+                unit = doc["CurrentUnit"];
+            wf_label_printf( current_label, "%0.1f%s", atof( doc["channel0"]["current"] ), unit );
         }
-        lv_obj_align( id_label, id_cont, LV_ALIGN_IN_RIGHT_MID, -5, 0 );
-        lv_obj_align( power_label, power_cont, LV_ALIGN_IN_RIGHT_MID, -5, 0 );
-        lv_obj_align( voltage_label, voltage_cont, LV_ALIGN_IN_RIGHT_MID, -5, 0 );
-        lv_obj_align( current_label, current_cont, LV_ALIGN_IN_RIGHT_MID, -5, 0 );
+
+        lv_obj_align( id_label, id_cont, LV_ALIGN_IN_RIGHT_MID, -THEME_PADDING, 0 );
+        lv_obj_align( power_label, power_cont, LV_ALIGN_IN_RIGHT_MID, -THEME_PADDING, 0 );
+        lv_obj_align( voltage_label, voltage_cont, LV_ALIGN_IN_RIGHT_MID, -THEME_PADDING, 0 );
+        lv_obj_align( current_label, current_cont, LV_ALIGN_IN_RIGHT_MID, -THEME_PADDING, 0 );
     }
+
     doc.clear();
     free( mqttmsg );
 }
@@ -303,8 +301,7 @@ bool powermeter_mqtt_event_cb(EventBits_t event, void* arg) {
 
 static void enter_powermeter_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( powermeter_get_app_setup_tile_num(), LV_ANIM_ON );
-                                        statusbar_hide( true );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( powermeter_get_app_setup_tile_num(), LV_ANIM_ON, true );
                                         break;
     }
 }

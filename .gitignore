@@ -2,6 +2,7 @@
 .vscode
 .vs
 deploy.sh
+change.log
 .gitignore
 data/tile_map.ods
 firmware_fork_list.json

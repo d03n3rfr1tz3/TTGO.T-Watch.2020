@@ -27,6 +27,7 @@
 #include "quickbar.h"
 #include "screenshot.h"
 #include "widget_styles.h"
+#include "widget_factory.h"
 #include "keyboard.h"
 #include "gui/lv_fs/lv_fs_spiffs.h"
 #include "mainbar/mainbar.h"
@@ -37,6 +38,7 @@
 #include "mainbar/setup_tile/display_settings/display_settings.h"
 #include "mainbar/setup_tile/gps_settings/gps_settings.h"
 #include "mainbar/setup_tile/move_settings/move_settings.h"
+#include "mainbar/setup_tile/notify_settings/notify_settings.h"
 #include "mainbar/setup_tile/battery_settings/battery_settings.h"
 #include "mainbar/setup_tile/sound_settings/sound_settings.h"
 #include "mainbar/setup_tile/sdcard_settings/sdcard_settings.h"
@@ -44,8 +46,8 @@
 #include "mainbar/setup_tile/bluetooth_settings/bluetooth_settings.h"
 #include "mainbar/setup_tile/wlan_settings/wlan_settings.h"
 #include "mainbar/setup_tile/time_settings/time_settings.h"
+#include "mainbar/setup_tile/touch_settings/touch_settings.h"
 #include "mainbar/setup_tile/watchface/watchface_manager.h"
-#include "gui/mainbar/setup_tile/watchface/config/watchface_expr.h"
 #include "mainbar/setup_tile/update/update.h"
 #include "mainbar/setup_tile/style_settings/style_settings.h"
 #include "hardware/powermgm.h"
@@ -64,16 +66,69 @@
     #include "utils/logging.h"
 #else
     #include <Arduino.h>
+
+    SemaphoreHandle_t xGUI_SemaphoreMutex;
+#endif
+
+#if defined( M5CORE2 )
+    LV_IMG_DECLARE( bg_320px );
+    LV_IMG_DECLARE( bg1_320px );
+    LV_IMG_DECLARE( bg2_320px );
+    LV_IMG_DECLARE( bg3_320px );
+
+    const lv_img_dsc_t bg = bg_320px;
+    const lv_img_dsc_t bg1 = bg1_320px;
+    const lv_img_dsc_t bg2 = bg2_320px;
+    const lv_img_dsc_t bg3 = bg3_320px;
+#elif defined( M5PAPER )
+    LV_IMG_DECLARE( bg_540px );
+    LV_IMG_DECLARE( bg1_540px );
+    LV_IMG_DECLARE( bg2_540px );
+    LV_IMG_DECLARE( bg3_540px );
+
+    const lv_img_dsc_t bg = bg_540px;
+    const lv_img_dsc_t bg1 = bg1_540px;
+    const lv_img_dsc_t bg2 = bg2_540px;
+    const lv_img_dsc_t bg3 = bg3_540px;
+#elif defined( WT32_SC01 )
+    LV_IMG_DECLARE( bg_480px );
+    LV_IMG_DECLARE( bg1_480px );
+    LV_IMG_DECLARE( bg2_480px );
+    LV_IMG_DECLARE( bg3_480px );
+
+    const lv_img_dsc_t bg = bg_480px;
+    const lv_img_dsc_t bg1 = bg1_480px;
+    const lv_img_dsc_t bg2 = bg2_480px;
+    const lv_img_dsc_t bg3 = bg3_480px;
+#else
+    LV_IMG_DECLARE( bg_240px );
+    LV_IMG_DECLARE( bg1_240px );
+    LV_IMG_DECLARE( bg2_240px );
+    LV_IMG_DECLARE( bg3_240px );
+
+    const lv_img_dsc_t bg = bg_240px;
+    const lv_img_dsc_t bg1 = bg1_240px;
+    const lv_img_dsc_t bg2 = bg2_240px;
+    const lv_img_dsc_t bg3 = bg3_240px;
 #endif
 
 lv_obj_t *img_bin = NULL;
 
 static volatile bool force_redraw = false;
+static volatile int lvgl_thread_guard_catcher = 1;
 
+bool gui_powermgm_lvgl_guard_take_cb( EventBits_t event, void *arg );
+bool gui_powermgm_lvgl_guard_give_cb( EventBits_t event, void *arg );
 bool gui_powermgm_event_cb( EventBits_t event, void *arg );
 bool gui_powermgm_loop_event_cb( EventBits_t event, void *arg );
 
 void gui_setup( void ) {
+    #ifdef NATIVE_64BIT
+    #else
+        xGUI_SemaphoreMutex = xSemaphoreCreateMutex();
+    #endif
+    gui_give();
+    gui_take();
     /**
      * install lv fs spiffs wrapper
      * files begin with "P:/foo.bar" -> "/spiffs/foo.bar"
@@ -111,30 +166,26 @@ void gui_setup( void ) {
     keyboard_setup();
     log_i("num keyboard setup");
     num_keyboard_setup();
+    gui_give();
     /*
      * add setup tool to the setup tile
      */
-
     battery_settings_tile_setup();
     display_settings_tile_setup();
     move_settings_tile_setup();
     style_settings_tile_setup();
+    notify_settings_tile_setup();
     wlan_settings_tile_setup();
+    touch_settings_tile_setup();
     time_settings_tile_setup();
     gps_settings_tile_setup();
     utilities_tile_setup();
     sound_settings_tile_setup();
-    #ifndef NO_UPDATES
-        update_tile_setup();
-    #endif
+    update_tile_setup();
     #ifndef NO_BLUETOOTH
         bluetooth_settings_tile_setup();
     #endif
-    #ifndef NO_WATCHFACE
-        watchface_manager_setup();
-        watchface_expr_setup();
-    #endif
-
+    watchface_manager_setup();
     #if defined( LILYGO_WATCH_HAS_SDCARD )
         sdcard_settings_tile_setup();
     #endif
@@ -153,6 +204,13 @@ void gui_setup( void ) {
     powermgm_register_cb_with_prio( POWERMGM_STANDBY, gui_powermgm_event_cb, "gui", CALL_CB_FIRST );
     powermgm_register_cb_with_prio( POWERMGM_WAKEUP | POWERMGM_SILENCE_WAKEUP, gui_powermgm_event_cb, "gui", CALL_CB_LAST );
     powermgm_register_loop_cb( POWERMGM_WAKEUP | POWERMGM_SILENCE_WAKEUP, gui_powermgm_loop_event_cb, "gui loop" );
+    /**
+     * add lvgl thread guard
+     */
+    powermgm_register_cb_with_prio( POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_SILENCE_WAKEUP , gui_powermgm_lvgl_guard_take_cb, "LVGL thread guard take", CALL_CB_LVGL_GUARD_TAKE );
+    powermgm_register_cb_with_prio( POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_SILENCE_WAKEUP , gui_powermgm_lvgl_guard_give_cb, "LVGL thread guard give", CALL_CB_LVGL_GUARD_GIVE );
+    powermgm_register_loop_cb_with_prio( POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_SILENCE_WAKEUP , gui_powermgm_lvgl_guard_take_cb, "LVGL loop thread guard take", CALL_CB_LVGL_GUARD_TAKE );
+    powermgm_register_loop_cb_with_prio( POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_SILENCE_WAKEUP , gui_powermgm_lvgl_guard_give_cb, "LVGL loop thread guard give", CALL_CB_LVGL_GUARD_GIVE );
 
 #if defined( NATIVE_64BIT ) && defined( ROUND_DISPLAY )
     LV_IMG_DECLARE( rounddisplaymask_240px );
@@ -164,44 +222,66 @@ void gui_setup( void ) {
     lv_img_set_src( watch2021_mask_bin, &rounddisplaymask_240px );
     lv_obj_align( watch2021_mask_bin, NULL, LV_ALIGN_CENTER, 0, 0 );
 #endif
+}
 
-#ifdef M5PAPER
-    widget_style_theme_set( 0 );
-#endif
+bool gui_powermgm_lvgl_guard_take_cb( EventBits_t event, void *arg ) {
+    gui_take();
+    return( true );
+}
+
+bool gui_powermgm_lvgl_guard_give_cb( EventBits_t event, void *arg ) {
+    gui_give();
+    return( true );
+}
+
+bool gui_take( void ) {
+    #ifdef NATIVE_64BIT
+        return( true );
+    #else
+        return( xSemaphoreTake( xGUI_SemaphoreMutex, portMAX_DELAY ) == pdTRUE );
+    #endif
+}
+
+void gui_give( void ) {
+    #ifdef NATIVE_64BIT
+    #else
+        xSemaphoreGive( xGUI_SemaphoreMutex );
+    #endif
 }
 
 bool gui_powermgm_event_cb( EventBits_t event, void *arg ) {
-
     switch ( event ) {
         case POWERMGM_STANDBY:          /*
-                                         * get back to maintile if configure and
-                                         * stop all LVGL activitys and tasks
+                                         * slow LVGL down ticker
                                          */
-                                        log_i("go standby");                  
+                                        log_d("go standby");                  
                                         #ifdef NATIVE_64BIT
                                         #else
                                             lv_obj_invalidate( lv_scr_act() );
                                             lv_refr_now( NULL );
                                             hardware_detach_lvgl_ticker();
+                                            lv_task_enable( false );
                                         #endif
                                         break;
         case POWERMGM_WAKEUP:           /*
-                                         * resume all LVGL activitys and tasks
+                                         * resume LVGL ticker
                                          */
-                                        log_i("go wakeup");
+                                        log_d("go wakeup");
                                         #ifdef NATIVE_64BIT
                                         #else
                                             hardware_attach_lvgl_ticker();
+                                            lv_task_enable( true );
                                         #endif
                                         lv_disp_trig_activity( NULL );
                                         break;
         case POWERMGM_SILENCE_WAKEUP:   /*
-                                         * resume all LVGL activitys and tasks
+                                         * resume LVGL ticker
                                          */
-                                        log_i("go silence wakeup");
+                                        log_d("go silence wakeup");
                                         #ifdef NATIVE_64BIT
                                         #else
                                             hardware_attach_lvgl_ticker();
+                                            lv_task_enable( true );
                                         #endif
                                         lv_disp_trig_activity( NULL );
                                         break;
@@ -225,27 +305,29 @@ void gui_force_redraw( bool force ) {
 }
 
 void gui_set_background_image ( uint32_t background_image ) {
+    /**
+     * force reflush lvgl image cache
+     */
+    lv_img_cache_set_size( 1 );
+    lv_img_cache_set_size( 256 );
+
     switch ( background_image ) {
         case 0:
-            LV_IMG_DECLARE( bg );
             lv_img_set_src( img_bin, &bg );
             lv_obj_align( img_bin, NULL, LV_ALIGN_CENTER, 0, 0 );
             lv_obj_set_hidden( img_bin, false );
             break;
         case 1:
-            LV_IMG_DECLARE( bg1 );
             lv_img_set_src( img_bin, &bg1 );
             lv_obj_align( img_bin, NULL, LV_ALIGN_CENTER, 0, 0 );
             lv_obj_set_hidden( img_bin, false );
             break;
         case 2:
-            LV_IMG_DECLARE( bg2 );
             lv_img_set_src( img_bin, &bg2 );
             lv_obj_align( img_bin, NULL, LV_ALIGN_CENTER, 0, 0 );
             lv_obj_set_hidden( img_bin, false );
             break;
         case 3:
-            LV_IMG_DECLARE( bg3 );
             lv_img_set_src( img_bin, &bg3 );
             lv_obj_align( img_bin, NULL, LV_ALIGN_CENTER, 0, 0 );
             lv_obj_set_hidden( img_bin, false );
@@ -259,14 +341,14 @@ void gui_set_background_image ( uint32_t background_image ) {
             filepath_convert( filename, sizeof( filename ), BACKGROUNDIMAGE );
             file = fopen( filename, "rb" );
             if ( file ) {
-                log_i("set custom background image from spiffs");
+                log_d("set custom background image from spiffs");
                 fclose( file );
                 lv_img_set_src( img_bin, filename );
                 lv_obj_align( img_bin, NULL, LV_ALIGN_CENTER, 0, 0 );
                 lv_obj_set_hidden( img_bin, false );
             }
             else {
-                log_i("not custom background image found on spiffs, set to black");
+                log_d("not custom background image found on spiffs, set to black");
                 lv_obj_set_hidden( img_bin, true );
             }
             break;
@@ -281,20 +363,11 @@ bool gui_powermgm_loop_event_cb( EventBits_t event, void *arg ) {
 
     #else
         switch ( event ) {
-            case POWERMGM_WAKEUP:           if ( lv_disp_get_inactive_time( NULL ) < display_get_timeout() * 1000  || display_get_timeout() == DISPLAY_MAX_TIMEOUT ) {
-                                                lv_task_handler();
-                                            }
-                                            else {
+            case POWERMGM_WAKEUP:           if ( lv_disp_get_inactive_time( NULL ) >= display_get_timeout() * 1000  && display_get_timeout() != DISPLAY_MAX_TIMEOUT )
                                                 powermgm_set_event( POWERMGM_STANDBY_REQUEST );
-                                            }
-
                                             break;
-            case POWERMGM_SILENCE_WAKEUP:   if ( lv_disp_get_inactive_time( NULL ) < display_get_timeout() * 1000 ) {
-                                                lv_task_handler();
-                                            }
-                                            else {
+            case POWERMGM_SILENCE_WAKEUP:   if ( lv_disp_get_inactive_time( NULL ) >= display_get_timeout() * 1000 )
                                                 powermgm_set_event( POWERMGM_STANDBY_REQUEST );
-                                            }
                                             break;
         }
     #endif

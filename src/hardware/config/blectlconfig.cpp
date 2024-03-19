@@ -34,13 +34,22 @@ bool blectl_config_t::onSave(JsonDocument& doc) {
     doc["advertising"] = advertising;
     doc["enable_on_standby"] = enable_on_standby;
     doc["disable_only_disconnected"] = disable_only_disconnected;
-    doc["tx_power"] = txpower;
+    doc["timesync"] = timesync;
+    doc["wakeup_on_notification"] = wakeup_on_notification;
     doc["show_notification"] = show_notification;
+    doc["vibe_notification"]= vibe_notification;
+    doc["sound_notification"]= sound_notification;
+    doc["media_notification"]= media_notification;
+    doc["tx_power"] = txpower;
+    doc["minInterval"] = minInterval;
+    doc["maxInterval"] = maxInterval;
+    doc["latency"] = latency;
+    doc["timeout"] = timeout;
+
     for ( int i = 0 ; i < CUSTOM_AUDIO_ENTRYS ; i++ ) {
         doc["custom_audio_notifications"][ i ]["text"] = custom_audio_notifications[ i ].text;
         doc["custom_audio_notifications"][ i ]["value"] = custom_audio_notifications[ i ].value;
     }
-
     return true;
 }
 
@@ -67,11 +76,20 @@ bool blectl_config_t::onLoad(JsonDocument& doc) {
     advertising = doc["advertising"] | true;
     enable_on_standby = doc["enable_on_standby"] | false;
     disable_only_disconnected = doc["disable_only_disconnected"] | false;
+    timesync = doc["timesync"] | true;
     txpower = doc["tx_power"] | 1;
     show_notification = doc["show_notification"] | true;
+    vibe_notification = doc["vibe_notification"] | true;
+    sound_notification = doc["sound_notification"] | true;
+    media_notification = doc["media_notification"] | true;
+    wakeup_on_notification = doc["wakeup_on_notification"] | true;
+    minInterval = doc["minInterval"] | 0x06;
+    maxInterval = doc["maxInterval"] | 0x20;
+    latency = doc["latency"] | 20;
+    timeout = doc["timeout"] | 400;
 
     for ( int i = 0 ; i < CUSTOM_AUDIO_ENTRYS ; i++ ) {
-        if ( doc["custom_audio_notifications"][ i ]["text"] && doc["custom_audio_notifications"][ i ]["value"] ) {
+        if ( doc["custom_audio_notifications"][ i ].containsKey("text") && doc["custom_audio_notifications"][ i ].containsKey("value") ) {
             strncpy( custom_audio_notifications[ i ].text   , doc["custom_audio_notifications"][ i ]["text"], sizeof( custom_audio_notifications[ i ].text ) );
             strncpy( custom_audio_notifications[ i ].value  , doc["custom_audio_notifications"][ i ]["value"], sizeof( custom_audio_notifications[ i ].value ) );
         }
@@ -104,7 +122,15 @@ bool blectl_config_t::onDefault( void ) {
     enable_on_standby = false;
     disable_only_disconnected = false;
     txpower = 1;
+    wakeup_on_notification = true;
     show_notification = true;
+    vibe_notification = true;
+    sound_notification = true;
+    media_notification = true;
+    minInterval = 0x06;
+    maxInterval = 0x20;
+    latency = 20;
+    timeout = 400;
 
     return true;
 }

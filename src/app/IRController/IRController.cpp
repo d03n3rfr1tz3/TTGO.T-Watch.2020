@@ -25,15 +25,20 @@
 #include "quickglui/quickglui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/widget_styles.h"
-#include "hardware/blectl.h"
+#include "hardware/ble/gadgetbridge.h"
+#include "gui/app.h"
 
+/*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &IRController_setup, 8 );           /** @brief app autocall function */
 
 #ifdef NATIVE_64BIT
     void IRController_setup( void ) {
         return;
     }
 #else
-    #if defined( M5PAPER ) ||  defined( M5CORE2 ) || defined( LILYGO_WATCH_2021 )    
+    #if defined( M5PAPER ) ||  defined( M5CORE2 ) || defined( LILYGO_WATCH_2021 ) || defined( WT32_SC01 )
         void IRController_setup( void ) {
             return;
         }
@@ -57,11 +62,16 @@
         * setup routine for IR Controller app
         */
         void IRController_setup( void ) {
+            if( !registed ) {
+                return;
+            }
+            
+
             irController.init("IR Remote", &IRController_64px);
             // Load config and build user interface
             IRController_build_UI(IRControlSettingsAction::Load);
 
-            blectl_register_cb(BLECTL_MSG_JSON, IRController_bluetooth_event_cb, "ir-remote setup");
+            gadgetbridge_register_cb( GADGETBRIDGE_JSON_MSG, IRController_bluetooth_event_cb, "ir-remote setup");
         }
 
         void IRController_build_UI(IRControlSettingsAction settingsAction)
@@ -75,7 +85,7 @@
             lv_page_set_scrollbar_mode(desks, LV_SCROLLBAR_MODE_OFF);
             lv_obj_add_style(desks, LV_OBJ_PART_MAIN, ws_get_mainbar_style());
 
-            valid_pos = ( lv_point_t * )MALLOC( sizeof( lv_point_t ) * irConfig.pageCount );
+            valid_pos = ( lv_point_t * )MALLOC_ASSERT( sizeof( lv_point_t ) * irConfig.pageCount, "valid_pos allocation failed" );
             for (lv_coord_t i = 0; i < irConfig.pageCount; i++)
             {
                 valid_pos[i].x = i;
@@ -202,7 +212,7 @@
         }
 
         bool IRController_bluetooth_event_cb(EventBits_t event, void *arg) {
-            if (event != BLECTL_MSG_JSON) return false; // Not supported
+            if (event != GADGETBRIDGE_JSON_MSG) return false; // Not supported
 
             BluetoothJsonRequest &request = *(BluetoothJsonRequest *)arg;
 

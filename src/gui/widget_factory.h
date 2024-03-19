@@ -50,6 +50,7 @@
     #define     BACKGROUND_STYLE            ws_get_background_style()
     #define     MAINBAR_STYLE               ws_get_mainbar_style()
     #define     APP_STYLE                   ws_get_app_style()
+    #define     APP_OPA_STYLE               ws_get_app_opa_style()
     #define     APP_ICON_STYLE              ws_get_app_icon_style()
     #define     APP_ICON_LABEL_STYLE        ws_get_app_icon_label_style()
     #define     SETUP_STYLE                 ws_get_setup_tile_style()
@@ -111,7 +112,26 @@ lv_obj_t * wf_add_label(lv_obj_t *parent, char const * text);
 lv_obj_t * wf_add_label(lv_obj_t *parent, char const * text, lv_style_t *style );
 lv_obj_t * wf_add_label_container(lv_obj_t *parent, char const * text);
 lv_obj_t * wf_add_label_container(lv_obj_t *parent, char const * text, lv_style_t *style );
-
+/**
+ * @brief set a printf formated label and align it
+ * 
+ * @param label         label lv_obj_t
+ * @param base          parent widget
+ * @param align         align like LV_ALIGN_....
+ * @param x             x offset
+ * @param y             y offset
+ * @param format        format string
+ * @param ...           format options list
+ */
+void wf_label_printf( lv_obj_t *label, lv_obj_t *base, lv_align_t align, lv_coord_t x, lv_coord_t y, const char *format, ... );
+/**
+ * @brief set a printf formated label
+ * 
+ * @param label         label lv_obj_t
+ * @param format        format string
+ * @param ...           format options list
+ */
+void wf_label_printf( lv_obj_t *label, const char *format, ... );
 /**
  * @brief   Creates and adds a roller object to a container
  *
@@ -133,6 +153,7 @@ lv_obj_t * wf_add_roller(lv_obj_t *parent, char const * data, lv_roller_mode_t m
  * @return  returns pointer to the added object
  */
 lv_obj_t * wf_add_switch(lv_obj_t *parent, bool on = false);
+lv_obj_t * wf_add_switch(lv_obj_t *parent, bool on, lv_event_cb_t event_cb );
 
 /**
  * @brief   Creates and adds a container with a label and a switch to a container
@@ -159,6 +180,48 @@ lv_obj_t * wf_add_labeled_list(lv_obj_t *parent, char const * text, lv_obj_t ** 
  * @return  returns pointer to the added object
  */
 lv_obj_t * wf_add_image_button(lv_obj_t *parent, lv_img_dsc_t const &image, lv_event_cb_t event_cb, lv_style_t *style=NULL);
+/**
+ * @brief   Creates and adds an image button to a container and used overleyed images
+ *
+ * @param   parent   pointer to a parent container
+ * @param   image    reference to image description
+ * @param   event_cb the button click event function
+ * @param   style    style to apply
+ *
+ * @return  returns pointer to the added object
+ */
+lv_obj_t * wf_add_image_button_old(lv_obj_t *parent, lv_img_dsc_t const &image, lv_event_cb_t event_cb, lv_style_t *style);
+/**
+ * @brief set a new style on image button
+ * 
+ * @param button    button
+ * @param style    style to apply
+ */
+void wf_image_button_set_style( lv_obj_t *button, lv_style_t *style );
+/**
+ * @brief fade a img button in from 0 to full size
+ * 
+ * @param button    button
+ * @param duration  duration time in ms
+ * @param duration  delayed start time in ms
+ */
+void wf_image_button_fade_in( lv_obj_t *button, uint32_t duration, uint32_t  );
+
+/**
+ * @brief fade a img button in from full size to 0
+ * 
+ * @param button    button
+ * @param duration  duration time in ms
+ * @param duration  delayed start time in ms
+ */
+void wf_image_button_fade_out( lv_obj_t *button, uint32_t duration, uint32_t  );
+
+/**
+ * @brief enabled/disabled image button anim
+ * 
+ * @param enable    true means enabled, false disabled
+ */
+void wf_enable_anim( bool enable );
 
 /**
  * @brief   Creates and adds an exit button to a container
@@ -362,6 +425,66 @@ lv_img_dsc_t const &wf_get_up_img( void );
  */
 lv_obj_t * wf_add_down_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style = NULL );
 lv_img_dsc_t const &wf_get_down_img( void );
+
+/**
+ * @brief   Creates and adds an location button to a container
+ *
+ * @param   parent   pointer to a parent container
+ * @param   event_cb the button click event function
+ * @param   style    style to apply
+ *
+ * @return  returns pointer to the added object
+ */
+lv_obj_t * wf_add_location_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style = NULL );
+lv_img_dsc_t const &wf_get_location_img( void );
+
+/**
+ * @brief   Creates and adds an play button to a container
+ *
+ * @param   parent   pointer to a parent container
+ * @param   event_cb the button click event function
+ * @param   style    style to apply
+ *
+ * @return  returns pointer to the added object
+ */
+lv_obj_t * wf_add_play_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style = NULL );
+lv_img_dsc_t const &wf_get_play_img( void );
+
+/**
+ * @brief   Creates and adds an stop button to a container
+ *
+ * @param   parent   pointer to a parent container
+ * @param   event_cb the button click event function
+ * @param   style    style to apply
+ *
+ * @return  returns pointer to the added object
+ */
+lv_obj_t * wf_add_stop_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style = NULL );
+lv_img_dsc_t const &wf_get_stop_img( void );
+
+/**
+ * @brief   Creates and adds an eject button to a container
+ *
+ * @param   parent   pointer to a parent container
+ * @param   event_cb the button click event function
+ * @param   style    style to apply
+ *
+ * @return  returns pointer to the added object
+ */
+lv_obj_t * wf_add_eject_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style = NULL );
+lv_img_dsc_t const &wf_get_eject_img( void );
+
+/**
+ * @brief   Creates and adds an reply button to a container
+ *
+ * @param   parent   pointer to a parent container
+ * @param   event_cb the button click event function
+ * @param   style    style to apply
+ *
+ * @return  returns pointer to the added object
+ */
+lv_obj_t * wf_add_reply_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style = NULL );
+lv_img_dsc_t const &wf_get_reply_img( void );
 
 /**
  * @brief   Creates and adds an labeled button to a container

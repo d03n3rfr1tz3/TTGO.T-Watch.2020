@@ -36,9 +36,15 @@
     #elif defined( LILYGO_WATCH_2020_V3 )
         #define FIRMWARE_UPDATE_URL            "http://www.neo-guerillaz.de/ttgo-t-watch2020_v3.version.json"
     #elif defined( LILYGO_WATCH_2021 )
-        #define FIRMWARE_UPDATE_URL            "http://www.neo-guerillaz.de/ttgo-t-watch2021.version.json"
+        #if defined( VERSION_2 )
+            #define FIRMWARE_UPDATE_URL            "http://www.neo-guerillaz.de/ttgo-t-watch2021-v2.version.json"
+        #else
+            #define FIRMWARE_UPDATE_URL            "http://www.neo-guerillaz.de/ttgo-t-watch2021-v1.version.json"
+        #endif
     #elif defined( M5CORE2 )
         #define FIRMWARE_UPDATE_URL            "http://www.neo-guerillaz.de/m5stack-core2.version.json"
+    #elif defined( WT32_SC01 )
+        #define FIRMWARE_UPDATE_URL            "http://www.neo-guerillaz.de/wt32-sc01_v3_3.version.json"
     #endif
 
     #if !defined( FIRMWARE_UPDATE_URL )

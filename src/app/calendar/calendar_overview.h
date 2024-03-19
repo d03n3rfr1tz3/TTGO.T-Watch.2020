@@ -32,5 +32,9 @@
      * @return  calendar overview tile number
      */
     uint32_t calendar_overview_get_tile( void );
+    /**
+     * @brief refresh calendar date ui
+     */
+    void calendar_overview_refresh_showed_ui( void );
 
 #endif // _CALENDAR_OVREVIEW_H

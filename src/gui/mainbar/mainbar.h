@@ -28,6 +28,8 @@
     typedef void ( * MAINBAR_CALLBACK_FUNC ) ( void );
 
     #define MAINBAR_INFO_LOG            log_d
+    #define MAINBAR_ERROR_LOG           log_e
+    #define MAINBAR_WARN_LOG            log_w
 
     #define MAINBAR_APP_TILE_X_START    0                       /** @brief x start pos for app tiles **/
     #define MAINBAR_APP_TILE_Y_START    8                       /** @brief y start for app tiles **/
@@ -42,6 +44,7 @@
         lv_point_t       tile[ MAINBAR_MAX_HISTORY ];           /** @brief stored tile coordinates */
         bool             statusbar[ MAINBAR_MAX_HISTORY ];      /** @brief stored statusbar state */
         lv_anim_enable_t anim[ MAINBAR_MAX_HISTORY ];           /** @brief stored anim enable state */
+        EventBits_t      powermgm_state[ MAINBAR_MAX_HISTORY ]; /** @brief store powermgm state wenn jump */
     } mainbar_history_t;
 
     /**
@@ -49,8 +52,11 @@
      */
     typedef struct {
         lv_obj_t *tile;                                         /** @brief pointer to the lv tile obj */
-        MAINBAR_CALLBACK_FUNC activate_cb;                      /** @brief pointer to a activate function when enter this tile */
-        MAINBAR_CALLBACK_FUNC hibernate_cb;                     /** @brief pointer to a hibernate function when leave this tile */
+        int activate_cb_entry_count;
+        int hibernate_cb_entry_count;
+        int button_cb_entry_count;
+        MAINBAR_CALLBACK_FUNC *activate_cb;                     /** @brief pointer to a activate function when enter this tile */
+        MAINBAR_CALLBACK_FUNC *hibernate_cb;                    /** @brief pointer to a hibernate function when leave this tile */
         CALLBACK_FUNC button_cb;                                /** @brief pointer to a button event function tile is active */
         uint16_t x;                                             /** @brief tile x pos */
         uint16_t y;                                             /** @brief tile y pos */

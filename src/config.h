@@ -60,10 +60,9 @@
             #define HARDWARE_NAME   "T-Watch2021"
             #define RES_X_MAX       240
             #define RES_Y_MAX       240
+            #define ENABLE_FTPSERVER                        /** @brief To disable built-in ftpserver, comment this line */
             #define ONLY_ESSENTIAL
             #define ROUND_DISPLAY
-            #define NO_BLUETOOTH
-            #define NO_WATCHFACE
             #define NO_UPDATES
         #elif defined( M5PAPER )
             #define HARDWARE_NAME   "m5stack-fire"
@@ -73,15 +72,19 @@
             #define ENABLE_FTPSERVER                        /** @brief To disable built-in ftpserver, comment this line */
             #define ENABLE_MQTT                             /** @brief To disable built-in mqtt, comment this line */
             #define NO_WATCHFACE
-            #define NO_BLUETOOTH
         #elif defined( M5CORE2 )
             #define HARDWARE_NAME   "m5stack-core2"
             #define RES_X_MAX       320
             #define RES_Y_MAX       240
-            #define ENABLE_WEBSERVER                        /** @brief To disable built-in webserver, comment this line */
             #define ENABLE_FTPSERVER                        /** @brief To disable built-in ftpserver, comment this line */
-            #define ENABLE_MQTT                             /** @brief To disable built-in mqtt, comment this line */
-            #define NO_BLUETOOTH
+        #elif defined( WT32_SC01 )
+            #undef LILYGO_WATCH_LVGL
+            #define HARDWARE_NAME   "wt32-sc01"
+            #define RES_X_MAX       480
+            #define RES_Y_MAX       320
+            #define USE_PSRAM_ALLOC_LVGL                    /** @brief enabled LVGL to use PSRAM */ 
+            #define ENABLE_FTPSERVER                        /** @brief To disable built-in ftpserver, comment this line */
+            #define NO_WATCHFACE
         #else
             #error "no destination hardware version defined"
         #endif
@@ -93,7 +96,7 @@
     /**
      * firmeware version string
      */
-    #define __FIRMWARE__            "2021121701"
+    #define __FIRMWARE__            "2023091101"
     /**
      * Allows to include config.h from C code
      */
