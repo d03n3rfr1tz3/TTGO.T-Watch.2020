@@ -152,7 +152,7 @@ void wifictl_setup( void ) {
                     /**
                      * remember that the connection to this network was tried
                      */
-                    strncpy( wifictl_config.networklist_tried[ entry ].ssid, wifictl_config.networklist[ entry ].ssid, sizeof( wifictl_config.networklist_tried[ entry ].ssid ) );
+                    strncpy( wifictl_config->networklist_tried[ entry ].ssid, wifictl_config->networklist[ entry ].ssid, sizeof( wifictl_config->networklist_tried[ entry ].ssid ) );
                     triedAny = true;
                 }
             }
@@ -165,8 +165,8 @@ void wifictl_setup( void ) {
              * clean tried networklist
              */
             for ( int entry = 0 ; entry < NETWORKLIST_ENTRYS ; entry++ ) {
-                wifictl_config.networklist_tried[ entry ].ssid[ 0 ] = '\0';
-                wifictl_config.networklist_tried[ entry ].password[ 0 ] = '\0';
+                wifictl_config->networklist_tried[ entry ].ssid[ 0 ] = '\0';
+                wifictl_config->networklist_tried[ entry ].password[ 0 ] = '\0';
             }
             /**
              * connect if we discover an known network
@@ -179,14 +179,14 @@ void wifictl_setup( void ) {
                     if ( triedAny ) {
                         break;
                     }
-                    if ( !strcmp( wifictl_config.networklist[ entry ].ssid,  WiFi.SSID(i).c_str() ) ) {
+                    if ( !strcmp( wifictl_config->networklist[ entry ].ssid,  WiFi.SSID(i).c_str() ) ) {
                         wifictl_send_event_cb( WIFICTL_MSG, (void *)"connecting ..." );
-                        WiFi.setHostname( wifictl_config.hostname );
-                        WiFi.begin( wifictl_config.networklist[ entry ].ssid, wifictl_config.networklist[ entry ].password );
+                        WiFi.setHostname( wifictl_config->hostname );
+                        WiFi.begin( wifictl_config->networklist[ entry ].ssid, wifictl_config->networklist[ entry ].password );
                         /**
                          * remember the connection to this network was tried
                          */
-                        strncpy( wifictl_config.networklist_tried[ entry ].ssid, wifictl_config.networklist[ entry ].ssid, sizeof( wifictl_config.networklist_tried[ entry ].ssid ) );
+                        strncpy( wifictl_config->networklist_tried[ entry ].ssid, wifictl_config->networklist[ entry ].ssid, sizeof( wifictl_config->networklist_tried[ entry ].ssid ) );
                         triedAny = true;
                     }
                 }
@@ -197,8 +197,6 @@ void wifictl_setup( void ) {
 #else
         }, WiFiEvent_t::SYSTEM_EVENT_SCAN_DONE );
 #endif
-            }
-        }
 
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
         wifictl_set_event( WIFICTL_CONNECT | WIFICTL_ACTIVE );
@@ -221,8 +219,8 @@ void wifictl_setup( void ) {
         }
         # endif
         #ifdef ENABLE_MQTT
-        if ( wifictl_config.mqtt ) {
-            mqtt_start( wifictl_config.hostname , wifictl_config.mqttssl , wifictl_config.mqttserver , wifictl_config.mqttport , wifictl_config.mqttuser , wifictl_config.mqttpass );
+        if ( wifictl_config->mqtt ) {
+            mqtt_start( wifictl_config->hostname , wifictl_config->mqttssl , wifictl_config->mqttserver , wifictl_config->mqttport , wifictl_config->mqttuser , wifictl_config->mqttpass );
         }
         # endif
 
@@ -275,7 +273,7 @@ void wifictl_setup( void ) {
     #else
         WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
             esp_wifi_wps_disable();
-            WiFi.setHostname(wifictl_config.hostname);
+            WiFi.setHostname(wifictl_config->hostname);
             WiFi.begin();
             wifictl_send_event_cb( WIFICTL_WPS_SUCCESS, (void *)"wps success" );
         }, WiFiEvent_t::SYSTEM_EVENT_STA_WPS_ER_SUCCESS );
@@ -403,11 +401,11 @@ void wifictl_set_ftpserver( bool ftpserver ) {
 
 #ifdef ENABLE_MQTT
 bool wifictl_get_mqtt( void ) {
-return( wifictl_config.mqtt );
+return( wifictl_config->mqtt );
 }
 
 void wifictl_set_mqtt( bool mqtt ) {
-  wifictl_config.mqtt = mqtt;
+  wifictl_config->mqtt = mqtt;
   wifictl_save_config();
 }
 #endif
