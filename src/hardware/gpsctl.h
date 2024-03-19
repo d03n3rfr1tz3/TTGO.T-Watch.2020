@@ -26,11 +26,14 @@
     #include "hardware/config/gpsctlconfig.h"
     #include "utils/io.h"
     
-    #define GPSCTL_INFO_LOG                 log_i
+    #define GPSCTL_INFO_LOG                 log_d
     #define GPSCTL_DEBUG_LOG                log_d
     #define GPSCTL_ERROR_LOG                log_e
 
     #define GPSCTL_INTERVAL                 1000           /** @brief gps data intervall in milliseconds */
+
+    #define EARTH_RADIUS_KM                 6367
+    #define EARTH_RADIUS_MIL                3956
 
     #define GPSCTL_ENABLE                   _BV(0)         /** @brief event mask for GPS enabled */
     #define GPSCTL_DISABLE                  _BV(1)         /** @brief event mask for GPS disable */
@@ -42,10 +45,11 @@
     #define GPSCTL_UPDATE_TIME              _BV(7)         /** @brief event mask for GPS time update*/
     #define GPSCTL_UPDATE_SPEED             _BV(8)         /** @brief event mask for GPS speed update*/
     #define GPSCTL_UPDATE_ALTITUDE          _BV(9)         /** @brief event mask for GPS altitude update*/
-    #define GPSCTL_UPDATE_SATELLITE         _BV(10)        /** @brief event mask for GPS satellite update*/
-    #define GPSCTL_UPDATE_SATELLITE_TYPE    _BV(11)        /** @brief event mask for GPS satellite type update*/
-    #define GPSCTL_UPDATE_SOURCE            _BV(12)        /** @brief event mask for GPS source update*/
-    #define GPSCTL_UPDATE_CONFIG            _BV(13)        /** @brief event mask for GPS configuration*/
+    #define GPSCTL_UPDATE_COURSE            _BV(10)        /** @brief event mask for GPS course update*/
+    #define GPSCTL_UPDATE_SATELLITE         _BV(11)        /** @brief event mask for GPS satellite update*/
+    #define GPSCTL_UPDATE_SATELLITE_TYPE    _BV(12)        /** @brief event mask for GPS satellite type update*/
+    #define GPSCTL_UPDATE_SOURCE            _BV(13)        /** @brief event mask for GPS source update*/
+    #define GPSCTL_UPDATE_CONFIG            _BV(14)        /** @brief event mask for GPS configuration*/
     /**
      * @brief gps source types
      */
@@ -67,6 +71,7 @@
         bool valid_speed = false;                       /** @brief true if speed valid */
         bool valid_altitude = false;                    /** @brief true if altitude valid */
         bool valid_satellite = false;                   /** @brief true if satellite valid */
+        bool valid_course = false;
         double lat = 0;                                 /** @brief gps latitude */
         double lon = 0;                                 /** @brief gps longitude */
         double speed_mph = 0;                           /** @brief speed in miles per hour */
@@ -74,6 +79,7 @@
         double speed_kmh = 0;                           /** @brief speed in kilometers per hour */
         double altitude_feed = 0;                       /** @brief altitude in feed */
         double altitude_meters = 0;                     /** @brief altitude in meter */
+        double course = 0;
         uint32_t satellites = 0;                        /** @brief number of seen satellites */
         struct {
             uint32_t gps_satellites = 0;                /** @brief number of gps satellits in view */
@@ -157,10 +163,11 @@
      * @param   lat set lat
      * @param   lon set lon
      * @param   altitude set altitude
+     * @param   speed set speed
      * @param   gps_source gps data source
      * @param   app_location true to inform app for a new location like weather app
      */
-    void gpsctl_set_location( double lat, double lon, double altitude, gps_source_t gps_source , bool app_location );
+    void gpsctl_set_location( double lat, double lon, double altitude, double speed, gps_source_t gps_source , bool app_location );
     /**
      * @brief get gps source string
      * 
@@ -181,5 +188,26 @@
      * @param   tx      pointer to a tx variable
      */
     void gpsctl_get_gps_rx_tx_pin( int8_t *rx, int8_t *tx );
+    /**
+     * @brief calculate the distance between to gps point
+     * 
+     * @param lat1
+     * @param long1 
+     * @param lat2 
+     * @param long2 
+     * @param earth_radius      EARTH_RADIUS_KM or EARTH_RADIUS_MIL
+     * @return double 
+     */
+    double gpsctl_distance( double lat1, double long1, double lat2, double long2, double earth_radius );
+    /**
+     * @brief calculate the direction based on two coordinates
+     * 
+     * @param lat1 
+     * @param long1 
+     * @param lat2 
+     * @param long2 
+     * @return double 
+     */
+    double gpsctl_courseTo( double lat1, double long1, double lat2, double long2 );
 
 #endif // _GPSCTL_H

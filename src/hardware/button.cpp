@@ -38,6 +38,7 @@ bool button_send_cb( EventBits_t event, void *arg );
         #include <M5EPD.h>
     #elif defined( M5CORE2 )
         #include <M5Core2.h>
+        static bool button_active = true;
 
         HotZone left_btn( 0, 240, 106, 300 );
         HotZone power_btn( 106, 240, 212, 300 );
@@ -52,16 +53,17 @@ bool button_send_cb( EventBits_t event, void *arg );
         bool button_pmu_event_cb( EventBits_t event, void *arg ) {
             switch( event ) {
                 case PMUCTL_SHORT_PRESS:    button_send_cb( BUTTON_PWR, (void *)NULL );
-                                            log_i("send BUTTON_PWR event");
+                                            log_d("send BUTTON_PWR event");
                                             break;
                 case PMUCTL_LONG_PRESS:     button_send_cb( BUTTON_QUICKBAR, (void *)NULL );
-                                            log_i("send BUTTON_QUICKBAR event");
+                                            log_d("send BUTTON_QUICKBAR event");
                                             break;
             }
             return( true );
         }
     #elif defined( LILYGO_WATCH_2021 ) 
         #include <twatch2021_config.h>
+    #elif defined( WT32_SC01 )
     #else
         #warning "no hardware driver for button"
     #endif
@@ -78,6 +80,7 @@ bool button_send_cb( EventBits_t event, void *arg );
         portENTER_CRITICAL_ISR(&BUTTON_IRQ_Mux);
         button_irq_flag = true;
         portEXIT_CRITICAL_ISR(&BUTTON_IRQ_Mux);
+        powermgm_resume_from_ISR();
     }
 #endif
 
@@ -105,6 +108,8 @@ void button_setup( void ) {
             pinMode( BTN_1, INPUT_PULLUP );
             pinMode( BTN_2, INPUT );
             pinMode( BTN_3, INPUT );
+        #elif defined( WT32_SC01 )
+
         #endif
     #endif
     /*
@@ -120,6 +125,9 @@ bool button_powermgm_loop_cb( EventBits_t event, void *arg ) {
     static bool right_button = false;
     static bool quickbar_button = false;
     static bool exit_button = false;
+    static bool media_button = false;
+    static bool notify_button = false;
+    static bool notify_del_button = false;
 
     const uint8_t *state = SDL_GetKeyboardState( NULL );
 
@@ -143,6 +151,20 @@ bool button_powermgm_loop_cb( EventBits_t event, void *arg ) {
         if ( exit_button ) button_send_cb( BUTTON_EXIT, (void*)NULL );
     }
 
+    if ( state[ SDL_SCANCODE_P] != notify_button ) {
+        notify_button = state[ SDL_SCANCODE_P ];
+        if ( notify_button ) button_send_cb( BUTTON_NOTIFY_TEST, (void*)NULL );
+    }
+
+    if ( state[ SDL_SCANCODE_D] != notify_del_button ) {
+        notify_del_button = state[ SDL_SCANCODE_D ];
+        if ( notify_del_button ) button_send_cb( BUTTON_NOTIFY_DEL_TEST, (void*)NULL );
+    }
+
+    if ( state[ SDL_SCANCODE_M] != media_button ) {
+        media_button = state[ SDL_SCANCODE_M ];
+        if ( media_button ) button_send_cb( BUTTON_MEDIA_TEST, (void*)NULL );
+    }
 #else
     /*
      * handle IRQ event
@@ -159,24 +181,24 @@ bool button_powermgm_loop_cb( EventBits_t event, void *arg ) {
          */
         M5.update();
         if( M5.BtnP.wasPressed() ) {
-            log_i("button was pressed");
+            log_d("button was pressed");
             push_presstime = millis();
         }
         else if( M5.BtnP.wasReleased() ) {
-            log_i("button was release");
+            log_d("button was release");
             if( !temp_button_irq_flag ) {
                 push_presstime = millis() - push_presstime;
-                log_i("presstime = %dms", push_presstime );
+                log_d("presstime = %dms", push_presstime );
                 if ( push_presstime < 2000 ) {
-                    log_i("short press");
+                    log_d("short press");
                     button_send_cb( BUTTON_PWR, (void *)NULL );
                 }
                 else if  ( push_presstime < 4500 ) {
-                    log_i("long press");
+                    log_d("long press");
                     button_send_cb( BUTTON_QUICKBAR, (void *)NULL );           
                 }
                 else {
-                    log_i("press state ignore");
+                    log_d("press state ignore");
                 }
             }
             else {
@@ -191,18 +213,21 @@ bool button_powermgm_loop_cb( EventBits_t event, void *arg ) {
              * handle left button event
              */
             if ( M5.BtnL.wasPressed() ) {
-                log_i("left press");
+                log_d("left press");
                 button_send_cb( BUTTON_LEFT, (void *)NULL );
             }
             /**
              * handle right button event
              */
             if ( M5.BtnR.wasPressed() ) {
-                log_i("right press");
+                log_d("right press");
                 button_send_cb( BUTTON_RIGHT, (void *)NULL );
             }
         }
     #elif defined( M5CORE2 )
+        if( !button_active )
+            return( true );
+
         TouchPoint_t pos = M5.Touch.getPressPoint();
 
         static bool left_button = left_btn.inHotZone( pos );
@@ -298,14 +323,20 @@ bool button_powermgm_loop_cb( EventBits_t event, void *arg ) {
             }
 
             if ( press_time != 0 ) {
-                if ( press_time < 1000 ) {
-                    if ( powermgm_get_event( POWERMGM_STANDBY ) || powermgm_get_event( POWERMGM_SILENCE_WAKEUP ) )
-                        button_send_cb( BUTTON_PWR, (void *)NULL );
-                    else
-                        button_send_cb( BUTTON_EXIT, (void *)NULL );
+                /**
+                 * special case when we are in standby or silence wakeup
+                 */
+                if ( powermgm_get_event( POWERMGM_STANDBY ) || powermgm_get_event( POWERMGM_SILENCE_WAKEUP ) ){
+                    button_send_cb( BUTTON_PWR, (void *)NULL );
+                    powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
                 }
                 else {
-                    button_send_cb( BUTTON_QUICKBAR, (void *)NULL );
+                    if( press_time < 250 )
+                        button_send_cb( BUTTON_EXIT, (void *)NULL );
+                    else if ( press_time < 1000 )
+                        button_send_cb( BUTTON_PWR, (void *)NULL );                    
+                    else
+                        button_send_cb( BUTTON_QUICKBAR, (void *)NULL );
                 }
             }
         }
@@ -322,10 +353,19 @@ bool button_powermgm_loop_cb( EventBits_t event, void *arg ) {
                 press_time = millis() - setup_button_time;
 
             if ( press_time != 0 ) {
-                if ( press_time < 1000 )
-                    button_send_cb( BUTTON_DOWN, (void*)NULL );
-                else
-                    button_send_cb( BUTTON_SETUP, (void *)NULL );
+                /**
+                 * special case when we are in standby or silence wakeup
+                 */
+                if ( powermgm_get_event( POWERMGM_STANDBY ) || powermgm_get_event( POWERMGM_SILENCE_WAKEUP ) ){
+                    button_send_cb( BUTTON_PWR, (void *)NULL );
+                    powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
+                }
+                else {
+                    if ( press_time < 250 )
+                        button_send_cb( BUTTON_DOWN, (void*)NULL );
+                    else
+                        button_send_cb( BUTTON_SETUP, (void *)NULL );
+                }
             }
         }
         /**
@@ -341,15 +381,29 @@ bool button_powermgm_loop_cb( EventBits_t event, void *arg ) {
                 press_time = millis() - refresh_button_time;
 
             if ( press_time != 0 ) {
-                if ( press_time < 1000 )
-                    button_send_cb( BUTTON_UP, (void*)NULL );
-                else
-                    button_send_cb( BUTTON_REFRESH, (void *)NULL );
+                /**
+                 * special case when we are in standby or silence wakeup
+                 */
+                if ( powermgm_get_event( POWERMGM_STANDBY ) || powermgm_get_event( POWERMGM_SILENCE_WAKEUP ) ){
+                    button_send_cb( BUTTON_PWR, (void *)NULL );
+                    powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
+                }
+                else {
+                    if ( press_time < 250 )
+                        button_send_cb( BUTTON_UP, (void*)NULL );
+                    else
+                        button_send_cb( BUTTON_REFRESH, (void *)NULL );
+                }
             }
 
             if ( refresh_button ) button_send_cb( BUTTON_REFRESH, (void*)NULL );
         }
+    #elif defined( WT32_SC01 )
     #endif
+    /**
+     * prevent "warning: variable 'temp_button_irq_flag' set but not used" in some platform conditions
+     */
+    temp_button_irq_flag = ~temp_button_irq_flag;
 #endif
     return( true );
 }
@@ -362,7 +416,7 @@ bool button_powermgm_event_cb( EventBits_t event, void *arg ) {
     #else
         #if defined( M5PAPER )
             switch( event ) {
-                case POWERMGM_STANDBY:              log_i("button standby");
+                case POWERMGM_STANDBY:              log_d("button standby");
                                                     /*
                                                     * enable GPIO in lightsleep for wakeup
                                                     */
@@ -370,52 +424,63 @@ bool button_powermgm_event_cb( EventBits_t event, void *arg ) {
                                                     esp_sleep_enable_gpio_wakeup ();
                                                     retval = true;
                                                     break;
-                case POWERMGM_WAKEUP:               log_i("button wakeup");
+                case POWERMGM_WAKEUP:               log_d("button wakeup");
                                                     retval = true;
                                                     break;
-                case POWERMGM_SILENCE_WAKEUP:       log_i("button silence wakeup");
+                case POWERMGM_SILENCE_WAKEUP:       log_d("button silence wakeup");
                                                     retval = true;
                                                     break;
-                case POWERMGM_ENABLE_INTERRUPTS:    log_i("button enable interrupts");
+                case POWERMGM_ENABLE_INTERRUPTS:    log_d("button enable interrupts");
                                                     attachInterrupt( M5EPD_KEY_PUSH_PIN, &button_irq, FALLING );
                                                     retval = true;
                                                     break;
-                case POWERMGM_DISABLE_INTERRUPTS:   log_i("button disable interrupts");
+                case POWERMGM_DISABLE_INTERRUPTS:   log_d("button disable interrupts");
                                                     detachInterrupt( M5EPD_KEY_PUSH_PIN );
                                                     retval = true;
                                                     break;
             }
         #elif defined( M5CORE2 )
             switch( event ) {
-                case POWERMGM_STANDBY:              log_i("standby blocked");
-                                                    retval = false;
-                                                    break;
-            }            
+                case POWERMGM_STANDBY:
+                    button_active = false;
+                    break;
+                case POWERMGM_SILENCE_WAKEUP:
+                    button_active = false;
+                    break;
+                case POWERMGM_WAKEUP:
+                    button_active = true;
+                    break;
+            }
+            retval = true;
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
             retval = true;
         #elif defined( LILYGO_WATCH_2021 ) 
             switch( event ) {
-                case POWERMGM_STANDBY:              log_i("button standby");
+                case POWERMGM_STANDBY:              log_d("button standby");
                                                     /*
                                                     * enable GPIO in lightsleep for wakeup
                                                     */
                                                     gpio_wakeup_enable( (gpio_num_t)BTN_1, GPIO_INTR_LOW_LEVEL );
+                                                    gpio_wakeup_enable( (gpio_num_t)BTN_2, GPIO_INTR_LOW_LEVEL );
+                                                    gpio_wakeup_enable( (gpio_num_t)BTN_3, GPIO_INTR_LOW_LEVEL );
                                                     esp_sleep_enable_gpio_wakeup ();
                                                     retval = true;
                                                     break;
-                case POWERMGM_WAKEUP:               log_i("button wakeup");
+                case POWERMGM_WAKEUP:               log_d("button wakeup");
                                                     retval = true;
                                                     break;
-                case POWERMGM_SILENCE_WAKEUP:       log_i("button silence wakeup");
+                case POWERMGM_SILENCE_WAKEUP:       log_d("button silence wakeup");
                                                     retval = true;
                                                     break;
-                case POWERMGM_ENABLE_INTERRUPTS:    log_i("button enable interrupts");
+                case POWERMGM_ENABLE_INTERRUPTS:    log_d("button enable interrupts");
                                                     retval = true;
                                                     break;
-                case POWERMGM_DISABLE_INTERRUPTS:   log_i("button disable interrupts");
+                case POWERMGM_DISABLE_INTERRUPTS:   log_d("button disable interrupts");
                                                     retval = true;
                                                     break;
             }
+        #elif defined( WT32_SC01 )
+            retval = true;
         #endif
     #endif
 
@@ -440,7 +505,7 @@ bool button_register_cb( EventBits_t event, CALLBACK_FUNC callback_func, const c
 }
 
 bool button_send_cb( EventBits_t event, void *arg ) {
-    log_i("send button cb");
+    log_d("send button cb");
     /*
      * call all callbacks with her event mask
      */

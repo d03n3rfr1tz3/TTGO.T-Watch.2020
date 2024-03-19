@@ -18,6 +18,8 @@
 #include "blectl.h"
 #include "callback.h"
 #include "sensor.h"
+#include "device.h"
+#include "compass.h"
 
 #include "utils/fakegps.h"
 #include "gui/splashscreen.h"
@@ -49,6 +51,8 @@
     #include <Arduino.h>
     #include <SPIFFS.h>
     #include <Ticker.h>
+    #include <pthread.h>
+    #include "esp_pthread.h"
     #include "esp_bt.h"
     #include "esp_task_wdt.h"
     #include "lvgl.h"
@@ -61,6 +65,8 @@
         #include <TTGO.h>
     #elif defined( LILYGO_WATCH_2021 )    
         #include <twatch2021_config.h>
+        #include <Wire.h>
+    #elif defined( WT32_SC01 )
         #include <Wire.h>
     #else
         #error "no hardware init"
@@ -75,9 +81,24 @@ void hardware_attach_lvgl_ticker( void ) {
     #else
         #if defined( M5PAPER )
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
-        tickTicker->attach_ms(5, []() {
+        tickTicker->attach_ms( 5, []() {
             lv_tick_inc(5);
+        });
+    #endif
+}
+
+void hardware_attach_lvgl_ticker_slow( void ) {
+    #ifdef NATIVE_64BIT
+
+    #else
+        #if defined( M5PAPER )
+        #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
+        #endif
+        tickTicker->attach_ms(250, []() {
+            lv_tick_inc(250);
         });
     #endif
 }
@@ -88,6 +109,7 @@ void hardware_detach_lvgl_ticker( void ) {
     #else
         #if defined( M5PAPER )
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        #elif defined( WT32_SC01 )
         #endif
         tickTicker->detach();
     #endif
@@ -109,6 +131,11 @@ void hardware_setup( void ) {
         * Create an SDL thread to do this*/
         SDL_CreateThread( tick_thread, "tick", NULL );
     #else
+        esp_pthread_cfg_t cfg = esp_pthread_get_default_config();
+        cfg.stack_size = ( 8 * 1024 );
+        cfg.inherit_cfg = false;
+        esp_pthread_set_cfg(&cfg);   
+
         #if defined( M5PAPER )
             /**
              * lvgl init
@@ -138,7 +165,6 @@ void hardware_setup( void ) {
              */
             ttgo->begin();
         #elif defined( LILYGO_WATCH_2021 )
-            heap_caps_malloc_extmem_enable( 32+1024 );
             /**
              * power all devices
              */
@@ -159,7 +185,8 @@ void hardware_setup( void ) {
             /**
              * setup wire interface
              */
-            Wire.begin( IICSDA, IICSCL, 1000000 );
+//            Wire.begin( IICSDA, IICSCL, 1000000 );
+            Wire.begin( IICSDA, IICSCL );
             /**
              * scan i2c devices
              */
@@ -168,6 +195,24 @@ void hardware_setup( void ) {
                 if ( Wire.endTransmission() == 0 )
                     log_i("I2C device at: 0x%02x", address );
 
+            }
+        #elif defined( WT32_SC01 )
+            /**
+             * lvgl init
+             */
+            lv_init();     
+            /**
+             * setup wire interface
+             */
+//            Wire.begin( IICSDA, IICSCL, 1000000 );
+            Wire.begin( PIN_SDA, PIN_SCL );
+            /**
+             * scan i2c devices
+             */
+            for( uint8_t address = 1; address < 127; address++ ) {
+                Wire.beginTransmission(address);
+                if ( Wire.endTransmission() == 0 )
+                    log_i("I2C device at: 0x%02x", address );
             }
         #endif
         /**
@@ -183,12 +228,14 @@ void hardware_setup( void ) {
     /**
      * driver init
      */
+    device_setup();
     sdcard_setup();
     powermgm_setup();
     button_setup();
     motor_setup();
     display_setup();
     screenshot_setup();
+    compass_setup();
     /**
      * splashscreen setup
      */
@@ -227,18 +274,6 @@ void hardware_setup( void ) {
 
     splash_screen_stage_update( "init gui", 80 );
     splash_screen_stage_finish();
-
-    #ifdef NATIVE_64BIT
-    #else
-        delay(500);
-
-        log_i("Total heap: %d", ESP.getHeapSize());
-        log_i("Free heap: %d", ESP.getFreeHeap());
-        log_i("Total PSRAM: %d", ESP.getPsramSize());
-        log_i("Free PSRAM: %d", ESP.getFreePsram());
-
-        disableCore0WDT();
-    #endif
 }
 
 void hardware_post_setup( void ) {
@@ -259,13 +294,7 @@ void hardware_post_setup( void ) {
 
     #ifdef NATIVE_64BIT
     #else
-        delay(500);
-
-        log_i("Total heap: %d", ESP.getHeapSize());
         log_i("Free heap: %d", ESP.getFreeHeap());
-        log_i("Total PSRAM: %d", ESP.getPsramSize());
-        log_i("Free PSRAM: %d", ESP.getFreePsram());
-
-        disableCore0WDT();
+        log_i("Free PSRAM heap: %d", ESP.getFreePsram());
     #endif
 }

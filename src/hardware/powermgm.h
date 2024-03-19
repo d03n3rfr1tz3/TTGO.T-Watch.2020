@@ -111,6 +111,15 @@
      */
     bool powermgm_register_loop_cb( EventBits_t event, CALLBACK_FUNC callback_func, const char *id );
     /**
+     * @brief registers a callback function which is called on a corresponding loop event
+     * 
+     * @param   event               possible values: POWERMGM_STANDBY, POWERMGM_SILENCE_WAKEUP, POWERMGM_WAKEUP
+     * @param   callback_func       pointer to the callback function 
+     * @param   id                  pointer to an string
+     * @param   prio                prio from CALL_CB_FIRST to CALL_CB_LAST
+     */
+    bool powermgm_register_loop_cb_with_prio( EventBits_t event, CALLBACK_FUNC callback_func, const char *id, callback_prio_t prio );
+    /**
      * @brief send an interrupt disable request
      */
     void powermgm_disable_interrupts( void );
@@ -126,5 +135,36 @@
      * @brief set normal mode 240/80Mhz (only custom framework)
      */
     void powermgm_set_normal_mode( void );
+    /**
+     * @brief enable CPU lightsleep mode
+     * 
+     * @param enable 
+     */
+    void powermgm_set_lightsleep( bool enable );
+    /**
+     * @brief set the resume interval when standby is active and some devices blocked their
+     * 
+     * @param interval      in ms
+     */
+    void powermgm_set_resume_interval( int32_t interval );
+    /**
+     * @brief get if CPU lightsleep enaled
+     * 
+     * @return true 
+     * @return false 
+     */
+    bool powermgm_get_lightsleep( void );
+    /**
+     * @brief suspend alls Tasks
+     */
+    void powermgm_suspend( void );
+    /**
+     * @brief resume all Task
+     */
+    void powermgm_resume( void );
+    /**
+     * @brief resume only powermgm Task
+     */
+    void powermgm_resume_from_ISR( void );
 
 #endif // _POWERMGM_H

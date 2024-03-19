@@ -53,7 +53,7 @@
     #include "utils/decompress/decompress.h"
 #endif
 
-watchface_config_t watchface_config;
+watchface_config_t *watchface_config = NULL;
 
 lv_obj_t *watchface_setup_tile = NULL;                      /** @brief watchface setup tile obj */
 lv_style_t watchface_setup_style;                           /** @brief watchface setup style */
@@ -68,10 +68,11 @@ static void watchface_setup_decompress_cb( lv_obj_t *obj, lv_event_t event );
 void watchface_setup_progress_cb( int32_t percent );
 
 void watchface_setup_tile_setup( uint32_t tile_num ) {
+    watchface_config = new watchface_config_t();
     /**
      * load watchface config file
      */
-    watchface_config.load();
+    watchface_config->load();
     /**
      * get setup tile
      */
@@ -84,15 +85,20 @@ void watchface_setup_tile_setup( uint32_t tile_num ) {
     /**
      * switch container
      */
-    lv_obj_t *watchface_onoff_cont = wf_add_labeled_switch( watchface_setup_tile, "enable watchface", &watchface_onoff, watchface_config.watchface_enable, watchface_setup_enable_event_cb, SETUP_STYLE );
+    lv_obj_t *watchface_onoff_cont = wf_add_labeled_switch( watchface_setup_tile, "enable watchface", &watchface_onoff, watchface_config->watchface_enable, watchface_setup_enable_event_cb, SETUP_STYLE );
     lv_obj_align( watchface_onoff_cont, watchface_setup_header, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
+    /**
+     * switch container
+     */
+    lv_obj_t *watchface_onoff_show_notifications_cont = wf_add_labeled_switch( watchface_setup_tile, "enable notifications", &watchface_onoff, watchface_config->watchface_show_notifications, watchface_setup_enable_event_cb, SETUP_STYLE );
+    lv_obj_align( watchface_onoff_show_notifications_cont, watchface_onoff_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
     /**
      * btn container
      */
     lv_obj_t *watchface_btn_cont = lv_obj_create( watchface_setup_tile, NULL );
     lv_obj_set_size( watchface_btn_cont, lv_disp_get_hor_res( NULL ) - THEME_ICON_PADDING * 2, 90 );
     lv_obj_add_style( watchface_btn_cont, LV_OBJ_PART_MAIN, SETUP_STYLE );
-    lv_obj_align( watchface_btn_cont, watchface_onoff_cont, LV_ALIGN_OUT_BOTTOM_LEFT, 0, THEME_ICON_PADDING );
+    lv_obj_align( watchface_btn_cont, watchface_onoff_show_notifications_cont, LV_ALIGN_OUT_BOTTOM_LEFT, 0, THEME_ICON_PADDING );
 
     lv_obj_t *watchface_reload_and_test_btn = lv_btn_create( watchface_btn_cont, NULL );
     lv_obj_set_size( watchface_reload_and_test_btn, lv_disp_get_hor_res( NULL ) / 2 - THEME_ICON_PADDING * 2, 40 );
@@ -128,10 +134,10 @@ void watchface_setup_tile_setup( uint32_t tile_num ) {
     lv_obj_align( watchface_info_label, watchface_info_cont, LV_ALIGN_CENTER, 0,0 );
     lv_label_set_text( watchface_info_label, "" );
 
-    watchface_tile_set_antialias( watchface_config.watchface_antialias );
+    watchface_tile_set_antialias( watchface_config->watchface_antialias );
     watchface_enable_tile_after_wakeup( lv_switch_get_state( watchface_onoff ) );
 
-    watchface_config.save();
+    watchface_config->save();
 }
 
 static void watchface_setup_default_cb( lv_obj_t *obj, lv_event_t event ) {
@@ -151,7 +157,7 @@ void watchface_setup_set_info_label( const char *text ){
 
 
 String watchface_setup_get_theme_url( void ) {
-    return( watchface_config.watchface_theme_url );
+    return( watchface_config->watchface_theme_url );
 }
 
 static void watchface_setup_decompress_cb( lv_obj_t *obj, lv_event_t event ) {
@@ -180,8 +186,16 @@ static void watchface_setup_reload_and_test_cb( lv_obj_t *obj, lv_event_t event 
 static void watchface_setup_enable_event_cb( lv_obj_t *obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_VALUE_CHANGED ):     watchface_enable_tile_after_wakeup( lv_switch_get_state( obj ) );
-                                            watchface_config.watchface_enable = lv_switch_get_state( obj );
-                                            watchface_config.save();
+                                            watchface_config->watchface_enable = lv_switch_get_state( obj );
+                                            watchface_config->save();
                                             break;
     }
+}
+
+bool watchface_setup_get_watchface_enable( void ) {
+    return( watchface_config->watchface_enable );
+}
+
+bool watchface_setup_get_allow_notifications( void ) {
+    return( watchface_config->watchface_show_notifications );
 }

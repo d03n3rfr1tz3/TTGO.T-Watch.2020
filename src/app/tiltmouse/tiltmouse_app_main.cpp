@@ -21,9 +21,6 @@
  */
 #include "config.h"
 #include <TTGO.h>
-#include <BLEServer.h>
-#include <BLEAdvertising.h>
-#include <BLEHIDDevice.h>
 #include <stdlib.h>
 
 #include "tiltmouse_app.h"
@@ -43,8 +40,8 @@
 lv_obj_t *tiltmouse_app_main_tile = NULL;
 lv_style_t tiltmouse_app_main_style;
 
-BLEHIDDevice *pHID = NULL;
-BLECharacteristic *pHIDMouse = NULL;
+NimBLEHIDDevice *pHID = NULL;
+NimBLECharacteristic *pHIDMouse = NULL;
 lv_task_t * _tiltmouse_app_task;
 
 bool tiltmouse_active = false;
@@ -150,13 +147,11 @@ void tiltmouse_app_task( lv_task_t * task )
 void tiltmouse_init()
 {
     if (pHID == NULL || pHIDMouse == NULL) {
-        BLEServer *pServer = blectl_get_ble_server();
-        BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
+        NimBLEServer *pServer = blectl_get_ble_server();
+        NimBLEAdvertising *pAdvertising = blectl_get_ble_advertising();
 
-        pHID = new BLEHIDDevice(pServer);
+        pHID = new NimBLEHIDDevice(pServer);
         pHIDMouse = pHID->inputReport(0); // <-- input REPORTID from report map
-
-        pHIDMouse->setAccessPermissions(ESP_GATT_PERM_READ_ENCRYPTED | ESP_GATT_PERM_WRITE_ENCRYPTED);
 
         pHID->pnp(0x02, 0xe502, 0xa111, 0x0210);
         pHID->hidInfo(0x00,0x02);
@@ -173,14 +168,14 @@ void tiltmouse_activate()
 {
     tiltmouse_init();
     BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
-    pAdvertising->setAppearance( ESP_BLE_APPEARANCE_HID_MOUSE );
+    pAdvertising->setAppearance( 0x03C2 );
     tiltmouse_active = true;
 }
 
 void tiltmouse_deactivate()
 {
     BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
-    pAdvertising->setAppearance( ESP_BLE_APPEARANCE_GENERIC_WATCH );
+    pAdvertising->setAppearance( 0x00c0 );
     tiltmouse_active = false;
 }
 

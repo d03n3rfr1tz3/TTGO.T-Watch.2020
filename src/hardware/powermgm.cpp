@@ -37,14 +37,18 @@
     #include "esp_err.h"
     #include "esp_pm.h"
     #include <Arduino.h>
+    #include <Ticker.h>
 
+    Ticker *powermgm_tickTicker = nullptr;
     EventGroupHandle_t powermgm_status = NULL;
+    TaskHandle_t _powermgmTask;
     portMUX_TYPE DRAM_ATTR powermgmMux = portMUX_INITIALIZER_UNLOCKED;
     esp_pm_config_esp32_t pm_config;
 #endif
 
 callback_t *powermgm_callback = NULL;
 callback_t *powermgm_loop_callback = NULL;
+static uint32_t lighsleep = 0;
 
 bool powermgm_button_event_cb( EventBits_t event, void *arg );
 bool powermgm_send_event_cb( EventBits_t event );
@@ -55,7 +59,19 @@ void powermgm_setup( void ) {
 #ifdef NATIVE_64BIT
     powermgm_status = 0;
 #else
+    _powermgmTask = xTaskGetCurrentTaskHandle();
     powermgm_status = xEventGroupCreate();
+
+    powermgm_tickTicker = new Ticker();
+    #if defined( LILYGO_WATCH_2021 ) || defined( WT32_SC01 )
+        powermgm_tickTicker->attach_ms( 100, []() {
+            powermgm_resume_from_ISR();
+        });
+    #else
+        powermgm_tickTicker->attach_ms( 1000, []() {
+            powermgm_resume_from_ISR();
+        });
+    #endif
 #endif
     /*
      * register powerbutton event
@@ -73,13 +89,13 @@ bool powermgm_button_event_cb( EventBits_t event, void *arg ) {
 }
 
 void powermgm_loop( void ) {
-    static bool lighsleep = true;
-
+    static bool standby = true;
     #ifdef NATIVE_64BIT
         /**
          * delay loop fpr 5ms
          */
         SDL_Delay(5);
+    #else
     #endif // NATIVE_64BIT
     /*
      * check if power button was release
@@ -129,13 +145,13 @@ void powermgm_loop( void ) {
             #if CONFIG_PM_ENABLE
                 pm_config.max_freq_mhz = 160;
                 pm_config.min_freq_mhz = 80;
-                pm_config.light_sleep_enable = true;
+                pm_config.light_sleep_enable = lighsleep ? false : true ;
                 ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
-                log_i("custom arduino-esp32 framework detected, enable PM/DFS support, 160/80MHz with light sleep");
+                log_i("custom arduino-esp32 framework detected, enable PM/DFS support, %d/%dMHz %s light sleep (%d)", pm_config.max_freq_mhz, pm_config.min_freq_mhz, lighsleep ? "without" : "with", lighsleep );
             #else
                 #ifndef NATIVE_64BIT
                     setCpuFrequencyMhz(80);
-                    log_i("CPU speed = 80MHz");
+                    log_d("CPU speed = 80MHz");
                 #endif
             #endif
         }
@@ -158,19 +174,19 @@ void powermgm_loop( void ) {
             #if CONFIG_PM_ENABLE
                 pm_config.max_freq_mhz = 240;
                 pm_config.min_freq_mhz = 80;
-                pm_config.light_sleep_enable = false;
+                pm_config.light_sleep_enable = lighsleep ? false : true ;
                 ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
-                log_i("custom arduino-esp32 framework detected, enable PM/DFS support, 240/80MHz with light sleep");
+                log_i("custom arduino-esp32 framework detected, enable PM/DFS support, %d/%dMHz %s light sleep (%d)", pm_config.max_freq_mhz, pm_config.min_freq_mhz, lighsleep ? "without" : "with", lighsleep );
             #else
                 #ifndef NATIVE_64BIT
                     setCpuFrequencyMhz(240);
-                    log_i("CPU speed = 240MHz");
+                    log_d("CPU speed = 240MHz");
                 #endif
             #endif
         }
         #ifndef NATIVE_64BIT
-            log_i("Free heap: %d", ESP.getFreeHeap());
-            log_i("Free PSRAM heap: %d", ESP.getFreePsram());
+            log_d("Free heap: %d", ESP.getFreeHeap());
+            log_d("Free PSRAM heap: %d", ESP.getFreePsram());
             log_i("%s uptime: %d", HARDWARE_NAME, millis() / 1000 );
         #endif
     }        
@@ -193,17 +209,18 @@ void powermgm_loop( void ) {
          * send POWERMGM_STANDBY to all registered callback functions and
          * check if an standby callback block lightsleep in standby
          */
-        lighsleep = powermgm_send_event_cb( POWERMGM_STANDBY );
+        standby = powermgm_send_event_cb( POWERMGM_STANDBY );
+        // powermgm_disable_interrupts();
         /*
          * print some memory stats
          */
         #ifndef NATIVE_64BIT
-            log_i("Free heap: %d", ESP.getFreeHeap());
-            log_i("Free PSRAM heap: %d", ESP.getFreePsram());
+            log_d("Free heap: %d", ESP.getFreeHeap());
+            log_d("Free PSRAM heap: %d", ESP.getFreePsram());
             log_i("%s uptime: %d", HARDWARE_NAME, millis() / 1000 );
         #endif
 
-        if ( lighsleep ) {
+        if ( standby ) {
             log_i("go standby");
             /*
              * set cpu speed
@@ -216,7 +233,7 @@ void powermgm_loop( void ) {
 
             #else
                 setCpuFrequencyMhz( 80 );
-                log_i("CPU speed = 80MHz, start light sleep");
+                log_d("CPU speed = 80MHz, start light sleep");
                 /*
                 * from here, the consumption is round about 2.5mA
                 * total standby time is 152h (6days) without use?
@@ -226,9 +243,11 @@ void powermgm_loop( void ) {
                  * check wakeup source
                  */
                 switch( esp_sleep_get_wakeup_cause() ) {
-                    case ESP_SLEEP_WAKEUP_TIMER:    
-                        log_i("timer wakeup");
+                    case ESP_SLEEP_WAKEUP_TIMER:
+                        log_d("timer wakeup");
                         powermgm_set_event( POWERMGM_SILENCE_WAKEUP_REQUEST );
+                        esp_sleep_disable_wakeup_source( ESP_SLEEP_WAKEUP_TIMER );
+                        log_d("disable wakeup timer");
                         break;
                     default:
                         break;
@@ -239,19 +258,19 @@ void powermgm_loop( void ) {
                 #if CONFIG_PM_ENABLE
                     pm_config.max_freq_mhz = 240;
                     pm_config.min_freq_mhz = 80;
-                    pm_config.light_sleep_enable = false;
+                    pm_config.light_sleep_enable = lighsleep ? false : true ;
                     ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
-                    log_i("custom arduino-esp32 framework detected, enable PM/DFS support, 240/80MHz with light sleep");
+                    log_i("custom arduino-esp32 framework detected, enable PM/DFS support, %d/%dMHz %s light sleep (%d)", pm_config.max_freq_mhz, pm_config.min_freq_mhz, lighsleep ? "without" : "with", lighsleep );
                 #else
                     #ifndef NATIVE_64BIT
                         setCpuFrequencyMhz(240);
-                        log_i("CPU speed = 240MHz");
+                        log_d("CPU speed = 240MHz");
                     #endif
                 #endif
             #endif
         }
         else {
-            log_i("go standby blocked");
+            log_w("go standby blocked");
             /*
              * set cpu speed
              * 
@@ -267,9 +286,9 @@ void powermgm_loop( void ) {
                  */
                 pm_config.max_freq_mhz = 80;
                 pm_config.min_freq_mhz = 40;
-                pm_config.light_sleep_enable = true;
+                pm_config.light_sleep_enable = lighsleep ? false : true ;
                 ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
-                log_i("custom arduino-esp32 framework detected, enable PM/DFS support, 80/40MHz with light sleep");
+                log_d("custom arduino-esp32 framework detected, enable PM/DFS support, %d/%dMHz %s light sleep (%d)", pm_config.max_freq_mhz, pm_config.min_freq_mhz, lighsleep ? "without" : "with", lighsleep );
             #else
                 /*
                  * from here, the consumption is round about 28mA with ble
@@ -277,7 +296,7 @@ void powermgm_loop( void ) {
                  */
                 #ifndef NATIVE_64BIT
                     setCpuFrequencyMhz(80);
-                    log_i("CPU speed = 80MHz");
+                    log_d("CPU speed = 80MHz");
                 #endif
             #endif
         }
@@ -287,25 +306,25 @@ void powermgm_loop( void ) {
      */
     if ( powermgm_get_event( POWERMGM_STANDBY ) ) {
         /*
-         * Idle when lightsleep in standby not allowed
-         * It make it possible for the IDLE task to trottle
-         * down CPU clock or go into light sleep.
-         * 
-         * note:    When change vTaskDelay to an higher value, please
-         *          note that the reaction time to wake up increase.
+         * suspend powermgm Task
          */
-        #ifdef NATIVE_64BIT
-        #else
-            if ( !lighsleep )
-                vTaskDelay( 250 );
-        #endif
-
+        if ( !standby )
+            powermgm_suspend();
+        /**
+         * call powermgm loop standby cb
+         */
         powermgm_send_loop_event_cb( POWERMGM_STANDBY );
     }
     else if ( powermgm_get_event( POWERMGM_WAKEUP ) ) {
+        /**
+         * call powermgm loop wakeup cb
+         */
         powermgm_send_loop_event_cb( POWERMGM_WAKEUP );
     }
     else if ( powermgm_get_event( POWERMGM_SILENCE_WAKEUP ) ) {
+        /**
+         * call powermgm loop silence wakeup cb
+         */
         powermgm_send_loop_event_cb( POWERMGM_SILENCE_WAKEUP );
     }
 }
@@ -316,6 +335,27 @@ void powermgm_shutdown( void ) {
 
 void powermgm_reset( void ) {
     powermgm_send_event_cb( POWERMGM_RESET );
+}
+
+void powermgm_suspend( void ) {
+    #ifdef NATIVE_64BIT
+    #else
+        vTaskSuspend( _powermgmTask );
+    #endif
+}
+
+void powermgm_resume_from_ISR( void ) {
+    #ifdef NATIVE_64BIT
+    #else
+        xTaskResumeFromISR( _powermgmTask );
+    #endif
+}
+
+void powermgm_resume( void ) {
+    #ifdef NATIVE_64BIT
+    #else
+        vTaskResume( _powermgmTask );
+    #endif
 }
 
 void powermgm_set_perf_mode( void ) {
@@ -335,13 +375,35 @@ void powermgm_set_normal_mode( void ) {
     #if CONFIG_PM_ENABLE
         pm_config.max_freq_mhz = 240;
         pm_config.min_freq_mhz = 80;
-        pm_config.light_sleep_enable = false;
+        pm_config.light_sleep_enable = true;
         ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
     #else
         #ifndef NATIVE_64BIT
             setCpuFrequencyMhz(240);
         #endif
     #endif
+}
+
+void powermgm_set_lightsleep( bool enable ) {
+    if( enable ) {
+        if( lighsleep > 0 )
+            lighsleep--;
+    }
+    else
+        lighsleep++;
+}
+
+void powermgm_set_resume_interval( int32_t interval ) {
+    #ifdef NATIVE_64BIT
+    #else
+        powermgm_tickTicker->attach_ms( interval, []() {
+            powermgm_resume_from_ISR();
+        });
+    #endif
+}
+
+bool powermgm_get_lightsleep( void ) {
+    return( lighsleep ? true : false );
 }
 
 void powermgm_set_event( EventBits_t bits ) {
@@ -351,6 +413,7 @@ void powermgm_set_event( EventBits_t bits ) {
         portENTER_CRITICAL(&powermgmMux);
         xEventGroupSetBits( powermgm_status, bits );
         portEXIT_CRITICAL(&powermgmMux);
+        powermgm_resume_from_ISR();
     #endif
 }
 
@@ -361,6 +424,7 @@ void powermgm_clear_event( EventBits_t bits ) {
         portENTER_CRITICAL(&powermgmMux);
         xEventGroupClearBits( powermgm_status, bits );
         portEXIT_CRITICAL(&powermgmMux);
+        powermgm_resume_from_ISR();
     #endif
 }
 
@@ -371,6 +435,7 @@ EventBits_t powermgm_get_event( EventBits_t bits ) {
         portENTER_CRITICAL(&powermgmMux);
         EventBits_t temp = xEventGroupGetBits( powermgm_status ) & bits;
         portEXIT_CRITICAL(&powermgmMux);
+        powermgm_resume_from_ISR();
     #endif
     return( temp );
 }
@@ -406,6 +471,17 @@ bool powermgm_register_loop_cb( EventBits_t event, CALLBACK_FUNC callback_func, 
         }
     }    
     return( callback_register( powermgm_loop_callback, event, callback_func, id ) );
+}
+
+bool powermgm_register_loop_cb_with_prio( EventBits_t event, CALLBACK_FUNC callback_func, const char *id, callback_prio_t prio ) {
+    if ( powermgm_loop_callback == NULL ) {
+        powermgm_loop_callback = callback_init( "powermgm loop" );
+        if ( powermgm_loop_callback == NULL ) {
+            log_e("powermgm loop callback alloc failed");
+            while(true);
+        }
+    }    
+    return( callback_register_with_prio( powermgm_loop_callback, event, callback_func, id, prio ) );
 }
 
 bool powermgm_send_event_cb( EventBits_t event ) {

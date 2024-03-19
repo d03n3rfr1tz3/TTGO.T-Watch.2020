@@ -29,7 +29,7 @@
 #include "gui/keyboard.h"
 #include "gui/widget_factory.h"
 #include "gui/widget_styles.h"
-#include "hardware/blectl.h"
+#include "hardware/ble/gadgetbridge.h"
 #include "hardware/motor.h"
 #include "hardware/gpsctl.h"
 #include "utils/bluejsonrequest.h"
@@ -198,7 +198,7 @@ void weather_setup_tile_setup( uint32_t tile_num ) {
     else
         lv_switch_off( weather_widget_onoff, LV_ANIM_OFF );
 
-    blectl_register_cb( BLECTL_MSG_JSON, weather_bluetooth_message_event_cb, "weather setup" );
+    gadgetbridge_register_cb( GADGETBRIDGE_JSON_MSG, weather_bluetooth_message_event_cb, "weather setup" );
     gpsctl_register_cb( GPSCTL_SET_APP_LOCATION, weather_gpsctl_app_use_location_event_cb, "gpsctl weather");
 }
 
@@ -267,16 +267,15 @@ static void exit_weather_widget_setup_event_cb( lv_obj_t * obj, lv_event_t event
 
 bool weather_bluetooth_message_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
-        case BLECTL_MSG_JSON:       weather_bluetooth_message_msg_pharse( *(BluetoothJsonRequest*)arg );
+        case GADGETBRIDGE_JSON_MSG: weather_bluetooth_message_msg_pharse( *(BluetoothJsonRequest*)arg );
                                     break;
     }
     return( true );
 }
 
 void weather_bluetooth_message_msg_pharse( BluetoothJsonRequest &doc ) {
-    if( !strcmp( doc["t"], "conf" ) ) {
-        if ( !strcmp( doc["app"], "weather" ) ) {
-
+    if( doc.containsKey("t") && doc.containsKey("weather") ) {
+        if( !strcmp( doc["t"], "conf" ) && !strcmp( doc["app"], "weather" ) ) {
             weather_config_t *weather_config = weather_get_config();
             strncpy( weather_config->apikey, doc["apikey"] |"", sizeof( weather_config->apikey ) );
             strncpy( weather_config->lat, doc["lat"] | "", sizeof( weather_config->lat ) );
@@ -289,7 +288,6 @@ void weather_bluetooth_message_msg_pharse( BluetoothJsonRequest &doc ) {
 
             motor_vibe(100);
         }
-
     }
 }
 

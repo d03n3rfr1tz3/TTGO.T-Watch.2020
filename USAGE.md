@@ -2,7 +2,7 @@
 
 ![screenshot](images/screen1.png)
 
-On startup you see the main screen (time tile). It show the time and widgets.
+On startup you see the main screen (time tile). It shows the time and widgets.
 
 Widgets are:
 
@@ -37,6 +37,13 @@ Set color, background, touch feedback with vibrations...
 
 ![screenshot](images/display_1.png)
 ![screenshot](images/display_2.png)
+
+## Touch
+
+Touch calibration menu.
+
+![screenshot](images/touch1.png)
+![screenshot](images/touch2.png)
 
 ## Move
 
@@ -124,6 +131,8 @@ Here you can find some finish watchface packages:
 [![hal9000](images/watchface/hal9000/watchface_theme_prev.png)](images/watchface/hal9000/watchface.tar.gz)
 [![black](images/watchface/black/watchface_theme_prev.png)](images/watchface/black/watchface.tar.gz)
 
+alternative [watchfaces](https://github.com/PGNetHun/PG-TTGO-Watchfaces)
+
 # Applications
 
 ![screenshot](images/screen7.png)
@@ -136,9 +145,13 @@ For the weather app you need an openweather.com api-id. http://openweathermap.or
 
 ## Stopwatch
 
+![screenshot](images/stopwatch.png)
+
 Click play to start.
 
 ## Alarm
+
+![screenshot](images/alarm.png)
 
 You can set an alarm, by setting time and day(s) of the week.
 
@@ -224,6 +237,31 @@ A long press in the middle centers the map to the current gps position.
 
 In connection with [OsmAnd](https://osmand.net) the watch can also be used for navigation. Please use the osmand app, otherwise a lot of messages will be displayed.
 
+## gps tracker
+
+![screenshot](images/tracker1.png)
+![screenshot](images/tracker2.png)
+
+gps tracker that generates .gpx files. Only works properly with watches that have GPS. A long press on the crosshairs starts and stops the logging. The .gpx files can be downloaded via FTP and imported directly into e.g. GoogleMaps or OSM. The trash icon deletes all files to save space.
+
+## gps status
+
+![screenshot](images/gps_status.png)
+
+## astro
+
+![screenshot](images/astro.png)
+
+## powermeter
+
+![screenshot](images/powermeter.png)
+
+Get realtime data from a [powermeter](https://github.com/sharandac/powermeter) over mqtt.
+
+## wfif mon
+
+![screenshot](images/wifi_mon.png)
+
 ## Activity tracker
 
 ![screenshot](images/screen12.png)
@@ -240,6 +278,8 @@ The trash can button allows to reset step counter.
 Useful when starting a new activity an keeping exact track of it.
 
 ## Sailing
+
+![screenshot](images/sailing.png)
 
 This app connects to your [OpenPlotter](https://openmarine.net/openplotter) and shows some of your boat stats.
 

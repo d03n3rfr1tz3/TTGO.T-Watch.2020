@@ -23,15 +23,7 @@
     #define _KODI_REMOTE_H
 
     #include "gui/icon.h"
-
-    #define KODI_REMOTE_JSON_CONFIG_FILE        "/kodi_remote.json"
-
-    typedef struct {
-        char host[32] = "";
-        uint16_t port = 8080;
-        char user[32] = "";
-        char pass[32] = "";
-    } kodi_remote_config_t;
+    #include "kodi_remote_config.h"
 
     typedef struct {
         volatile bool changed = false;

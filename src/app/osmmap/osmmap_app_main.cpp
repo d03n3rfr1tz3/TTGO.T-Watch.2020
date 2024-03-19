@@ -23,8 +23,9 @@
 
 #include "osmmap_app.h"
 #include "osmmap_app_main.h"
-#include "app/osmmap/config/osmmap_config.h"
+#include "config/osmmap_config.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/setup_tile/bluetooth_settings/bluetooth_message.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
@@ -203,16 +204,16 @@ void osmmap_app_main_setup( uint32_t tile_num ) {
     lv_label_set_text( osmmap_lonlat_label, "0 / 0" );
 
     osmmap_layers_btn = wf_add_menu_button( osmmap_cont, layers_btn_app_main_event_cb, &osmmap_app_btn_style );
-    lv_obj_align( osmmap_layers_btn, osmmap_cont, LV_ALIGN_IN_TOP_LEFT, 10, 10 );
+    lv_obj_align( osmmap_layers_btn, osmmap_cont, LV_ALIGN_IN_TOP_LEFT, THEME_PADDING, THEME_PADDING );
 
     osmmap_exit_btn = wf_add_exit_button( osmmap_cont, exit_osmmap_app_main_event_cb, &osmmap_app_btn_style );
-    lv_obj_align( osmmap_exit_btn, osmmap_cont, LV_ALIGN_IN_BOTTOM_LEFT, 10, -10 );
+    lv_obj_align( osmmap_exit_btn, osmmap_cont, LV_ALIGN_IN_BOTTOM_LEFT, THEME_PADDING, -THEME_PADDING );
 
     osmmap_zoom_in_btl = wf_add_zoom_in_button( osmmap_cont, zoom_in_osmmap_app_main_event_cb, &osmmap_app_btn_style );
-    lv_obj_align( osmmap_zoom_in_btl, osmmap_cont, LV_ALIGN_IN_TOP_RIGHT, -10, 10 );
+    lv_obj_align( osmmap_zoom_in_btl, osmmap_cont, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING, THEME_PADDING );
 
     osmmap_zoom_out_btl = wf_add_zoom_out_button( osmmap_cont, zoom_out_osmmap_app_main_event_cb, &osmmap_app_btn_style );
-    lv_obj_align( osmmap_zoom_out_btl, osmmap_cont, LV_ALIGN_IN_BOTTOM_RIGHT, -10, -10 );
+    lv_obj_align( osmmap_zoom_out_btl, osmmap_cont, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_PADDING, -THEME_PADDING );
 
     osmmap_north_btn = lv_btn_create( osmmap_cont, NULL );
     lv_obj_set_width( osmmap_north_btn, 80 );
@@ -598,21 +599,27 @@ void osmmap_update_Task( void * pvParameters ) {
              */
             OSMMAP_APP_LOG("start osm map update");
             if( osm_map_update( osmmap_location ) ) {
+                gui_take();
                 if ( osm_map_get_tile_image( osmmap_location ) ) {
                     lv_img_set_src( osmmap_app_tile_img, osm_map_get_tile_image( osmmap_location ) );
                 }
                 lv_obj_align( osmmap_app_tile_img, lv_obj_get_parent( osmmap_app_tile_img ), LV_ALIGN_CENTER, 0 , 0 );
+                gui_give();
                 xEventGroupSetBits( osmmap_event_handle, OSM_APP_LOAD_AHEAD_REQUEST );
             }
             /**
              * update postion point on the tile image when is valid
              */
             if ( osmmap_location->tilexy_pos_valid ) {
+                gui_take();
                 lv_obj_align( osmmap_app_pos_img, lv_obj_get_parent( osmmap_app_pos_img ), LV_ALIGN_IN_TOP_LEFT, osmmap_location->tilex_pos - 8 , osmmap_location->tiley_pos - 8 );
                 lv_obj_set_hidden( osmmap_app_pos_img, false );
+                gui_give();
             }
             else {
+                gui_take();
                 lv_obj_set_hidden( osmmap_app_pos_img, true );
+                gui_give();
             }
             /**
              * clear update request flag
@@ -777,12 +784,14 @@ static void osmmap_tile_server_event_cb( lv_obj_t * obj, lv_event_t event ) {
                 OSMMAP_APP_ERROR_LOG("osm server list deserializeJson() failed: %s", error.c_str() );
             }
             else {
-                const char *tile_server = doc[ lv_list_get_btn_text( obj ) ];
-                OSMMAP_APP_INFO_LOG("new tile server url: %s", tile_server );
-                osm_map_set_tile_server( osmmap_location, tile_server );
-                strncpy( osmmap_config.osmmap, lv_list_get_btn_text( obj ), sizeof( osmmap_config.osmmap ) );
-                osmmap_add_tile_server_list( osmmap_sub_menu_layers );
-                osmmap_update_request();
+                if( doc.containsKey( lv_list_get_btn_text( obj ) ) ) {
+                    const char *tile_server = doc[ lv_list_get_btn_text( obj ) ];
+                    OSMMAP_APP_INFO_LOG("new tile server url: %s", tile_server );
+                    osm_map_set_tile_server( osmmap_location, tile_server );
+                    strncpy( osmmap_config.osmmap, lv_list_get_btn_text( obj ), sizeof( osmmap_config.osmmap ) );
+                    osmmap_add_tile_server_list( osmmap_sub_menu_layers );
+                    osmmap_update_request();
+                }
             }
             doc.clear();
             lv_obj_set_hidden( osmmap_sub_menu_layers, true );            
@@ -892,6 +901,11 @@ void osmmap_activate_cb( void ) {
     osmmap_update_request();
     lv_img_cache_invalidate_src( osmmap_app_tile_img );
     powermgm_set_perf_mode();
+
+    wf_image_button_fade_in( osmmap_exit_btn, 300, 0 );
+    wf_image_button_fade_in( osmmap_zoom_in_btl, 300, 100 );
+    wf_image_button_fade_in( osmmap_zoom_out_btl, 300, 200 );
+    wf_image_button_fade_in( osmmap_layers_btn, 300, 300 );
 }
 
 void osmmap_hibernate_cb( void ) {

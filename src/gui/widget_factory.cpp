@@ -22,6 +22,8 @@
 #include "widget_factory.h"
 #include "widget_styles.h"
 #include "mainbar/mainbar.h"
+#include "utils/alloc.h"
+#include <stdarg.h>
 
 #ifdef NATIVE_64BIT
     #include "utils/logging.h"
@@ -46,6 +48,11 @@
     LV_IMG_DECLARE(right_96px);
     LV_IMG_DECLARE(up_96px);
     LV_IMG_DECLARE(down_96px);
+    LV_IMG_DECLARE(location_96px);
+    LV_IMG_DECLARE(play_96px);
+    LV_IMG_DECLARE(stop_96px);
+    LV_IMG_DECLARE(eject_96px);
+    LV_IMG_DECLARE(reply_96px);
 
     const lv_img_dsc_t down_icon = down_96px;
     const lv_img_dsc_t up_icon = up_96px;
@@ -63,6 +70,11 @@
     const lv_img_dsc_t exit_icon = exit_96px;
     const lv_img_dsc_t menu_icon = menu_96px;
     const lv_img_dsc_t refresh_icon = refresh_96px;
+    const lv_img_dsc_t location_icon = location_96px;
+    const lv_img_dsc_t play_icon = play_96px;
+    const lv_img_dsc_t stop_icon = stop_96px;
+    const lv_img_dsc_t eject_icon = eject_96px;
+    const lv_img_dsc_t reply_icon = reply_96px;
 #elif defined( MID_THEME )
     LV_IMG_DECLARE(menu_64px);
     LV_IMG_DECLARE(setup_64px);
@@ -80,6 +92,11 @@
     LV_IMG_DECLARE(right_64px);
     LV_IMG_DECLARE(up_64px);
     LV_IMG_DECLARE(down_64px);
+    LV_IMG_DECLARE(location_64px);
+    LV_IMG_DECLARE(play_64px);
+    LV_IMG_DECLARE(stop_64px);
+    LV_IMG_DECLARE(eject_64px);
+    LV_IMG_DECLARE(reply_64px);
 
     const lv_img_dsc_t down_icon = down_64px;
     const lv_img_dsc_t up_icon = up_64px;
@@ -97,6 +114,11 @@
     const lv_img_dsc_t exit_icon = exit_64px;
     const lv_img_dsc_t menu_icon = menu_64px;
     const lv_img_dsc_t refresh_icon = refresh_64px;
+    const lv_img_dsc_t location_icon = location_64px;
+    const lv_img_dsc_t play_icon = play_64px;
+    const lv_img_dsc_t stop_icon = stop_64px;
+    const lv_img_dsc_t eject_icon = eject_64px;
+    const lv_img_dsc_t reply_icon = reply_64px;
 #else
     LV_IMG_DECLARE(menu_32px);
     LV_IMG_DECLARE(setup_32px);
@@ -114,6 +136,11 @@
     LV_IMG_DECLARE(right_32px);
     LV_IMG_DECLARE(up_32px);
     LV_IMG_DECLARE(down_32px);
+    LV_IMG_DECLARE(location_32px);
+    LV_IMG_DECLARE(play_32px);
+    LV_IMG_DECLARE(stop_32px);
+    LV_IMG_DECLARE(eject_32px);
+    LV_IMG_DECLARE(reply_32px);
 
     const lv_img_dsc_t down_icon = down_32px;
     const lv_img_dsc_t up_icon = up_32px;
@@ -131,10 +158,17 @@
     const lv_img_dsc_t exit_icon = exit_32px;
     const lv_img_dsc_t menu_icon = menu_32px;
     const lv_img_dsc_t refresh_icon = refresh_32px;
+    const lv_img_dsc_t location_icon = location_32px;
+    const lv_img_dsc_t play_icon = play_32px;
+    const lv_img_dsc_t stop_icon = stop_32px;
+    const lv_img_dsc_t eject_icon = eject_32px;
+    const lv_img_dsc_t reply_icon = reply_32px;
 #endif
 
 #define CLICKABLE_PADDING 6
 #define CONTAINER_INNER_PADDING CLICKABLE_PADDING * 2
+
+static bool wf_anim_enabled = true;
 
 static void exit_jump_back_event_cb( lv_obj_t * obj, lv_event_t event );
 
@@ -194,6 +228,43 @@ lv_obj_t * wf_add_label(lv_obj_t *parent, char const * text, lv_style_t *style )
     return label;
 }
 
+void wf_label_printf( lv_obj_t *label, lv_obj_t *base, lv_align_t align, lv_coord_t x, lv_coord_t y, const char *format, ... ) {
+    va_list args;
+    va_start(args, format);
+
+    char *buffer = NULL;
+    int size = vasprintf( &buffer, format, args );
+    va_end(args);
+
+    if( size > 0 ) {
+        lv_label_set_text( label, buffer );
+        lv_obj_align( label, base, align, x, y );
+    }
+
+    if( buffer )
+        free( buffer );
+    
+    return;
+}
+
+void wf_label_printf( lv_obj_t *label, const char *format, ... ) {
+    va_list args;
+    va_start(args, format);
+
+    char *buffer = NULL;
+    int size = vasprintf( &buffer, format, args );
+    va_end(args);
+
+    if( size > 0 ) {
+        lv_label_set_text( label, buffer );
+    }
+
+    if( buffer )
+        free( buffer );
+    
+    return;
+}
+
 lv_obj_t * wf_add_label_container(lv_obj_t *parent, char const * text) {
     lv_obj_t *container = wf_add_container( parent, LV_LAYOUT_PRETTY_MID, LV_FIT_PARENT, LV_FIT_TIGHT );
     wf_add_label( container, text);
@@ -238,6 +309,29 @@ lv_obj_t * wf_add_switch(lv_obj_t *parent, bool on){
         lv_obj_set_size( _switch, 50, 25 );
     #endif
     lv_obj_set_ext_click_area(_switch, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING);
+    return _switch;
+}
+
+lv_obj_t * wf_add_switch(lv_obj_t *parent, bool on, lv_event_cb_t event_cb ){
+    lv_obj_t *_switch = lv_switch_create( parent, NULL );
+    //TODO: must it be here?
+    lv_obj_add_protect( _switch, LV_PROTECT_CLICK_FOCUS);
+
+    if (on) {
+        lv_switch_on( _switch, LV_ANIM_OFF );
+    } else {
+        lv_switch_off( _switch, LV_ANIM_OFF );
+    }
+
+    lv_obj_add_style( _switch, LV_SWITCH_PART_INDIC, ws_get_switch_style() );
+    #if defined( BIG_THEME )
+        lv_obj_set_size( _switch, 70, 35 );
+    #elif defined( MID_THEME )
+        lv_obj_set_size( _switch, 50, 25 );
+    #endif
+    lv_obj_set_ext_click_area(_switch, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING);
+
+    lv_obj_set_event_cb( _switch, event_cb );
     return _switch;
 }
 
@@ -342,27 +436,115 @@ lv_obj_t * wf_add_button(lv_obj_t *parent, char const * label, int width, int he
     if (height != -1){
         lv_obj_set_height(button, height);
     }
-    if (event_cb != NULL) {
+
+    if( event_cb )
         lv_obj_set_event_cb( button, event_cb );
-    }
+
     return button;
 }
-/**
- * 
- */
-lv_obj_t * wf_add_image_button(lv_obj_t *parent, lv_img_dsc_t const &image, lv_event_cb_t event_cb, lv_style_t *style){
+
+void wf_enable_anim( bool enable ) {
+    wf_anim_enabled = enable;
+}
+
+void wf_image_button_fade_out_state_2( _lv_anim_t *anim ) {
+    lv_obj_set_hidden( lv_obj_get_parent( (lv_obj_t*)anim->var ), true );
+    lv_anim_del( anim->var, (lv_anim_exec_xcb_t)lv_img_set_zoom );
+}
+
+void wf_image_button_fade_out( lv_obj_t *button, uint32_t duration, uint32_t delay ) {
+    if( !wf_anim_enabled )
+        return;
+
+    lv_anim_t wf_btn_icon_anim;
+
+    lv_anim_init( &wf_btn_icon_anim );
+	lv_anim_set_exec_cb( &wf_btn_icon_anim, (lv_anim_exec_xcb_t)lv_img_set_zoom );
+	lv_anim_set_time( &wf_btn_icon_anim, duration );
+    lv_anim_set_ready_cb( &wf_btn_icon_anim, wf_image_button_fade_out_state_2 );
+
+    lv_anim_set_var( &wf_btn_icon_anim, lv_obj_get_child( button, NULL ) );
+    lv_anim_set_values( &wf_btn_icon_anim, 256, 1 );
+    lv_anim_set_delay( &wf_btn_icon_anim, delay );
+    lv_anim_start( &wf_btn_icon_anim );
+}
+
+void wf_image_button_fade_in_state_3( _lv_anim_t *anim ) {
+    lv_anim_del( anim->var, (lv_anim_exec_xcb_t)lv_img_set_zoom );
+}
+
+void wf_image_button_fade_in_state_2( _lv_anim_t *anim ) {
+
+    lv_anim_set_ready_cb( anim, wf_image_button_fade_in_state_3 );
+	lv_anim_set_time( anim, 100 );
+    lv_anim_set_values( anim, 300, 256 );
+    lv_anim_set_delay( anim, 0 );
+    lv_anim_start( anim );
+}
+
+void wf_image_button_fade_in( lv_obj_t *button, uint32_t duration, uint32_t delay ) {
+    if( !wf_anim_enabled )
+        return;
+
+    lv_anim_t wf_btn_icon_anim;
+
+    lv_anim_init( &wf_btn_icon_anim );
+	lv_anim_set_exec_cb( &wf_btn_icon_anim, (lv_anim_exec_xcb_t)lv_img_set_zoom );
+	lv_anim_set_time( &wf_btn_icon_anim, duration );
+    lv_anim_set_ready_cb( &wf_btn_icon_anim, wf_image_button_fade_in_state_2 );
+
+    lv_anim_set_var( &wf_btn_icon_anim, lv_obj_get_child( button, NULL ) );
+    lv_anim_set_values( &wf_btn_icon_anim, 1, 300 );
+    lv_anim_set_delay( &wf_btn_icon_anim, delay );
+    lv_anim_start( &wf_btn_icon_anim );
+
+    lv_obj_set_hidden( button, false );
+}
+
+void wf_image_button_set_style( lv_obj_t *button, lv_style_t *style ) {
+    lv_obj_reset_style_list( lv_obj_get_child( button, NULL ), LV_OBJ_PART_MAIN );
+    lv_obj_add_style( lv_obj_get_child( button, NULL ), LV_OBJ_PART_MAIN, style );
+}
+
+lv_obj_t * wf_add_image_button_old(lv_obj_t *parent, lv_img_dsc_t const &image, lv_event_cb_t event_cb, lv_style_t *style){
     lv_obj_t * button = lv_imgbtn_create( parent, NULL );
     lv_imgbtn_set_src( button, LV_BTN_STATE_RELEASED, &image );
     lv_imgbtn_set_src( button, LV_BTN_STATE_PRESSED, &image );
     lv_imgbtn_set_src( button, LV_BTN_STATE_CHECKED_RELEASED, &image );
     lv_imgbtn_set_src( button, LV_BTN_STATE_CHECKED_PRESSED, &image );
 
+    if (!style)
+        style = ws_get_img_button_style();
+
+    lv_obj_add_style( button, LV_OBJ_PART_MAIN, style );
+    lv_obj_set_ext_click_area(button, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING);
+
+    if ( event_cb != NULL )
+        lv_obj_set_event_cb( button, event_cb );
+
+    return button;
+}
+    
+/**
+ * 
+ */
+lv_obj_t * wf_add_image_button(lv_obj_t *parent, lv_img_dsc_t const &image, lv_event_cb_t event_cb, lv_style_t *style){
+    lv_obj_t *button = lv_btn_create( parent, NULL );
+    lv_obj_set_width( button, image.header.w + THEME_PADDING * 2 );
+    lv_obj_set_height( button, image.header.h + THEME_PADDING * 2 );
+    lv_obj_add_protect( button, LV_PROTECT_CLICK_FOCUS );
+    lv_obj_add_style( button, LV_BTN_PART_MAIN, ws_get_img_button_style() );
+
+    lv_obj_t *button_img = lv_img_create( button, NULL );
+    lv_img_set_src( button_img, &image );
+    lv_obj_align( button_img, button, LV_ALIGN_CENTER, 0, 0 );
+    lv_obj_set_click( button_img, false );
+
     if (!style) {
         style = ws_get_img_button_style();
     }
-    lv_obj_add_style( button, LV_OBJ_PART_MAIN, style );
-//    lv_obj_add_style( button, LV_IMGBTN_PART_MAIN, style );
-    lv_obj_set_ext_click_area(button, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING, CLICKABLE_PADDING);
+
+    lv_obj_add_style( button_img, LV_OBJ_PART_MAIN, style );
 
     if (event_cb != NULL) {
         lv_obj_set_event_cb( button, event_cb );
@@ -487,7 +669,41 @@ lv_obj_t * wf_add_down_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style
     return wf_add_image_button(parent, down_icon, event_cb, style?style:SYSTEM_ICON_STYLE );
 }
 lv_img_dsc_t const &wf_get_down_img( void ) { return( down_icon ); }
-
+/**
+ * 
+ */
+lv_obj_t * wf_add_location_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style){
+    return wf_add_image_button(parent, location_icon, event_cb, style?style:SYSTEM_ICON_STYLE );
+}
+lv_img_dsc_t const &wf_get_location_img( void ) { return( location_icon ); }
+/**
+ * 
+ */
+lv_obj_t * wf_add_play_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style){
+    return wf_add_image_button(parent, play_icon, event_cb, style?style:SYSTEM_ICON_STYLE );
+}
+lv_img_dsc_t const &wf_get_play_img( void ) { return( play_icon ); }
+/**
+ * 
+ */
+lv_obj_t * wf_add_stop_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style){
+    return wf_add_image_button(parent, stop_icon, event_cb, style?style:SYSTEM_ICON_STYLE );
+}
+lv_img_dsc_t const &wf_get_stop_img( void ) { return( stop_icon ); }
+/**
+ * 
+ */
+lv_obj_t * wf_add_eject_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style){
+    return wf_add_image_button(parent, eject_icon, event_cb, style?style:SYSTEM_ICON_STYLE );
+}
+lv_img_dsc_t const &wf_get_eject_img( void ) { return( eject_icon ); }
+/**
+ * 
+ */
+lv_obj_t * wf_add_reply_button(lv_obj_t *parent, lv_event_cb_t event_cb, lv_style_t *style){
+    return wf_add_image_button(parent, reply_icon, event_cb, style?style:SYSTEM_ICON_STYLE );
+}
+lv_img_dsc_t const &wf_get_reply_img( void ) { return( reply_icon ); }
 
 lv_obj_t * wf_add_settings_header(lv_obj_t *parent, char const * title, lv_obj_t ** ret_back_btn, lv_style_t *style ) {
     lv_obj_t *container = wf_add_container(parent, LV_LAYOUT_ROW_MID, LV_FIT_PARENT, LV_FIT_TIGHT, false, style?style:SETUP_STYLE );
@@ -536,13 +752,13 @@ lv_obj_t *wf_get_settings_header_title(lv_obj_t *parent) {
         lv_obj_type_t buf;
         lv_obj_get_type(child, &buf);
         if (!strcmp(buf.type[0], "lv_label")) {
-            log_i("header_title found");
+            log_d("header_title found");
             /* found */
             title = child;
             /* Break the loop */
             child = NULL;
         } else {
-            log_i("header_title not found");
+            log_d("header_title not found");
             /* continue the loop */
             child = lv_obj_get_child(parent, child);
         }

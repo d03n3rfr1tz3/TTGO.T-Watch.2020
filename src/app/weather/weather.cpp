@@ -25,6 +25,7 @@
 #include "weather_forecast.h"
 #include "weather_setup.h"
 #include "images/resolve_owm_icon.h"
+#include "gui/gui.h"
 #include "gui/app.h"
 #include "gui/widget.h"
 #include "gui/mainbar/mainbar.h"
@@ -50,28 +51,46 @@
     EventGroupHandle_t weather_sync_event_handle = NULL;
     TaskHandle_t _weather_sync_Task;
 #endif
-
-void weather_widget_sync( void );
-void weather_sync_Task( void * pvParameters );
-
+/*
+ * app config
+ */
 weather_config_t weather_config;
 weather_forcast_t weather_today;
-
+/*
+ * app tiles
+ */
 uint32_t weather_app_tile_num;
 uint32_t weather_app_setup_tile_num;
-
+/*
+ * app icon
+ */
 icon_t *weather_app = NULL;
 icon_t * weather_widget = NULL;
-
+/*
+ * declare callback functions for the app and widget icon to enter the app
+ */
 static void enter_weather_widget_event_cb( lv_obj_t * obj, lv_event_t event );
 bool weather_wifictl_event_cb( EventBits_t event, void *arg );
-
+void weather_widget_sync( void );
+void weather_sync_Task( void * pvParameters );
+/*
+ * declare you images or fonts you need
+ */
 LV_IMG_DECLARE(owm01d_64px);
 LV_IMG_DECLARE(info_ok_16px);
 LV_IMG_DECLARE(info_fail_16px);
 LV_FONT_DECLARE(Ubuntu_16px);
+/*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &weather_app_setup, 0 );           /** @brief app autocall function */
+
 
 void weather_app_setup( void ) {
+    if( !registed ) {
+        return;
+    }
+    
 
     weather_config.load();
 
@@ -117,8 +136,7 @@ bool weather_wifictl_event_cb( EventBits_t event, void *arg ) {
 
 static void enter_weather_widget_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( weather_app_tile_num, LV_ANIM_OFF );
-                                        statusbar_hide( true );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( weather_app_tile_num, LV_ANIM_OFF, true );
                                         break;
     }    
 }
@@ -132,13 +150,11 @@ void weather_remove_widget( void ) {
 }
 
 void weather_jump_to_forecast( void ) {
-    statusbar_hide( true );
-    mainbar_jump_to_tilenumber( weather_app_tile_num, LV_ANIM_ON );
+    mainbar_jump_to_tilenumber( weather_app_tile_num, LV_ANIM_ON, true );
 }
 
 void weather_jump_to_setup( void ) {
-    statusbar_hide( true );
-    mainbar_jump_to_tilenumber( weather_app_setup_tile_num, LV_ANIM_ON );    
+    mainbar_jump_to_tilenumber( weather_app_setup_tile_num, LV_ANIM_ON, true );    
 }
 
 void weather_sync_request( void ) {
@@ -185,6 +201,9 @@ void weather_sync_Task( void * pvParameters ) {
 
 void weather_widget_sync( void ) {
     uint32_t retval = weather_fetch_today( &weather_config, &weather_today );
+
+    gui_take();
+
     if ( retval == 200 ) {
         widget_set_label( weather_widget, weather_today.temp );
         widget_set_icon( weather_widget, (lv_obj_t*)resolve_owm_icon( weather_today.icon ) );
@@ -201,6 +220,8 @@ void weather_widget_sync( void ) {
         widget_set_indicator( weather_widget, ICON_INDICATOR_FAIL );
     }
     lv_obj_invalidate( lv_scr_act() );
+
+    gui_give();
 }
 
 void weather_save_config( void ) {

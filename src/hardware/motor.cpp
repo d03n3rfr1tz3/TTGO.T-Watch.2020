@@ -101,6 +101,8 @@
             */
             portEXIT_CRITICAL_ISR(&timerMux);
         }
+    #elif defined( WT32_SC01 )
+
     #else
         #warning "no hardware driver for motor/vibe"
     #endif
@@ -134,7 +136,7 @@ void motor_setup( void ) {
             Wire.beginTransmission( DRV2605_ADDRESS );
             uint8_t err = Wire.endTransmission();
             if ( err == 0 ) {
-                log_i("Motor init: I2C device found at address %p", DRV2605_ADDRESS);
+                log_d("Motor init: I2C device found at address %p", DRV2605_ADDRESS);
                 TTGOClass * ttgo = TTGOClass::getWatch(); 
                 ttgo->enableDrv2650( true );
                 drv = ttgo->drv;
@@ -156,6 +158,8 @@ void motor_setup( void ) {
             timerAttachInterrupt(timer, &onTimer, true);
             timerAlarmWrite(timer, 10000, true);
             timerAlarmEnable(timer);
+        #elif defined( WT32_SC01 )
+
         #endif
     #endif
     /*
@@ -197,6 +201,7 @@ bool motor_powermgm_event_cb( EventBits_t event, void *arg ) {
                                                 timerDetachInterrupt(timer);
                                                 break;
             }
+        #elif defined( WT32_SC01 )
         #endif
     #endif
     return( true );

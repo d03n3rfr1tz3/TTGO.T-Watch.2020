@@ -30,7 +30,7 @@
 #include "gui/widget_styles.h"
 #include "hardware/wifictl.h"
 #include "hardware/motor.h"
-#include "hardware/blectl.h"
+#include "hardware/ble/gadgetbridge.h"
 #include "utils/bluejsonrequest.h"
 #include "utils/webserver/webserver.h"
 #include "utils/ftpserver/ftpserver.h"
@@ -265,9 +265,10 @@ void wlan_setup_tile_setup( uint32_t wifi_setup_tile_num ) {
 
     lv_obj_t *wps_btn = lv_btn_create( wifi_setup_tile, NULL);
     lv_obj_set_event_cb( wps_btn, wps_start_event_handler );
-    lv_obj_align( wps_btn, wifi_ftpserver_onoff_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, 0 );
+    lv_obj_add_style( wps_btn, LV_BTN_PART_MAIN, ws_get_button_style() );
     lv_obj_t *wps_btn_label = lv_label_create( wps_btn, NULL );
     lv_label_set_text( wps_btn_label, "start WPS");
+    lv_obj_align( wps_btn, wifi_ftpserver_onoff_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, 0 );
 
     #ifndef ENABLE_WEBSERVER
         lv_obj_set_hidden( wifi_webserver_onoff_cont, true );
@@ -276,7 +277,7 @@ void wlan_setup_tile_setup( uint32_t wifi_setup_tile_num ) {
         lv_obj_set_hidden( wifi_ftpserver_onoff_cont, true );
     #endif
 
-    blectl_register_cb( BLECTL_MSG_JSON, wifi_setup_bluetooth_message_event_cb, "wifi settings" );
+    gadgetbridge_register_cb( GADGETBRIDGE_JSON_MSG, wifi_setup_bluetooth_message_event_cb, "wifi settings" );
     wifictl_register_cb( WIFICTL_AUTOON, wifi_setup_autoon_event_cb, "wifi setup");
 }
 
@@ -304,13 +305,15 @@ static void wifi_autoon_onoff_event_handler( lv_obj_t * obj, lv_event_t event ) 
 static void wifi_webserver_onoff_event_handler( lv_obj_t * obj, lv_event_t event ) {
     switch (event) {
         case (LV_EVENT_VALUE_CHANGED):  wifictl_set_webserver( lv_switch_get_state( obj ) );
+                                        #if defined( ENABLE_WEBSERVER )
                                             if ( lv_switch_get_state( obj ) ) {
-                                            asyncwebserver_start();
-                                        }
-                                        else {
-                                            asyncwebserver_end();
-                                        }
-                                        break;
+                                                asyncwebserver_start();
+                                            }
+                                            else {
+                                                asyncwebserver_end();
+                                            }
+                                            break;
+                                        #endif // ENABLE_WEBSERVER
     }
 }
 
@@ -350,16 +353,28 @@ bool wifi_setup_autoon_event_cb( EventBits_t event, void *arg ) {
 
 bool wifi_setup_bluetooth_message_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
-        case BLECTL_MSG_JSON:       wifi_setup_bluetooth_message_msg_pharse( *(BluetoothJsonRequest*)arg );
+        case GADGETBRIDGE_JSON_MSG: wifi_setup_bluetooth_message_msg_pharse( *(BluetoothJsonRequest*)arg );
                                     break;
     }
     return( true );
 }
 
 void wifi_setup_bluetooth_message_msg_pharse( BluetoothJsonRequest &doc ) {
+    if( !doc.containsKey("t") )
+        return;
+
+    if( !doc.containsKey("app") )
+        return;
+
     if( !strcmp( doc["t"], "conf" ) ) {
-        if ( !strcmp( doc["app"], "settings" ) ) {
-            if ( !strcmp( doc["settings"], "wlan" ) ) {
+        /**
+         * check for app settings and if settings aviable
+         */
+        if ( !strcmp( doc["app"], "settings" ) && doc.containsKey("settings") ) {
+            /**
+             * check if we have settings for wlan
+             */
+            if ( !strcmp( doc["settings"], "wlan" ) && doc.containsKey("ssid") && doc.containsKey("key") ) {
                 motor_vibe(100);
                 wifictl_insert_network(  doc["ssid"] |"" , doc["key"] |"" );
             }
