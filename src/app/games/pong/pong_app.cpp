@@ -91,7 +91,8 @@ PongApp::PongApp(PongIcon *icon)
 {
     gameInstance = this;
     mParentIcon = icon;
-
+    control_orientation = display_get_rotation();
+    
     log_d("Creating game tiles...");
     if (!AllocateAppTiles(2, 1))
     {
@@ -440,7 +441,23 @@ void PongApp::UpdatePlayer1()
     ttgo->bma->getAccel(acc);
 
     // set new position by accelerator
-    int16_t new_position = acc.y * 0.2;
+    int16_t new_position = 0;
+    switch (control_orientation) {
+        case 270:
+            new_position = 0 - acc.x * 0.2;
+            break;
+        case 180:
+            new_position = acc.y * 0.2;
+            break;
+        case 90:
+            new_position = acc.x * 0.2;
+            break;
+        case 0:
+        default:
+            new_position = 0 - acc.y * 0.2;
+            break;
+    }
+
     if (new_position > 0 + PLAYER_BOUNDARY) new_position = 0 + PLAYER_BOUNDARY;
     if (new_position < 0 - PLAYER_BOUNDARY) new_position = 0 - PLAYER_BOUNDARY;
 
@@ -480,7 +497,7 @@ void PongApp::UpdatePlayer2()
 
 void PongApp::UpdateBoard()
 {
-    log_i("Updating Board to %d : %d", score_p1, score_p2);
+    log_d("Updating Board to %d : %d", score_p1, score_p2);
 
     char temp[10];
     snprintf(temp, sizeof(temp), "%d : %d", score_p1, score_p2);

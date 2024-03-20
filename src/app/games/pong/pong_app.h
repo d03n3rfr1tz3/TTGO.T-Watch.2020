@@ -48,6 +48,7 @@ private:
     PongIcon *mParentIcon = 0;
     bool pong_inited = false;
     bool pong_active = false;
+    uint32_t control_orientation;
     
     // Gameplay data
     uint8_t ball_speed = BALL_SPEED_MIN;
