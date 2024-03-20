@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "app\games\gamebase.h"
+#include "app/games/gamebase.h"
 
 void tic_tac_toe_app_setup();
 

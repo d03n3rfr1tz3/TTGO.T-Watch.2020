@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "app\games\gamebase.h"
+#include "app/games/gamebase.h"
 
 #define FIELD_WIDTH 240
 #define FIELD_HEIGHT 240
