@@ -49,6 +49,7 @@ bool tiltmouse_available = false;
 uint8_t tiltmouse_button = 0;
 
 #define MOUSE_SENSIVITY 0.1
+#define MOUSE_NONE 0
 #define MOUSE_LEFT 1
 #define MOUSE_RIGHT 2
 
@@ -100,7 +101,7 @@ bool tiltmouse_blectl_event_cb(EventBits_t event, void *arg);
 void tiltmouse_left_event_cb( lv_obj_t * obj, lv_event_t event );
 void tiltmouse_right_event_cb( lv_obj_t * obj, lv_event_t event );
 void tiltmouse_move(signed char x, signed char y, signed char wheel, signed char hWheel);
-void tiltmouse_battery();
+void tiltmouse_battery(int32_t percent);
 
 void tiltmouse_app_main_setup( uint32_t tile_num ) {
     tiltmouse_app_main_tile = mainbar_get_tile_obj( tile_num );
@@ -146,36 +147,60 @@ void tiltmouse_app_task( lv_task_t * task )
 
 void tiltmouse_init()
 {
-    if (pHID == NULL || pHIDMouse == NULL) {
-        NimBLEServer *pServer = blectl_get_ble_server();
-        NimBLEAdvertising *pAdvertising = blectl_get_ble_advertising();
+    if (pHID != NULL && pHIDMouse != NULL) return;
 
-        pHID = new NimBLEHIDDevice(pServer);
-        pHIDMouse = pHID->inputReport(0); // <-- input REPORTID from report map
+    NimBLEServer *pServer = blectl_get_ble_server();
 
-        pHID->pnp(0x02, 0xe502, 0xa111, 0x0210);
-        pHID->hidInfo(0x00,0x02);
-        pHID->reportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
-        pHID->startServices();
-        
-        pAdvertising->addServiceUUID(pHID->hidService()->getUUID());
-    }
+    pHID = new NimBLEHIDDevice(pServer);
+    pHIDMouse = pHID->inputReport(0); // <-- input REPORTID from report map
 
-    tiltmouse_battery();
+    pHID->manufacturer()->setValue("Lily Go");
+    pHID->pnp(0x02, 0xe502, 0xa111, 0x0210);
+    pHID->hidInfo(0x00,0x02);
+
+    pHID->reportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
+    pHID->startServices();
+
+    BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
+    pAdvertising->addServiceUUID(pHID->hidService()->getUUID());
+    pAdvertising->setAppearance(HID_MOUSE);
 }
 
 void tiltmouse_activate()
 {
     tiltmouse_init();
+
     BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
-    pAdvertising->setAppearance( 0x03C2 );
+    pAdvertising->addServiceUUID(pHID->hidService()->getUUID());
+    pAdvertising->setAppearance( HID_MOUSE );
+
+    BLESecurity *pSecurity = new NimBLESecurity();
+    pSecurity->setAuthenticationMode(ESP_LE_AUTH_BOND);
+
+    if (tiltmouse_available) {
+        pAdvertising->stop();
+        pAdvertising->start();
+    }
+
     tiltmouse_active = true;
 }
 
 void tiltmouse_deactivate()
 {
+    tiltmouse_init();
+
     BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
+    pAdvertising->removeServiceUUID(pHID->hidService()->getUUID());
     pAdvertising->setAppearance( 0x00c0 );
+
+    BLESecurity *pSecurity = new NimBLESecurity();
+    pSecurity->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
+
+    if (tiltmouse_available) {
+        pAdvertising->stop();
+        pAdvertising->start();
+    }
+
     tiltmouse_active = false;
 }
 
@@ -191,11 +216,16 @@ void tiltmouse_move(signed char x, signed char y, signed char wheel, signed char
     pHIDMouse->notify();
 }
 
-void tiltmouse_battery()
+void tiltmouse_battery(int32_t percent)
 {
-    if (!tiltmouse_available) return;
-    int32_t battery = pmu_get_battery_percent();
-    pHID->setBatteryLevel(battery);
+    if ( !tiltmouse_active || !tiltmouse_available ) return;
+
+    uint8_t level = (uint8_t)percent;
+    if ( level > 100 ) {
+        level = 100;
+    }
+    
+    pHID->setBatteryLevel(level);
 }
 
 bool tiltmouse_powermgm_event_cb(EventBits_t event, void *arg)
@@ -212,7 +242,8 @@ bool tiltmouse_pmuctl_event_cb( EventBits_t event, void *arg )
 {
     switch( event ) {
         case PMUCTL_STATUS:
-            tiltmouse_battery();
+            int32_t percent = *(int32_t*)arg & PMUCTL_STATUS_PERCENT;
+            tiltmouse_battery(percent);
             break;
     }
     return( true );
@@ -221,8 +252,7 @@ bool tiltmouse_pmuctl_event_cb( EventBits_t event, void *arg )
 bool tiltmouse_blectl_event_cb(EventBits_t event, void *arg)
 {
     switch( event ) {
-        case BLECTL_ON:             tiltmouse_init();
-                                    tiltmouse_available = true;
+        case BLECTL_ON:             tiltmouse_available = true;
                                     break;
         case BLECTL_OFF:            tiltmouse_available = false;
                                     break;
@@ -236,7 +266,8 @@ void tiltmouse_left_event_cb( lv_obj_t * obj, lv_event_t event )
         case( LV_EVENT_PRESSED ):       tiltmouse_button = MOUSE_LEFT;
                                         tiltmouse_move( 0, 0, 0, 0 );
                                         break;
-        case( LV_EVENT_RELEASED ):      tiltmouse_move( 0, 0, 0, 0 );
+        case( LV_EVENT_RELEASED ):      tiltmouse_button = MOUSE_NONE;
+                                        tiltmouse_move( 0, 0, 0, 0 );
                                         break;
     }
 }
@@ -247,7 +278,8 @@ void tiltmouse_right_event_cb( lv_obj_t * obj, lv_event_t event )
         case( LV_EVENT_PRESSED ):       tiltmouse_button = MOUSE_RIGHT;
                                         tiltmouse_move( 0, 0, 0, 0 );
                                         break;
-        case( LV_EVENT_RELEASED ):      tiltmouse_move( 0, 0, 0, 0 );
+        case( LV_EVENT_RELEASED ):      tiltmouse_button = MOUSE_NONE;
+                                        tiltmouse_move( 0, 0, 0, 0 );
                                         break;
     }
 }
