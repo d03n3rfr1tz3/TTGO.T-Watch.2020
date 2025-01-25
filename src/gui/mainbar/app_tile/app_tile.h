@@ -40,7 +40,7 @@
         #define APP_ICON_Y_CLEARENCE    36
         #define APP_ICON_X_OFFSET       0
         #define APP_ICON_Y_OFFSET       0
-        #define MAX_APPS_TILES          4
+        #define MAX_APPS_TILES          5
     #elif defined( LILYGO_WATCH_2021 )
         #define MAX_APPS_ICON_HORZ      2
         #define MAX_APPS_ICON_VERT      2
@@ -64,7 +64,7 @@
         #define APP_ICON_Y_CLEARENCE    36
         #define APP_ICON_X_OFFSET       0
         #define APP_ICON_Y_OFFSET       0
-        #define MAX_APPS_TILES          4
+        #define MAX_APPS_TILES          5
     #endif
 
     #define MAX_APPS_ICON           ( MAX_APPS_ICON_HORZ * MAX_APPS_ICON_VERT * MAX_APPS_TILES )

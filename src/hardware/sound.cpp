@@ -284,12 +284,17 @@ void sound_play_spiffs_mp3( const char *filename ) {
 
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
-        if ( sound_config.enable && sound_init && !sound_is_silenced() ) {
-            sound_set_enabled( sound_config.enable );
-            log_d("playing file %s from SPIFFS", filename);
-            spliffs_file = new AudioFileSourceSPIFFS(filename);
-            id3 = new AudioFileSourceID3(spliffs_file);
-            mp3->begin(id3, out);
+        if ( sound_config.enable && sound_init ) {
+            if (!sound_is_silenced()) {
+                sound_set_enabled( sound_config.enable );
+                log_d("playing file %s from SPIFFS", filename);
+                spliffs_file = new AudioFileSourceSPIFFS(filename);
+                id3 = new AudioFileSourceID3(spliffs_file);
+                mp3->begin(id3, out);
+            }
+            else {
+                log_d("Cannot play mp3, sound is silenced");
+            }
         } else {
             log_d("Cannot play mp3, sound is disabled");
         }
@@ -308,11 +313,16 @@ void sound_play_progmem_wav( const void *data, uint32_t len ) {
 
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
-        if ( sound_config.enable && sound_init && !sound_is_silenced() ) {
-            sound_set_enabled( sound_config.enable );
-            log_d("playing audio (size %d) from PROGMEM ", len );
-            progmem_file = new AudioFileSourcePROGMEM( data, len );
-            wav->begin(progmem_file, out);
+        if ( sound_config.enable && sound_init ) {
+            if (!sound_is_silenced()) {
+                sound_set_enabled( sound_config.enable );
+                log_d("playing audio (size %d) from PROGMEM ", len );
+                progmem_file = new AudioFileSourcePROGMEM( data, len );
+                wav->begin(progmem_file, out);
+            }
+            else {
+                log_d("Cannot play mp3, sound is silenced");
+            }
         } else {
             log_d("Cannot play wav, sound is disabled");
         }
@@ -331,12 +341,17 @@ void sound_speak( const char *str ) {
 
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
-        if ( sound_config.enable && sound_init && !sound_is_silenced() ) {
-            sound_set_enabled( sound_config.enable );
-            log_d("Speaking text", str);
-            is_speaking = true;
-            sam->Say(out, str);
-            is_speaking = false;
+        if ( sound_config.enable && sound_init ) {
+            if (!sound_is_silenced()) {
+                sound_set_enabled( sound_config.enable );
+                log_d("Speaking text", str);
+                is_speaking = true;
+                sam->Say(out, str);
+                is_speaking = false;
+            }
+            else {
+                log_d("Cannot play mp3, sound is silenced");
+            }
         }
         else {
             log_d("Cannot speak, sound is disabled");
@@ -430,7 +445,6 @@ void sound_set_volume_config( uint8_t volume ) {
 #endif
     sound_send_event_cb( SOUNDCTL_VOLUME, (void *)&sound_config.volume ); 
 }
-
 
 bool sound_is_silenced( void ) {
     if ( !sound_config.silence_timeframe ) {

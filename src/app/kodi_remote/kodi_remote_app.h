@@ -25,6 +25,17 @@
     #include "gui/icon.h"
     #include "kodi_remote_config.h"
 
+    typedef struct {
+        volatile bool changed = false;
+        volatile bool success = false;
+        volatile uint32_t kodi_remote_id = 0;
+        volatile int16_t kodi_remote_videoplayer_id = 0;
+        volatile int16_t kodi_remote_audioplayer_id = 0;
+        volatile int16_t kodi_remote_pictureplayer_id = 0;
+        volatile char* artist = nullptr;
+        volatile char* title = nullptr;
+    } kodi_remote_result_t;
+
     void kodi_remote_app_setup( void );
     uint32_t kodi_remote_app_get_app_setup_tile_num( void );
     uint32_t kodi_remote_app_get_app_main_tile_num( void );

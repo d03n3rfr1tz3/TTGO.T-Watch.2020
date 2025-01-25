@@ -26,6 +26,7 @@
         #include "utils/io.h"
     #else
         #include "NimBLEDevice.h"
+        #include "NimBLEHIDDevice.h"
     #endif
 
     #include "callback.h"

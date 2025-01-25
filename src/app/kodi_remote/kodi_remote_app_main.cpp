@@ -44,16 +44,13 @@
 #else
     #include <Arduino.h>
     #include "HTTPClient.h"
+    #include "esp_task_wdt.h"
 #endif
 
 static const char* buttons[] = {"Info","Up","Context","\n","Left","OK","Right","\n","Back","Down","Exit",""};
-bool kodi_remote_state = false;
+volatile bool kodi_remote_state = false;
 volatile bool kodi_remote_open_state = false;
 volatile bool kodi_remote_play_state = false;
-uint32_t kodi_remote_id = 0;
-int16_t kodi_remote_videoplayer_id = 0;
-int16_t kodi_remote_audioplayer_id = 0;
-int16_t kodi_remote_pictureplayer_id = 0;
 static uint64_t nextmillis = 0;
 
 lv_obj_t *kodi_remote_player_main_tile = NULL;
@@ -61,8 +58,8 @@ lv_obj_t *kodi_remote_control_main_tile = NULL;
 
 lv_task_t * _kodi_remote_app_task;
 
-lv_obj_t *exit_btn_player = NULL;
-lv_obj_t *setup_btn_player = NULL;
+lv_obj_t *kodi_remote_exit_btn = NULL;
+lv_obj_t *kodi_remote_setup_btn = NULL;
 lv_obj_t *kodi_remote_play = NULL;
 lv_obj_t *kodi_remote_pause = NULL;
 lv_obj_t *kodi_remote_prev = NULL;
@@ -98,10 +95,16 @@ static void kodi_remote_prev_event_cb( lv_obj_t * obj, lv_event_t event );
 static void kodi_remote_button_event_cb( lv_obj_t * obj, lv_event_t event );
 static void kodi_remote_control_button(char cmd);
 
+#ifndef NATIVE_64BIT
+    TaskHandle_t kodi_remote_refresh_handle;
+#endif
+kodi_remote_result_t kodi_remote_refresh_result;
+
+void kodi_remote_refresh(void *parameter);
 int16_t kodi_remote_get_active_player_id();
 void kodi_remote_get_active_player_state();
+void kodi_remote_get_active_player_item();
 void kodi_remote_get_active_players();
-void kodi_remote_refresh();
 int kodi_remote_publish(const char* method, const char* params, SpiRamJsonDocument* doc = nullptr);
 void kodi_remote_app_task( lv_task_t * task );
 
@@ -112,11 +115,11 @@ void kodi_remote_app_main_setup( uint32_t tile_num ) {
     mainbar_add_tile_hibernate_cb( tile_num, kodi_remote_setup_hibernate_callback );
     kodi_remote_player_main_tile = mainbar_get_tile_obj( tile_num );
 
-    exit_btn_player = wf_add_exit_button( kodi_remote_player_main_tile, exit_kodi_remote_main_event_cb );
-    lv_obj_align(exit_btn_player, kodi_remote_player_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_PADDING, -THEME_PADDING );
+    kodi_remote_exit_btn = wf_add_exit_button( kodi_remote_player_main_tile, exit_kodi_remote_main_event_cb );
+    lv_obj_align(kodi_remote_exit_btn, kodi_remote_player_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_PADDING, -THEME_PADDING );
 
-    setup_btn_player = wf_add_setup_button( kodi_remote_player_main_tile, enter_kodi_remote_setup_event_cb );
-    lv_obj_align(setup_btn_player, kodi_remote_player_main_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_PADDING, -THEME_PADDING );
+    kodi_remote_setup_btn = wf_add_setup_button( kodi_remote_player_main_tile, enter_kodi_remote_setup_event_cb );
+    lv_obj_align(kodi_remote_setup_btn, kodi_remote_player_main_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_PADDING, -THEME_PADDING );
 
     kodi_remote_play = wf_add_image_button( kodi_remote_player_main_tile, play_64px, kodi_remote_play_event_cb, SYSTEM_ICON_STYLE );
     lv_obj_align( kodi_remote_play, kodi_remote_player_main_tile, LV_ALIGN_CENTER, 0, -20 );
@@ -177,15 +180,15 @@ void kodi_remote_app_main_setup( uint32_t tile_num ) {
     mainbar_add_slide_element( button_matrix );
 
     // callbacks
-    wifictl_register_cb( WIFICTL_OFF | WIFICTL_CONNECT | WIFICTL_DISCONNECT, kodi_remote_main_wifictl_event_cb, "kodi remote main" );
+    wifictl_register_cb( WIFICTL_OFF | WIFICTL_CONNECT_IP | WIFICTL_DISCONNECT, kodi_remote_main_wifictl_event_cb, "kodi remote main" );
 
     // create an task that runs every secound
     _kodi_remote_app_task = lv_task_create( kodi_remote_app_task, 1000, LV_TASK_PRIO_MID, NULL );
 }
 
 static void kodi_remote_setup_activate_callback ( void ) {
-    wf_image_button_fade_in( exit_btn_player, 300, 0 );
-    wf_image_button_fade_in( setup_btn_player, 300, 0 );
+    wf_image_button_fade_in( kodi_remote_exit_btn, 300, 0 );
+    wf_image_button_fade_in( kodi_remote_setup_btn, 300, 0 );
     wf_image_button_fade_in( kodi_remote_play, 300, 0 );
     wf_image_button_fade_in( kodi_remote_pause, 300, 0 );
     wf_image_button_fade_in( kodi_remote_prev, 300, 0 );
@@ -204,7 +207,7 @@ static void kodi_remote_setup_hibernate_callback ( void ) {
 
 static bool kodi_remote_main_wifictl_event_cb( EventBits_t event, void *arg ) {    
     switch( event ) {
-        case WIFICTL_CONNECT:       kodi_remote_state = true;
+        case WIFICTL_CONNECT_IP:    kodi_remote_state = true;
                                     kodi_remote_app_hide_indicator();
                                     break;
         case WIFICTL_DISCONNECT:    kodi_remote_state = false;
@@ -239,19 +242,18 @@ static void kodi_remote_play_event_cb( lv_obj_t * obj, lv_event_t event ) {
             int16_t player = kodi_remote_get_active_player_id();
             if (player < 0) break;
 
-            if( kodi_remote_play_state == true ) {
-                lv_obj_set_hidden( kodi_remote_play, true );
-                lv_obj_set_hidden( kodi_remote_pause, false );
+            if ( kodi_remote_play_state == true ) {
+                lv_obj_set_hidden( kodi_remote_play, false );
+                lv_obj_set_hidden( kodi_remote_pause, true );
                 kodi_remote_play_state = false;
                 
                 char parameters[24];
                 snprintf(parameters, sizeof( parameters ), "{ \"playerid\": %d }", player);
                 kodi_remote_publish("Player.PlayPause", parameters);
                 nextmillis = 0;
-            }
-            else {
-                lv_obj_set_hidden( kodi_remote_play, false );
-                lv_obj_set_hidden( kodi_remote_pause, true );
+            } else {
+                lv_obj_set_hidden( kodi_remote_play, true );
+                lv_obj_set_hidden( kodi_remote_pause, false );                
                 kodi_remote_play_state = true;
                 
                 char parameters[24];
@@ -356,16 +358,63 @@ void kodi_remote_app_task( lv_task_t * task ) {
         } else {
             nextmillis = millis() + 60000L;
         }
+        
+        if (kodi_remote_refresh_result.artist == nullptr) kodi_remote_refresh_result.artist = (volatile char*)CALLOC(32, sizeof(char));
+        if (kodi_remote_refresh_result.title == nullptr) kodi_remote_refresh_result.title = (volatile char*)CALLOC(32, sizeof(char));
 
-        kodi_remote_refresh();
+        kodi_remote_app_set_indicator( ICON_INDICATOR_UPDATE );
+        #ifdef NATIVE_64BIT
+            kodi_remote_refresh( NULL );
+        #else
+            xTaskCreatePinnedToCore(kodi_remote_refresh, "kodi_remote_refresh", 5000, NULL, 0, &kodi_remote_refresh_handle, 1);
+        #endif
     }
+
+    if (kodi_remote_refresh_result.changed) {
+        if ( kodi_remote_play_state == true ) {
+            char val[32];
+
+            snprintf( val, sizeof(val), "%s", kodi_remote_refresh_result.artist );
+            lv_label_set_text(kodi_remote_artist, val);
+
+            snprintf( val, sizeof(val), "%s", kodi_remote_refresh_result.title );
+            lv_label_set_text(kodi_remote_title, val);
+
+            lv_obj_set_hidden( kodi_remote_play, true );
+            lv_obj_set_hidden( kodi_remote_pause, false );
+        } else {
+            lv_label_set_text( kodi_remote_artist, "" );
+            lv_label_set_text( kodi_remote_title, "" );
+
+            lv_obj_set_hidden( kodi_remote_play, false );
+            lv_obj_set_hidden( kodi_remote_pause, true );
+        }
+
+        if (kodi_remote_refresh_result.success) {
+            kodi_remote_app_set_indicator( ICON_INDICATOR_OK );
+        } else {
+            kodi_remote_app_set_indicator( ICON_INDICATOR_FAIL );
+        }
+    }
+}
+
+void kodi_remote_refresh(void *parameter) {
+    if (!kodi_remote_state) return;
+
+    kodi_remote_get_active_players();
+    kodi_remote_get_active_player_state();
+    kodi_remote_get_active_player_item();
+
+    #ifndef NATIVE_64BIT
+        vTaskDelete(NULL);
+    #endif
 }
 
 int16_t kodi_remote_get_active_player_id() {
     int16_t player = -1;
-    if (kodi_remote_videoplayer_id >= 0) player = kodi_remote_videoplayer_id;
-    if (kodi_remote_audioplayer_id >= 0) player = kodi_remote_audioplayer_id;
-    if (kodi_remote_pictureplayer_id >= 0) player = kodi_remote_pictureplayer_id;
+    if (kodi_remote_refresh_result.kodi_remote_videoplayer_id >= 0) player = kodi_remote_refresh_result.kodi_remote_videoplayer_id;
+    if (kodi_remote_refresh_result.kodi_remote_audioplayer_id >= 0) player = kodi_remote_refresh_result.kodi_remote_audioplayer_id;
+    if (kodi_remote_refresh_result.kodi_remote_pictureplayer_id >= 0) player = kodi_remote_refresh_result.kodi_remote_pictureplayer_id;
     return player;
 }
 
@@ -373,26 +422,29 @@ void kodi_remote_get_active_players() {
     SpiRamJsonDocument doc( 1000 );
     int httpcode = kodi_remote_publish("Player.GetActivePlayers", "{}", &doc);
     if (httpcode >= 200 && httpcode < 400) {
-        kodi_remote_app_set_indicator( ICON_INDICATOR_OK );
-
         if (doc.containsKey("result")) {
-            kodi_remote_videoplayer_id = -1;
-            kodi_remote_audioplayer_id = -1;
-            kodi_remote_pictureplayer_id = -1;
+            kodi_remote_refresh_result.kodi_remote_videoplayer_id = -1;
+            kodi_remote_refresh_result.kodi_remote_audioplayer_id = -1;
+            kodi_remote_refresh_result.kodi_remote_pictureplayer_id = -1;
 
             JsonArray players = doc["result"].as<JsonArray>();
             for (JsonObject player : players) {
                 if (!player.containsKey("type")) continue;
-                if (strncmp(player["type"], "video", 6) == 0) kodi_remote_videoplayer_id = player["playerid"].as<int16_t>();
-                if (strncmp(player["type"], "audio", 6) == 0) kodi_remote_audioplayer_id = player["playerid"].as<int16_t>();
-                if (strncmp(player["type"], "picture", 8) == 0) kodi_remote_pictureplayer_id = player["playerid"].as<int16_t>();
+                if (strncmp(player["type"], "video", 6) == 0) kodi_remote_refresh_result.kodi_remote_videoplayer_id = player["playerid"].as<int16_t>();
+                if (strncmp(player["type"], "audio", 6) == 0) kodi_remote_refresh_result.kodi_remote_audioplayer_id = player["playerid"].as<int16_t>();
+                if (strncmp(player["type"], "picture", 8) == 0) kodi_remote_refresh_result.kodi_remote_pictureplayer_id = player["playerid"].as<int16_t>();
             }
         }
 
         doc.clear();
+        
+        kodi_remote_refresh_result.changed = true;
+        kodi_remote_refresh_result.success = true;
     } else {
-        kodi_remote_app_set_indicator( ICON_INDICATOR_FAIL );
         doc.clear();
+        
+        kodi_remote_refresh_result.changed = true;
+        kodi_remote_refresh_result.success = false;
     }
 }
 
@@ -419,27 +471,31 @@ void kodi_remote_get_active_player_state() {
                     lv_obj_set_hidden( kodi_remote_play, false );
                     lv_obj_set_hidden( kodi_remote_pause, true );
                     kodi_remote_play_state = false;
-                }
-                else {
+                } else {
                     lv_obj_set_hidden( kodi_remote_play, true );
-                    lv_obj_set_hidden( kodi_remote_pause, false );
+                    lv_obj_set_hidden( kodi_remote_pause, false );                
                     kodi_remote_play_state = true;
                 }
             }
         }
 
         doc.clear();
+        
+        kodi_remote_refresh_result.changed = true;
+        kodi_remote_refresh_result.success = true;
     } else {
-        kodi_remote_app_set_indicator( ICON_INDICATOR_FAIL );
         doc.clear();
+
+        kodi_remote_refresh_result.changed = true;
+        kodi_remote_refresh_result.success = false;
     }
 }
 
 void kodi_remote_get_active_player_item() {
     int16_t player = kodi_remote_get_active_player_id();
     if (player < 0) {
-        lv_label_set_text( kodi_remote_artist, "" );
-        lv_label_set_text( kodi_remote_title, "" );
+        kodi_remote_refresh_result.artist[0] = '\0';
+        kodi_remote_refresh_result.title[0] = '\0';
         return;
     }
 
@@ -460,50 +516,44 @@ void kodi_remote_get_active_player_item() {
                         uint8_t num = 0;
                         String artistList;
                         for (JsonVariant artist : artists) {
-                            if (num > 0) {
-//                                artistList.concat(", ");
-                                artistList += ", ";
-                            }
-//                            artistList.concat( artist.as<const char*>() );
+                            if (num > 0) artistList += ", ";
                             artistList += artist.as<const char*>();
                             num++;
                         }
                         
-                        lv_label_set_text( kodi_remote_artist, artistList.c_str() );
+                        const char* value = artistList.c_str();
+                        for (uint8_t i = 0; i < strlen(value); i++) kodi_remote_refresh_result.artist[i] = value[i];
                     } else {
-                        lv_label_set_text( kodi_remote_artist, doc["result"]["item"]["artist"] );
+                        const char* value = doc["result"]["item"]["artist"].as<const char*>();
+                        for (uint8_t i = 0; i < strlen(value); i++) kodi_remote_refresh_result.artist[i] = value[i];
                     }
-                    lv_label_set_text( kodi_remote_artist, doc["result"]["item"]["artist"] );
-                    lv_obj_align( kodi_remote_artist, kodi_remote_player_main_tile, LV_ALIGN_IN_TOP_LEFT, 10, 10 );
                 } else {
-                    lv_label_set_text( kodi_remote_artist, "" );
+                    kodi_remote_refresh_result.artist[0] = '\0';
                 }
                 
                 if (doc["result"]["item"].containsKey("title")) {
-                    lv_label_set_text( kodi_remote_title, doc["result"]["item"]["title"] );
-                    lv_obj_align( kodi_remote_title, kodi_remote_play, LV_ALIGN_OUT_TOP_MID, 0, -16 );
+                    const char* value = doc["result"]["item"]["title"].as<const char*>();
+                    for (uint8_t i = 0; i < strlen(value); i++) kodi_remote_refresh_result.title[i] = value[i];
                 } else {
-                    lv_label_set_text( kodi_remote_title, "" );
+                    kodi_remote_refresh_result.title[0] = '\0';
                 }
             } else {
-                lv_label_set_text( kodi_remote_artist, "" );
-                lv_label_set_text( kodi_remote_title, "" );
+                kodi_remote_refresh_result.artist[0] = '\0';
+                kodi_remote_refresh_result.title[0] = '\0';
             }
         }
 
         doc.clear();
+        
+        kodi_remote_refresh_result.changed = true;
+        kodi_remote_refresh_result.success = true;
     } else {
         kodi_remote_app_set_indicator( ICON_INDICATOR_FAIL );
         doc.clear();
+
+        kodi_remote_refresh_result.changed = true;
+        kodi_remote_refresh_result.success = false;
     }
-}
-
-void kodi_remote_refresh() {
-    if (!kodi_remote_state) return;
-
-    kodi_remote_get_active_players();
-    kodi_remote_get_active_player_state();
-    kodi_remote_get_active_player_item();
 }
 
 int kodi_remote_publish(const char* method, const char* params, SpiRamJsonDocument* doc) {
@@ -519,11 +569,12 @@ int kodi_remote_publish(const char* method, const char* params, SpiRamJsonDocume
 #ifdef NATIVE_64BIT
     return( 200 );
 #else
-    kodi_remote_id++;
     char payload[256] = "";
-    snprintf( payload, sizeof( payload ), "{ \"jsonrpc\": \"2.0\", \"method\": \"%s\", \"params\": %s, \"id\": \"%d\" }", method, params, kodi_remote_id );
+    snprintf( payload, sizeof( payload ), "{ \"jsonrpc\": \"2.0\", \"method\": \"%s\", \"params\": %s, \"id\": \"%d\" }", method, params, kodi_remote_refresh_result.kodi_remote_id++ );
 
     HTTPClient publish_client;
+    publish_client.setConnectTimeout(1000);
+    publish_client.setTimeout(2000);
     publish_client.useHTTP10( true );
     publish_client.begin( url );
     publish_client.addHeader("Content-Type", "application/json");

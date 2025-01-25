@@ -159,7 +159,12 @@ static int registed = app_autocall_function( &IRController_setup, 8 );          
                 switch (command->mode)
                 {
                     case RC5:
-                        irsend.sendRC5(command->code);
+                        irsend.sendRC5(command->code, command->bits > 0 ? command->bits : RC5_BITS);
+                        if (command->toggle) irsend.sendRC5(irsend.toggleRC5(command->code), command->bits > 0 ? command->bits : RC5_BITS);
+                        break;
+                    case RC5X:
+                        irsend.sendRC5(command->code, command->bits > 0 ? command->bits : RC5X_BITS);
+                        if (command->toggle) irsend.sendRC5(irsend.toggleRC5(command->code), command->bits > 0 ? command->bits : RC5X_BITS);
                         break;
                     case RC6:
                         irsend.sendRC6(command->code);

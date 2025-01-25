@@ -75,7 +75,6 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
     class ServerCallbacks: public NimBLEServerCallbacks {
         void onConnect(NimBLEServer* pServer) {
             log_i("Client connected");
-            NimBLEDevice::startAdvertising();
         };
 
         void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) {
@@ -95,7 +94,7 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
             blectl_send_event_cb( BLECTL_DISCONNECT, (void *)"disconnected" );
             powermgm_resume_from_ISR();
 
-            if ( blectl_get_advertising() ) {
+            if ( blectl_get_advertising() && !pServer->getAdvertising()->isAdvertising() ) {
                 pServer->getAdvertising()->start();
                 log_d("BLE advertising...");
             }
@@ -220,6 +219,7 @@ void blectl_setup( void ) {
         pServer->setCallbacks( new ServerCallbacks() );
         pAdvertising = NimBLEDevice::getAdvertising();
         pAdvertising->setAppearance( 0x00c0 );
+        pAdvertising->setName( deviceName );
         /**
          * add services
          */

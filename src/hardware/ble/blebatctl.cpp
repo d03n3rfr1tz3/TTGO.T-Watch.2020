@@ -54,7 +54,7 @@
                 /*
                  * Do not notify on same value
                  */
-                if ( last_value == level || level <= 0 ) {
+                if ( last_value == level || level < 0 ) {
                     return( retval );
                 }
                 last_value = level;
@@ -137,9 +137,9 @@
 
         switch( event ) {
             case PMUCTL_STATUS:
-                bool charging = *(bool*)arg & PMUCTL_STATUS_CHARGING;
-                bool plug = *(bool*)arg & PMUCTL_STATUS_PLUG;
                 int32_t percent = *(int32_t*)arg & PMUCTL_STATUS_PERCENT;
+                bool charging = *(int32_t*)arg & PMUCTL_STATUS_CHARGING;
+                bool plug = *(int32_t*)arg & PMUCTL_STATUS_PLUG;
                 blebatctl_update_battery( percent, charging, plug );
                 retval = true;
                 break;
