@@ -160,10 +160,6 @@ void tiltmouse_init()
 
     pHID->reportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
     pHID->startServices();
-
-    BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
-    pAdvertising->addServiceUUID(pHID->hidService()->getUUID());
-    pAdvertising->setAppearance(HID_MOUSE);
 }
 
 void tiltmouse_activate()
@@ -178,8 +174,8 @@ void tiltmouse_activate()
     pSecurity->setAuthenticationMode(ESP_LE_AUTH_BOND);
 
     if (tiltmouse_available) {
-        pAdvertising->stop();
-        pAdvertising->start();
+        if (pAdvertising->stop())
+            pAdvertising->start();
     }
 
     tiltmouse_active = true;
@@ -197,8 +193,8 @@ void tiltmouse_deactivate()
     pSecurity->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
 
     if (tiltmouse_available) {
-        pAdvertising->stop();
-        pAdvertising->start();
+        if (pAdvertising->stop() && blectl_get_advertising())
+            pAdvertising->start();
     }
 
     tiltmouse_active = false;
