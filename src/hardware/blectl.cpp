@@ -141,14 +141,14 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
         void onAuthenticationComplete(ble_gap_conn_desc* desc){
             if(!desc->sec_state.encrypted) {
                 if ( blectl_get_event( BLECTL_PIN_AUTH ) ) {
-                    log_d("BLECTL pairing abort, reason: %02x", cmpl.fail_reason );
+                    log_d("BLECTL pairing abort");
                     blectl_clear_event( BLECTL_PIN_AUTH );
                     blectl_send_event_cb( BLECTL_PAIRING_ABORT, (void *)"abort" );
                     NimBLEDevice::getServer()->disconnect( desc->conn_handle );
                     return;
                 }
                 if ( blectl_get_event( BLECTL_AUTHWAIT | BLECTL_CONNECT ) ) {
-                    log_d("BLECTL authentication unsuccessful, client disconnected, reason: %02x", cmpl.fail_reason );
+                    log_d("BLECTL authentication unsuccessful, client disconnected");
                     blectl_clear_event( BLECTL_AUTHWAIT | BLECTL_CONNECT );
                     blectl_set_event( BLECTL_DISCONNECT );
                     blectl_send_event_cb( BLECTL_DISCONNECT, (void *) "disconnected" );
