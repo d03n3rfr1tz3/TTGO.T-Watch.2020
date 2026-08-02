@@ -1,0 +1,115 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - master
+      - experimental
+    tags:
+      - 'v*'
+
+  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - t-watch2020-v1
+          - t-watch2020-v2
+          - t-watch2020-v3
+          - t-watch2021-v1
+          - t-watch2021-v2
+          - m5paper
+          - m5core2
+          - WT32-SC01_v3_2
+          - WT32-SC01_v3_3
+          - emulator_twatch2020
+          - emulator_twatch2021
+          - emulator_m5paper
+          - emulator_m5core2
+          - emulator_WT32-SC01
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Cache PlatformIO
+      uses: actions/cache@v6
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-pio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pio-${{ matrix.env }}-
+          ${{ runner.os }}-pio-
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.x'
+
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+
+    - name: Install native libs
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libsdl2-dev libcurl4-gnutls-dev libmosquitto-dev build-essential
+
+    - name: Run PlatformIO
+      run: pio run -e ${{ matrix.env }}
+
+    - name: Collect build output
+      run: |
+        mkdir -p artifacts
+        for f in .pio/build/${{ matrix.env }}/firmware.bin \
+                 .pio/build/${{ matrix.env }}/firmware.elf \
+                 .pio/build/${{ matrix.env }}/partitions.bin \
+                 .pio/build/${{ matrix.env }}/bootloader.bin \
+                 .pio/build/${{ matrix.env }}/program; do
+          [ -f "$f" ] && cp "$f" "artifacts/${{ matrix.env }}-$(basename "$f")"
+        done
+        ls -l artifacts
+
+    - name: Upload build output
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ matrix.env }}
+        path: artifacts/
+        if-no-files-found: error
+
+  release:
+    name: Attach assets to release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Download all build output
+      uses: actions/download-artifact@v8
+      with:
+        path: artifacts
+        merge-multiple: true
+
+    - name: Publish to release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+      run: |
+        ls -l artifacts
+        if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          gh release upload "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+        else
+          gh release create "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+        fi
