@@ -358,16 +358,13 @@ void printer3d_app_task( lv_task_t * task ) {
     }
 }
 
-void printer3d_refresh(void *parameter) {
+static void printer3d_refresh_request(void) {
     if (!printer3d_state) return;
 
     printer3d_config_t *printer3d_config = printer3d_get_config();
     if (!strlen(printer3d_config->host)) {
         printer3d_refresh_result.changed = true;
         printer3d_refresh_result.success = false;
-        #ifndef NATIVE_64BIT
-            vTaskDelete(NULL);
-        #endif
         return;
     }
 
@@ -383,11 +380,9 @@ void printer3d_refresh(void *parameter) {
 
     if (!client.connected()){
         log_w("printer3d: could not connect to %s:%d", printer3d_config->host, printer3d_config->port);
+        client.stop();
         printer3d_refresh_result.changed = true;
         printer3d_refresh_result.success = false;
-        #ifndef NATIVE_64BIT
-            vTaskDelete(NULL);
-        #endif
         return;
     } else {
         log_i("printer3d: connected to %s:%d", printer3d_config->host, printer3d_config->port);
@@ -514,6 +509,11 @@ void printer3d_refresh(void *parameter) {
 
     printer3d_refresh_result.changed = true;
     printer3d_refresh_result.success = true;
+}
+
+void printer3d_refresh(void *parameter) {
+    printer3d_refresh_request();
+
     #ifndef NATIVE_64BIT
         vTaskDelete(NULL);
     #endif
@@ -606,7 +606,7 @@ void printer3d_send(WiFiClient client, char* buffer, const char* command) {
         return 1;
     }
 
-    void printer3d_mjpeg_task(void *parameter) {
+    static void printer3d_mjpeg_stream(void) {
         HTTPClient mjpeg_client;
         mjpeg_client.useHTTP10(true);
         mjpeg_client.setConnectTimeout(1000);
@@ -621,7 +621,7 @@ void printer3d_send(WiFiClient client, char* buffer, const char* command) {
                 free(mjpeg_buffer);
                 mjpeg_buffer = nullptr;
             }
-            vTaskDelete(NULL);
+            return;
         } else {
             log_i("3dprinter connected to video stream at %s", mjpeg_url);
 
@@ -751,6 +751,11 @@ void printer3d_send(WiFiClient client, char* buffer, const char* command) {
         }
 
         mjpeg_client.end();
+    }
+
+    void printer3d_mjpeg_task(void *parameter) {
+        printer3d_mjpeg_stream();
+
         vTaskDelete(NULL);
     }
 #endif

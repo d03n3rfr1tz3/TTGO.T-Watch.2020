@@ -399,11 +399,11 @@ void kodi_remote_app_task( lv_task_t * task ) {
 }
 
 void kodi_remote_refresh(void *parameter) {
-    if (!kodi_remote_state) return;
-
-    kodi_remote_get_active_players();
-    kodi_remote_get_active_player_state();
-    kodi_remote_get_active_player_item();
+    if (kodi_remote_state) {
+        kodi_remote_get_active_players();
+        kodi_remote_get_active_player_state();
+        kodi_remote_get_active_player_item();
+    }
 
     #ifndef NATIVE_64BIT
         vTaskDelete(NULL);

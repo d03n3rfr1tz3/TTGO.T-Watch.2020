@@ -360,16 +360,13 @@ void weather_station_app_task( lv_task_t * task ) {
     }
 }
 
-void weather_station_refresh(void *parameter) {
+static void weather_station_refresh_request(void) {
     if (!weather_station_state) return;
-    
+
     weather_station_config_t *weather_station_config = weather_station_get_config();
     if (!strlen(weather_station_config->url)) {
         weather_station_refresh_result.changed = true;
         weather_station_refresh_result.success = false;
-        #ifndef NATIVE_64BIT
-            vTaskDelete(NULL);
-        #endif
         return;
     }
 
@@ -400,9 +397,6 @@ void weather_station_refresh(void *parameter) {
             
             weather_station_refresh_result.changed = true;
             weather_station_refresh_result.success = false;
-            #ifndef NATIVE_64BIT
-                vTaskDelete(NULL);
-            #endif
             return;
         }
 
@@ -431,6 +425,10 @@ void weather_station_refresh(void *parameter) {
     }
 
     http_client.end();
+}
+
+void weather_station_refresh(void *parameter) {
+    weather_station_refresh_request();
 
     #ifndef NATIVE_64BIT
         vTaskDelete(NULL);
