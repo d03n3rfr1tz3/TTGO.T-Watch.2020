@@ -40,8 +40,32 @@
 #include "pong_app.h"
 #include "pong_game.h"
 
-LV_IMG_DECLARE(bg1);
-LV_IMG_DECLARE(bg2);
+#if defined( M5CORE2 )
+    LV_IMG_DECLARE( bg1_320px );
+    LV_IMG_DECLARE( bg2_320px );
+    static const lv_img_dsc_t * menu_bg = &bg1_320px;
+    static const lv_img_dsc_t * gameplay_bg = &bg2_320px;
+#elif defined( M5PAPER )
+    LV_IMG_DECLARE( bg1_540px );
+    LV_IMG_DECLARE( bg2_540px );
+    static const lv_img_dsc_t * menu_bg = &bg1_540px;
+    static const lv_img_dsc_t * gameplay_bg = &bg2_540px;
+#elif defined( WT32_SC01 )
+    LV_IMG_DECLARE( bg1_480px );
+    LV_IMG_DECLARE( bg2_480px );
+    static const lv_img_dsc_t * menu_bg = &bg1_480px;
+    static const lv_img_dsc_t * gameplay_bg = &bg2_480px;
+#elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+    LV_IMG_DECLARE( bg1 );
+    LV_IMG_DECLARE( bg2 );
+    static const lv_img_dsc_t * menu_bg = &bg1;
+    static const lv_img_dsc_t * gameplay_bg = &bg2;
+#else
+    LV_IMG_DECLARE( bg1_240px );
+    LV_IMG_DECLARE( bg2_240px );
+    static const lv_img_dsc_t * menu_bg = &bg1_240px;
+    static const lv_img_dsc_t * gameplay_bg = &bg2_240px;
+#endif
 LV_FONT_DECLARE(Ubuntu_48px);
 
 /* These would be unnecessary if LVGL supported a data param... */
@@ -121,14 +145,14 @@ PongApp::PongApp(PongIcon *icon)
         // Initialize screen backgrounds
         log_d("Creating background for menu tile");
         lv_obj_t *img_bin = lv_img_create(menuTile, NULL);
-        lv_img_set_src(img_bin, &bg1);
+        lv_img_set_src(img_bin, menu_bg);
         lv_obj_set_width(img_bin, LV_HOR_RES);
         lv_obj_set_height(img_bin, LV_VER_RES);
         lv_obj_align(img_bin, NULL, LV_ALIGN_CENTER, 0, 0);
 
         log_d("Creating background for gameplay tile");
         lv_obj_t *gameplay_img = lv_img_create(gameplayTile, NULL);
-        lv_img_set_src(gameplay_img, &bg2);
+        lv_img_set_src(gameplay_img, gameplay_bg);
         lv_obj_set_width(gameplay_img, LV_HOR_RES);
         lv_obj_set_height(gameplay_img, LV_VER_RES);
         lv_obj_align(gameplay_img, NULL, LV_ALIGN_CENTER, 0, 0);
@@ -435,38 +459,40 @@ void PongApp::UpdateBall()
 
 void PongApp::UpdatePlayer1()
 {
-    TTGOClass * ttgo = TTGOClass::getWatch();
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        TTGOClass * ttgo = TTGOClass::getWatch();
 
-    Accel acc;
-    ttgo->bma->getAccel(acc);
+        Accel acc;
+        ttgo->bma->getAccel(acc);
 
-    // set new position by accelerator
-    int16_t new_position = 0;
-    switch (control_orientation) {
-        case 270:
-            new_position = 0 - acc.x * 0.2;
-            break;
-        case 180:
-            new_position = acc.y * 0.2;
-            break;
-        case 90:
-            new_position = acc.x * 0.2;
-            break;
-        case 0:
-        default:
-            new_position = 0 - acc.y * 0.2;
-            break;
-    }
+        // set new position by accelerator
+        int16_t new_position = 0;
+        switch (control_orientation) {
+            case 270:
+                new_position = 0 - acc.x * 0.2;
+                break;
+            case 180:
+                new_position = acc.y * 0.2;
+                break;
+            case 90:
+                new_position = acc.x * 0.2;
+                break;
+            case 0:
+            default:
+                new_position = 0 - acc.y * 0.2;
+                break;
+        }
 
-    if (new_position > 0 + PLAYER_BOUNDARY) new_position = 0 + PLAYER_BOUNDARY;
-    if (new_position < 0 - PLAYER_BOUNDARY) new_position = 0 - PLAYER_BOUNDARY;
+        if (new_position > 0 + PLAYER_BOUNDARY) new_position = 0 + PLAYER_BOUNDARY;
+        if (new_position < 0 - PLAYER_BOUNDARY) new_position = 0 - PLAYER_BOUNDARY;
 
-    // limit distance by maximum speed
-    if (new_position < player1_y && player1_y - new_position > PLAYER_SPEED_MAX) new_position = player1_y - PLAYER_SPEED_MAX;
-    if (new_position > player1_y && new_position - player1_y > PLAYER_SPEED_MAX) new_position = player1_y + PLAYER_SPEED_MAX;
+        // limit distance by maximum speed
+        if (new_position < player1_y && player1_y - new_position > PLAYER_SPEED_MAX) new_position = player1_y - PLAYER_SPEED_MAX;
+        if (new_position > player1_y && new_position - player1_y > PLAYER_SPEED_MAX) new_position = player1_y + PLAYER_SPEED_MAX;
 
-    player1_y = new_position;
-	lv_obj_set_pos(bar_player1, PLAYER1_X, PLAYER_BOUNDARY + player1_y);
+        player1_y = new_position;
+        lv_obj_set_pos(bar_player1, PLAYER1_X, PLAYER_BOUNDARY + player1_y);
+    #endif
 }
 
 void PongApp::UpdatePlayer2()

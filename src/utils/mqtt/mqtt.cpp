@@ -21,6 +21,7 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <vector>
 
 #include "config.h"
 #include "utils/mqtt/mqtt.h"
@@ -199,27 +200,31 @@ void mqtt_publish_version() {
 }
 
 void mqtt_publish_ambient_temperature() {
-  TTGOClass * ttgo = TTGOClass::getWatch();
+  #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+    TTGOClass * ttgo = TTGOClass::getWatch();
 
-  char topic[64];
-  snprintf(topic, sizeof(topic), "%s/temp_ambient", clientId);
-  
-  char payload[6];
-  snprintf(payload, sizeof(payload), "%.2f", ttgo->bma->temperature());
+    char topic[64];
+    snprintf(topic, sizeof(topic), "%s/temp_ambient", clientId);
 
-  mqtt_client.publish(topic, payload, false);
+    char payload[6];
+    snprintf(payload, sizeof(payload), "%.2f", ttgo->bma->temperature());
+
+    mqtt_client.publish(topic, payload, false);
+  #endif
 }
 
 void mqtt_publish_power_temperature() {
-  TTGOClass * ttgo = TTGOClass::getWatch();
+  #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+    TTGOClass * ttgo = TTGOClass::getWatch();
 
-  char topic[64];
-  snprintf(topic, sizeof(topic), "%s/temp_power", clientId);
-  
-  char payload[6];
-  snprintf(payload, sizeof(payload), "%.2f", ttgo->power->getTemp());
+    char topic[64];
+    snprintf(topic, sizeof(topic), "%s/temp_power", clientId);
 
-  mqtt_client.publish(topic, payload, false);
+    char payload[6];
+    snprintf(payload, sizeof(payload), "%.2f", ttgo->power->getTemp());
+
+    mqtt_client.publish(topic, payload, false);
+  #endif
 }
 
 void mqtt_publish_heap() {
