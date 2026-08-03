@@ -16,7 +16,6 @@
 #ifndef _PING_APP_H
     #define _PING_APP_H
 
-    #include <TTGO.h>
 
     void ping_app_setup( void );
     uint32_t ping_app_get_app_setup_tile_num( void );

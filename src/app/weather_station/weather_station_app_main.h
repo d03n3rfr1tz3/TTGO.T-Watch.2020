@@ -22,7 +22,6 @@
 #ifndef _WEATHER_STATION_APP_MAIN_H
     #define _WEATHER_STATION_APP_MAIN_H
 
-    #include <TTGO.h>
 
     void weather_station_app_main_setup( uint32_t tile_num );
 

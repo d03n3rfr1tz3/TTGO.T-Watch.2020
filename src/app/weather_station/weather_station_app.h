@@ -22,7 +22,6 @@
 #ifndef _WEATHER_STATION_APP_H
     #define _WEATHER_STATION_APP_H
 
-    #include <TTGO.h>
     #include "gui/icon.h"
 
     #define WEATHER_STATION_JSON_CONFIG_FILE        "/weather_station.json"

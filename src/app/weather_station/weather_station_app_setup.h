@@ -22,7 +22,6 @@
 #ifndef _WEATHER_STATION_APP_SETUP_H
     #define _WEATHER_STATION_APP_SETUP_H
 
-    #include <TTGO.h>
 
     #define WEATHER_STATION_APP_INFO_LOG        log_i
 

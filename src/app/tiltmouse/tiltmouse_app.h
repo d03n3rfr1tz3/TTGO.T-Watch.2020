@@ -22,7 +22,6 @@
 #ifndef _TILTMOUSE_APP_H
     #define _TILTMOUSE_APP_H
 
-    #include <TTGO.h>
 
     void tiltmouse_app_setup( void );
     uint32_t tiltmouse_app_get_app_main_tile_num( void );

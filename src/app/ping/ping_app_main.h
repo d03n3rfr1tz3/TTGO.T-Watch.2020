@@ -16,7 +16,6 @@
 #ifndef _PING_APP_MAIN_H
     #define _PING_APP_MAIN_H
 
-    #include <TTGO.h>
 
     void ping_app_main_setup( uint32_t tile_num );
 

@@ -22,7 +22,6 @@
 #ifndef _MQTT_CONTROL_H
     #define _MQTT_CONTROL_H
 
-    #include <TTGO.h>
     #include "gui/icon.h"
 
     #define MQTT_CONTROL_ITEMS             20

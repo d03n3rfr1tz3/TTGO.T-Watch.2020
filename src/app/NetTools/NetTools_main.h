@@ -27,7 +27,6 @@
 #ifndef _NETTOOLS_MAIN_H
     #define _NETTOOLS_MAIN_H
 
-    #include <TTGO.h>
 
     void NetTools_main_setup( uint32_t tile_num );
 

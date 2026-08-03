@@ -20,7 +20,6 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 #include "config.h"
-#include <TTGO.h>
 #include <stdlib.h>
 
 #include "tiltmouse_app.h"
@@ -131,18 +130,21 @@ void tiltmouse_app_main_setup( uint32_t tile_num ) {
 void tiltmouse_app_task( lv_task_t * task )
 {
     if ( !tiltmouse_active || !tiltmouse_available ) return;
-    TTGOClass * ttgo = TTGOClass::getWatch();
+    
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        TTGOClass * ttgo = TTGOClass::getWatch();
 
-    Accel acc;
-    ttgo->bma->getAccel(acc);
+        Accel acc;
+        ttgo->bma->getAccel(acc);
 
-    int16_t x = acc.x * MOUSE_SENSIVITY;
-    int16_t y = acc.y * MOUSE_SENSIVITY;
-    if (abs(x) < 5) x = 0;
-    if (abs(y) < 5) y = 0;
+        int16_t x = acc.x * MOUSE_SENSIVITY;
+        int16_t y = acc.y * MOUSE_SENSIVITY;
+        if (abs(x) < 5) x = 0;
+        if (abs(y) < 5) y = 0;
 
-    tiltmouse_move( x, y, 0, 0 );
-    lv_disp_trig_activity( NULL );
+        tiltmouse_move( x, y, 0, 0 );
+        lv_disp_trig_activity( NULL );
+    #endif
 }
 
 void tiltmouse_init()

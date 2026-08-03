@@ -16,7 +16,6 @@
 #ifndef _WIRELESS_APP_H
     #define _WIRELESS_APP_H
 
-    #include <TTGO.h>
 
     void wireless_app_setup( void );
     uint32_t wireless_app_get_app_main_tile_num( void );

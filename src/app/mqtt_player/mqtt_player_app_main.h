@@ -22,7 +22,6 @@
 #ifndef _MQTT_PLAYER_MAIN_H
     #define _MQTT_PLAYER_MAIN_H
 
-    #include <TTGO.h>
 
     void mqtt_player_main_setup( uint32_t tile_num );
 

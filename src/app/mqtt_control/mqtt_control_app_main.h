@@ -22,7 +22,6 @@
 #ifndef _MQTT_CONTROL_MAIN_H
     #define _MQTT_CONTROL_MAIN_H
 
-    #include <TTGO.h>
 
     void mqtt_control_main_setup( uint32_t tile_num );
 

@@ -22,7 +22,6 @@
 #ifndef _MQTT_PLAYER_H
     #define _MQTT_PLAYER_H
 
-    #include <TTGO.h>
     #include "gui/icon.h"
 
     #define MQTT_PLAYER_JSON_CONFIG_FILE        "/mqtt_player.json"

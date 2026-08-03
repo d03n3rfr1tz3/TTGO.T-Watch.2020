@@ -27,7 +27,6 @@
 #ifndef _NETTOOLS_H
     #define _NETTOOLS_H
 
-    #include <TTGO.h>
 
 //    #define EXAMPLE_WIDGET    // uncomment if an widget need
     #define NetTools_JSON_CONFIG_FILE  "/NetTools.json"

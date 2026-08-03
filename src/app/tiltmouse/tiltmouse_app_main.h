@@ -22,7 +22,6 @@
 #ifndef _TILTMOUSE_APP_MAIN_H
     #define _TILTMOUSE_APP_MAIN_H
 
-    #include <TTGO.h>
 
     void tiltmouse_app_main_setup( uint32_t tile_num );
     void tiltmouse_activate();

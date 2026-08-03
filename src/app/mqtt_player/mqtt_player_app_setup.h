@@ -22,7 +22,6 @@
 #ifndef _MQTT_PLAYER_SETUP_H
     #define _MQTT_PLAYER_SETUP_H
 
-    #include <TTGO.h>
 
     #define MQTT_PLAYER_INFO_LOG        log_i
 
