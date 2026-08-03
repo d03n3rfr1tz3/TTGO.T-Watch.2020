@@ -33,6 +33,7 @@
 #include "gui/sound/piep_lower.h"
 #include "gui/sound/piep_low.h"
 #include "hardware/display.h"
+#include "hardware/motion.h"
 #include "hardware/motor.h"
 #include "hardware/powermgm.h"
 #include "hardware/sound.h"
@@ -459,40 +460,39 @@ void PongApp::UpdateBall()
 
 void PongApp::UpdatePlayer1()
 {
-    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-        TTGOClass * ttgo = TTGOClass::getWatch();
+    int16_t acc_x = 0;
+    int16_t acc_y = 0;
+    int16_t acc_z = 0;
 
-        Accel acc;
-        ttgo->bma->getAccel(acc);
+    if ( !bma_get_accel( acc_x, acc_y, acc_z ) ) return;
 
-        // set new position by accelerator
-        int16_t new_position = 0;
-        switch (control_orientation) {
-            case 270:
-                new_position = 0 - acc.x * 0.2;
-                break;
-            case 180:
-                new_position = acc.y * 0.2;
-                break;
-            case 90:
-                new_position = acc.x * 0.2;
-                break;
-            case 0:
-            default:
-                new_position = 0 - acc.y * 0.2;
-                break;
-        }
+    // set new position by accelerator
+    int16_t new_position = 0;
+    switch (control_orientation) {
+        case 270:
+            new_position = 0 - acc_x * 0.2;
+            break;
+        case 180:
+            new_position = acc_y * 0.2;
+            break;
+        case 90:
+            new_position = acc_x * 0.2;
+            break;
+        case 0:
+        default:
+            new_position = 0 - acc_y * 0.2;
+            break;
+    }
 
-        if (new_position > 0 + PLAYER_BOUNDARY) new_position = 0 + PLAYER_BOUNDARY;
-        if (new_position < 0 - PLAYER_BOUNDARY) new_position = 0 - PLAYER_BOUNDARY;
+    if (new_position > 0 + PLAYER_BOUNDARY) new_position = 0 + PLAYER_BOUNDARY;
+    if (new_position < 0 - PLAYER_BOUNDARY) new_position = 0 - PLAYER_BOUNDARY;
 
-        // limit distance by maximum speed
-        if (new_position < player1_y && player1_y - new_position > PLAYER_SPEED_MAX) new_position = player1_y - PLAYER_SPEED_MAX;
-        if (new_position > player1_y && new_position - player1_y > PLAYER_SPEED_MAX) new_position = player1_y + PLAYER_SPEED_MAX;
+    // limit distance by maximum speed
+    if (new_position < player1_y && player1_y - new_position > PLAYER_SPEED_MAX) new_position = player1_y - PLAYER_SPEED_MAX;
+    if (new_position > player1_y && new_position - player1_y > PLAYER_SPEED_MAX) new_position = player1_y + PLAYER_SPEED_MAX;
 
-        player1_y = new_position;
-        lv_obj_set_pos(bar_player1, PLAYER1_X, PLAYER_BOUNDARY + player1_y);
-    #endif
+    player1_y = new_position;
+    lv_obj_set_pos(bar_player1, PLAYER1_X, PLAYER_BOUNDARY + player1_y);
 }
 
 void PongApp::UpdatePlayer2()

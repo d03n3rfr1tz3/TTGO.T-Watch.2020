@@ -93,5 +93,15 @@
      * @brief reset the stepcounter value
      */
     void bma_reset_stepcounter( void );
-    
+    /**
+     * @brief read the current acceleration
+     *
+     * @param x     raw value of the x axis
+     * @param y     raw value of the y axis
+     * @param z     raw value of the z axis
+     *
+     * @return true if the board has an axis sensor and the values are valid
+     */
+    bool bma_get_accel( int16_t &x, int16_t &y, int16_t &z );
+
 #endif // _MOTION_H

@@ -33,6 +33,7 @@
 #include "gui/widget_styles.h"
 
 #include "hardware/blectl.h"
+#include "hardware/motion.h"
 #include "hardware/pmu.h"
 #include "hardware/powermgm.h"
 
@@ -131,20 +132,19 @@ void tiltmouse_app_task( lv_task_t * task )
 {
     if ( !tiltmouse_active || !tiltmouse_available ) return;
     
-    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-        TTGOClass * ttgo = TTGOClass::getWatch();
+    int16_t acc_x = 0;
+    int16_t acc_y = 0;
+    int16_t acc_z = 0;
 
-        Accel acc;
-        ttgo->bma->getAccel(acc);
+    if ( !bma_get_accel( acc_x, acc_y, acc_z ) ) return;
 
-        int16_t x = acc.x * MOUSE_SENSIVITY;
-        int16_t y = acc.y * MOUSE_SENSIVITY;
-        if (abs(x) < 5) x = 0;
-        if (abs(y) < 5) y = 0;
+    int16_t x = acc_x * MOUSE_SENSIVITY;
+    int16_t y = acc_y * MOUSE_SENSIVITY;
+    if (abs(x) < 5) x = 0;
+    if (abs(y) < 5) y = 0;
 
-        tiltmouse_move( x, y, 0, 0 );
-        lv_disp_trig_activity( NULL );
-    #endif
+    tiltmouse_move( x, y, 0, 0 );
+    lv_disp_trig_activity( NULL );
 }
 
 void tiltmouse_init()

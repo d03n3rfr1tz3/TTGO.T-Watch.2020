@@ -667,3 +667,34 @@ void bma_reset_stepcounter( void ) {
      */
     bma_notify_stepcounter();
 }
+
+bool bma_get_accel( int16_t &x, int16_t &y, int16_t &z ) {
+    x = 0;
+    y = 0;
+    z = 0;
+    #ifdef NATIVE_64BIT
+    #else
+        #ifdef M5PAPER
+        #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+            TTGOClass *ttgo = TTGOClass::getWatch();
+            Accel acc;
+            if( !ttgo->bma->getAccel( acc ) )
+                return( false );
+            x = acc.x;
+            y = acc.y;
+            z = acc.z;
+            return( true );
+        #elif defined( LILYGO_WATCH_2021 )
+            Accel acc;
+            if( !bma.getAccel( acc ) )
+                return( false );
+            x = acc.x;
+            y = acc.y;
+            z = acc.z;
+            return( true );
+        #elif defined( WT32_SC01 )
+
+        #endif
+    #endif
+    return( false );
+}
