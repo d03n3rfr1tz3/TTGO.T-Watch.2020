@@ -37,6 +37,11 @@
 
 #include "utils/json_psram_allocator.h"
 
+#ifndef NATIVE_64BIT
+    #include <FS.h>
+    #include <SPIFFS.h>
+#endif
+
 NetTools_config_t NetTools_config;
 
 uint32_t NetTools_main_tile_num;

@@ -33,6 +33,11 @@
 #include "utils/mqtt/mqtt.h"
 #include "utils/json_psram_allocator.h"
 
+#ifndef NATIVE_64BIT
+    #include <FS.h>
+    #include <SPIFFS.h>
+#endif
+
 mqtt_player_config_t mqtt_player_config;
 
 uint32_t mqtt_player_main_tile_num;

@@ -32,6 +32,11 @@
 
 #include "utils/json_psram_allocator.h"
 
+#ifndef NATIVE_64BIT
+    #include <FS.h>
+    #include <SPIFFS.h>
+#endif
+
 weather_station_config_t weather_station_config;
 
 uint32_t weather_station_app_main_tile_num;
