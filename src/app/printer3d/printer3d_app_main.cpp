@@ -99,7 +99,7 @@ static bool printer3d_main_wifictl_event_cb( EventBits_t event, void *arg );
 printer3d_result_t printer3d_refresh_result;
 
 void printer3d_refresh(void *parameter);
-void printer3d_send(WiFiClient client, char* buffer, const char* command);
+void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const char* command);
 void printer3d_app_task( lv_task_t * task );
 void printer3d_mjpeg_init( void );
 
@@ -292,6 +292,13 @@ void printer3d_app_task( lv_task_t * task ) {
         if (printer3d_refresh_result.stateMachine == nullptr) printer3d_refresh_result.stateMachine = (volatile char*)CALLOC(16, sizeof(char));
         if (printer3d_refresh_result.stateMove == nullptr) printer3d_refresh_result.stateMove = (volatile char*)CALLOC(16, sizeof(char));
 
+        if (printer3d_refresh_result.machineType == nullptr || printer3d_refresh_result.machineVersion == nullptr ||
+            printer3d_refresh_result.stateMachine == nullptr || printer3d_refresh_result.stateMove == nullptr) {
+            log_e("printer3d: could not allocate the result buffers");
+            printer3d_app_set_indicator( ICON_INDICATOR_FAIL );
+            return;
+        }
+
         printer3d_app_set_indicator( ICON_INDICATOR_UPDATE );
         #ifdef NATIVE_64BIT
             printer3d_refresh( NULL );
@@ -389,21 +396,34 @@ static void printer3d_refresh_request(void) {
     }
 
     // sending G-Codes to 3d printer
-    char* esp3dInfo = (char*)MALLOC( 1024 );
-    char* generalInfo = (char*)MALLOC( 1024 );
-    char* stateInfo = (char*)MALLOC( 1024 );
-    char* tempInfo = (char*)MALLOC( 512 );
-    char* printInfo = (char*)MALLOC( 512 );
+    const size_t info_size = 1024;
+    const size_t state_size = 512;
+
+    char* esp3dInfo = (char*)CALLOC( info_size, sizeof(char) );
+    char* generalInfo = (char*)CALLOC( info_size, sizeof(char) );
+    char* stateInfo = (char*)CALLOC( info_size, sizeof(char) );
+    char* tempInfo = (char*)CALLOC( state_size, sizeof(char) );
+    char* printInfo = (char*)CALLOC( state_size, sizeof(char) );
+
+    if (!esp3dInfo || !generalInfo || !stateInfo || !tempInfo || !printInfo) {
+        log_e("printer3d: could not allocate the info buffers");
+        free( esp3dInfo ); free( generalInfo ); free( stateInfo );
+        free( tempInfo ); free( printInfo );
+        client.stop();
+        printer3d_refresh_result.changed = true;
+        printer3d_refresh_result.success = false;
+        return;
+    }
 
     if (strlen(printer3d_config->pass) > 0) {
         char val[30];
         snprintf( val, sizeof(val), "[ESP800]pwd=%s", printer3d_config->pass );
-        printer3d_send(client, esp3dInfo, val);
+        printer3d_send(client, esp3dInfo, info_size, val);
     }
-    printer3d_send(client, generalInfo, "~M115");
-    printer3d_send(client, stateInfo, "~M119");
-    printer3d_send(client, tempInfo, "~M105");
-    printer3d_send(client, printInfo, "~M27");
+    printer3d_send(client, generalInfo, info_size, "~M115");
+    printer3d_send(client, stateInfo, info_size, "~M119");
+    printer3d_send(client, tempInfo, state_size, "~M105");
+    printer3d_send(client, printInfo, state_size, "~M27");
 
     // close connection
     client.stop();
@@ -413,18 +433,18 @@ static void printer3d_refresh_request(void) {
         char machineType[32], machineVersion[16];
 
         char* esp3dInfoType1 = strstr(esp3dInfo, "FW target");
-        if ( esp3dInfoType1 != NULL && strlen(esp3dInfoType1) > 0 && sscanf( esp3dInfoType1, "FW target: %s", machineType ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(machineType); i++) printer3d_refresh_result.machineType[i] = machineType[i];
+        if ( esp3dInfoType1 != NULL && strlen(esp3dInfoType1) > 0 && sscanf( esp3dInfoType1, "FW target: %31s", machineType ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.machineType, 32, "%s", machineType );
         }
 
         char* esp3dInfoType2 = strstr(esp3dInfo, "hostname");
-        if ( esp3dInfoType2 != NULL && strlen(esp3dInfoType2) > 0 && sscanf( esp3dInfoType2, "hostname: %s", machineType ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(machineType); i++) printer3d_refresh_result.machineType[i] = machineType[i];
+        if ( esp3dInfoType2 != NULL && strlen(esp3dInfoType2) > 0 && sscanf( esp3dInfoType2, "hostname: %31s", machineType ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.machineType, 32, "%s", machineType );
         }
 
         char* esp3dInfoVersion = strstr(esp3dInfo, "FW version:");
-        if ( esp3dInfoVersion != NULL && strlen(esp3dInfoVersion) > 0 && sscanf( esp3dInfoVersion, "FW version: %s", machineVersion ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(machineVersion); i++) printer3d_refresh_result.machineVersion[i] = machineVersion[i];
+        if ( esp3dInfoVersion != NULL && strlen(esp3dInfoVersion) > 0 && sscanf( esp3dInfoVersion, "FW version: %15s", machineVersion ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.machineVersion, 16, "%s", machineVersion );
         }
     }
     free( esp3dInfo );
@@ -433,23 +453,23 @@ static void printer3d_refresh_request(void) {
         char machineType[32], machineVersion[16];
 
         char* generalInfoType1 = strstr(generalInfo, "Machine Type:");
-        if ( generalInfoType1 != NULL && strlen(generalInfoType1) > 0 && sscanf( generalInfoType1, "Machine Type: %[a-zA-Z0-9- ]", machineType ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(machineType); i++) printer3d_refresh_result.machineType[i] = machineType[i];
+        if ( generalInfoType1 != NULL && strlen(generalInfoType1) > 0 && sscanf( generalInfoType1, "Machine Type: %31[a-zA-Z0-9- ]", machineType ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.machineType, 32, "%s", machineType );
         }
 
         char* generalInfoType2 = strstr(generalInfo, "FIRMWARE_NAME");
-        if ( generalInfoType2 != NULL && strlen(generalInfoType2) > 0 && sscanf( generalInfoType2, "FIRMWARE_NAME: %s", machineType ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(machineType); i++) printer3d_refresh_result.machineType[i] = machineType[i];
+        if ( generalInfoType2 != NULL && strlen(generalInfoType2) > 0 && sscanf( generalInfoType2, "FIRMWARE_NAME: %31s", machineType ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.machineType, 32, "%s", machineType );
         }
 
         char* generalInfoVersion1 = strstr(generalInfo, "Firmware:");
-        if ( generalInfoVersion1 != NULL && strlen(generalInfoVersion1) > 0 && sscanf( generalInfoVersion1, "Firmware: %s", machineVersion ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(machineVersion); i++) printer3d_refresh_result.machineVersion[i] = machineVersion[i];
+        if ( generalInfoVersion1 != NULL && strlen(generalInfoVersion1) > 0 && sscanf( generalInfoVersion1, "Firmware: %15s", machineVersion ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.machineVersion, 16, "%s", machineVersion );
         }
 
         char* generalInfoVersion2 = strstr(generalInfo, "FIRMWARE_VERSION:");
-        if ( generalInfoVersion2 != NULL && strlen(generalInfoVersion2) > 0 && sscanf( generalInfoVersion2, "FIRMWARE_VERSION: %s", machineVersion ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(machineVersion); i++) printer3d_refresh_result.machineVersion[i] = machineVersion[i];
+        if ( generalInfoVersion2 != NULL && strlen(generalInfoVersion2) > 0 && sscanf( generalInfoVersion2, "FIRMWARE_VERSION: %15s", machineVersion ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.machineVersion, 16, "%s", machineVersion );
         }
     }
     free( generalInfo );
@@ -458,13 +478,13 @@ static void printer3d_refresh_request(void) {
         char stateMachine[16], stateMove[16];
 
         char* stateInfoMachine = strstr(stateInfo, "MachineStatus:");
-        if ( stateInfoMachine != NULL && strlen(stateInfoMachine) > 0 && sscanf( stateInfoMachine, "MachineStatus: %[a-zA-Z]", stateMachine ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(stateMachine); i++) printer3d_refresh_result.stateMachine[i] = stateMachine[i];
+        if ( stateInfoMachine != NULL && strlen(stateInfoMachine) > 0 && sscanf( stateInfoMachine, "MachineStatus: %15[a-zA-Z]", stateMachine ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.stateMachine, 16, "%s", stateMachine );
         }
 
         char* stateInfoMove = strstr(stateInfo, "MoveMode:");
-        if ( stateInfoMove != NULL && strlen(stateInfoMove) > 0 && sscanf( stateInfoMove, "MoveMode: %[a-zA-Z]", stateMove ) > 0 ) {
-            for (uint8_t i = 0; i < strlen(stateMove); i++) printer3d_refresh_result.stateMove[i] = stateMove[i];
+        if ( stateInfoMove != NULL && strlen(stateInfoMove) > 0 && sscanf( stateInfoMove, "MoveMode: %15[a-zA-Z]", stateMove ) > 0 ) {
+            snprintf( (char*)printer3d_refresh_result.stateMove, 16, "%s", stateMove );
         }
     }
     free( stateInfo );
@@ -519,22 +539,29 @@ void printer3d_refresh(void *parameter) {
     #endif
 }
 
-void printer3d_send(WiFiClient client, char* buffer, const char* command) {
+void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const char* command) {
+    if (!buffer || !buffer_size) return;
+    buffer[0] = '\0';
+
     if (!printer3d_state) return;
     if (!client.connected()) return;
 
     client.write(command);
     log_d("3dprinter sent command: %s", command);
-    
+
     for (uint8_t i = 0; i < 25; i++) {
         if (client.available()) break;
         delay(10);
     }
-    
-    while (client.available()) {
-        client.readBytes(buffer, 512);
+
+    size_t pos = 0;
+    while (client.available() && pos < buffer_size - 1) {
+        size_t got = client.readBytes(buffer + pos, buffer_size - 1 - pos);
+        if (!got) break;
+        pos += got;
     }
-    
+    buffer[pos] = '\0';
+
     log_d("3dprinter received: %s", buffer);
 }
 
@@ -637,10 +664,11 @@ void printer3d_send(WiFiClient client, char* buffer, const char* command) {
 
             // prepare frame buffer and decoder
             JDEC* decoder = (JDEC*)MALLOC(sizeof(JDEC));
-            JRESULT result;
+            if (decoder == nullptr) log_e("3dprinter could not allocate the jpeg decoder");
 
+            JRESULT result;
             uint8_t failcount = 0;
-            while (true) {
+            while (decoder != nullptr) {
                 if (!printer3d_state || !printer3d_open_state) {
                     log_i("3dprinter closing connection to video stream at %s", mjpeg_url);
                     break;
@@ -667,6 +695,10 @@ void printer3d_send(WiFiClient client, char* buffer, const char* command) {
                     size_t mjpeg_size = decoder->width * decoder->height * LV_COLOR_DEPTH / 8;
                     if (mjpeg_frame == nullptr) {
                         mjpeg_frame = (uint8_t*)MALLOC(mjpeg_size);
+                        if (mjpeg_frame == nullptr) {
+                            log_e("3dprinter could not allocate a %d byte frame buffer", mjpeg_size);
+                            break;
+                        }
                         first_frame = true;
                     }
                     
@@ -773,6 +805,11 @@ void printer3d_mjpeg_init( void ) {
         mjpeg_url = printer3d_config->camera;
 
         mjpeg_buffer = (uint8_t*)malloc(PRINTER3D_MJPEG_BUFFER_SIZE);
+        if (mjpeg_buffer == nullptr) {
+            log_e("3dprinter could not allocate the video stream buffer");
+            return;
+        }
+
         xTaskCreatePinnedToCore(printer3d_mjpeg_task, "printer3d_mjpeg", 2500, NULL, 0, &printer3d_mjpeg_handle, 1);
     }
 }
