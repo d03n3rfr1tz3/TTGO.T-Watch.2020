@@ -22,6 +22,7 @@
 
 #include "config.h"
 
+#include "gui.h"
 #include "quickbar.h"
 #include "screenshot.h"
 #include "gui/mainbar/mainbar.h"
@@ -229,6 +230,7 @@ static bool quickbar_blectl_event_cb( EventBits_t event, void *arg ) {
     return( true );
 }
 static bool quickbar_wifictl_event_cb( EventBits_t event, void *arg ) {
+    gui_take();
     switch( event ) {
         case WIFICTL_ON:
             wifistate = true;
@@ -247,6 +249,7 @@ static bool quickbar_wifictl_event_cb( EventBits_t event, void *arg ) {
                 wf_image_button_set_style( quickbar_wifi_btn, &quickbarstyle[ QUICKBAR_STYLE_GRAY ] );
             break;
     }
+    gui_give();
     return( true );
 }
 

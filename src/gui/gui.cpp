@@ -125,7 +125,7 @@ bool gui_powermgm_loop_event_cb( EventBits_t event, void *arg );
 void gui_setup( void ) {
     #ifdef NATIVE_64BIT
     #else
-        xGUI_SemaphoreMutex = xSemaphoreCreateMutex();
+        xGUI_SemaphoreMutex = xSemaphoreCreateRecursiveMutex();
     #endif
     gui_give();
     gui_take();
@@ -238,14 +238,14 @@ bool gui_take( void ) {
     #ifdef NATIVE_64BIT
         return( true );
     #else
-        return( xSemaphoreTake( xGUI_SemaphoreMutex, portMAX_DELAY ) == pdTRUE );
+        return( xSemaphoreTakeRecursive( xGUI_SemaphoreMutex, portMAX_DELAY ) == pdTRUE );
     #endif
 }
 
 void gui_give( void ) {
     #ifdef NATIVE_64BIT
     #else
-        xSemaphoreGive( xGUI_SemaphoreMutex );
+        xSemaphoreGiveRecursive( xGUI_SemaphoreMutex );
     #endif
 }
 

@@ -24,6 +24,7 @@
 #include "printer3d_app.h"
 #include "printer3d_app_main.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
@@ -245,7 +246,7 @@ static bool printer3d_powermgm_event_cb(EventBits_t event, void *arg)
     return( true );
 }
 
-static bool printer3d_main_wifictl_event_cb( EventBits_t event, void *arg ) {    
+static bool printer3d_main_wifictl_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
         case WIFICTL_CONNECT_IP:    printer3d_state = true;
                                     printer3d_app_set_indicator( ICON_INDICATOR_UPDATE );
@@ -706,6 +707,8 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                     if (result == JDR_OK) {
                         log_d("3dprinter successfully decoded a %dx%d video frame with %d bytes", decoder->width, decoder->height, mjpeg_size);
 
+                        gui_take();
+
                         printer3d_video.header.always_zero = 0;
                         printer3d_video.header.cf = LV_IMG_CF_TRUE_COLOR;
                         printer3d_video.header.w = decoder->width;
@@ -734,6 +737,8 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                         } else {
                             lv_obj_invalidate( printer3d_video_img );
                         }
+
+                        gui_give();
                     } else {
                         log_d("3dprinter could not decode a video frame");
                     }

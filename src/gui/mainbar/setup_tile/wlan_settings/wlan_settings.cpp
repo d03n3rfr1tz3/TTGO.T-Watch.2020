@@ -21,6 +21,7 @@
  */
 #include "config.h"
 #include "wlan_settings.h"
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/setup_tile/setup_tile.h"
 #include "gui/statusbar.h"
@@ -114,6 +115,7 @@ uint32_t wifi_get_setup_tile_num( void ) {
 }
 
 bool wifi_setup_wifictl_event_cb( EventBits_t event, void *arg ) {
+    gui_take();
     switch( event ) {
         case    WIFICTL_ON:
                     lv_switch_on( wifi_onoff, LV_ANIM_OFF );
@@ -130,6 +132,7 @@ bool wifi_setup_wifictl_event_cb( EventBits_t event, void *arg ) {
                     lv_obj_set_event_cb( wifiname_list_btn, wifi_settings_enter_pass_event_cb);
                     break;
     }
+    gui_give();
     return( true );
 }
 

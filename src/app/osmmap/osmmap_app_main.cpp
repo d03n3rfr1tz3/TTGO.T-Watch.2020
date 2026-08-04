@@ -555,6 +555,28 @@ void osmmap_load_ahead_Task( void * pvParameters ) {
 #endif
 }
 
+static void osmmap_update_tile_image( void ) {
+    gui_take();
+    if ( osm_map_get_tile_image( osmmap_location ) ) {
+        lv_img_set_src( osmmap_app_tile_img, osm_map_get_tile_image( osmmap_location ) );
+    }
+    lv_obj_align( osmmap_app_tile_img, lv_obj_get_parent( osmmap_app_tile_img ), LV_ALIGN_CENTER, 0 , 0 );
+    gui_give();
+}
+
+static void osmmap_show_position( void ) {
+    gui_take();
+    lv_obj_align( osmmap_app_pos_img, lv_obj_get_parent( osmmap_app_pos_img ), LV_ALIGN_IN_TOP_LEFT, osmmap_location->tilex_pos - 8 , osmmap_location->tiley_pos - 8 );
+    lv_obj_set_hidden( osmmap_app_pos_img, false );
+    gui_give();
+}
+
+static void osmmap_hide_position( void ) {
+    gui_take();
+    lv_obj_set_hidden( osmmap_app_pos_img, true );
+    gui_give();
+}
+
 void osmmap_update_Task( void * pvParameters ) {
 #ifdef NATIVE_64BIT
     /**
@@ -566,21 +588,17 @@ void osmmap_update_Task( void * pvParameters ) {
          */
         OSMMAP_APP_LOG("start osm map update");
         if( osm_map_update( osmmap_location ) ) {
-            if ( osm_map_get_tile_image( osmmap_location ) ) {
-                lv_img_set_src( osmmap_app_tile_img, osm_map_get_tile_image( osmmap_location ) );
-            }
-            lv_obj_align( osmmap_app_tile_img, lv_obj_get_parent( osmmap_app_tile_img ), LV_ALIGN_CENTER, 0 , 0 );
+            osmmap_update_tile_image();
             eventmask |= OSM_APP_LOAD_AHEAD_REQUEST;
         }
         /**
          * update postion point on the tile image when is valid
          */
         if ( osmmap_location->tilexy_pos_valid ) {
-            lv_obj_align( osmmap_app_pos_img, lv_obj_get_parent( osmmap_app_pos_img ), LV_ALIGN_IN_TOP_LEFT, osmmap_location->tilex_pos - 8 , osmmap_location->tiley_pos - 8 );
-            lv_obj_set_hidden( osmmap_app_pos_img, false );
+            osmmap_show_position();
         }
         else {
-            lv_obj_set_hidden( osmmap_app_pos_img, true );
+            osmmap_hide_position();
         }
         /**
          * clear update request flag
@@ -599,27 +617,17 @@ void osmmap_update_Task( void * pvParameters ) {
              */
             OSMMAP_APP_LOG("start osm map update");
             if( osm_map_update( osmmap_location ) ) {
-                gui_take();
-                if ( osm_map_get_tile_image( osmmap_location ) ) {
-                    lv_img_set_src( osmmap_app_tile_img, osm_map_get_tile_image( osmmap_location ) );
-                }
-                lv_obj_align( osmmap_app_tile_img, lv_obj_get_parent( osmmap_app_tile_img ), LV_ALIGN_CENTER, 0 , 0 );
-                gui_give();
+                osmmap_update_tile_image();
                 xEventGroupSetBits( osmmap_event_handle, OSM_APP_LOAD_AHEAD_REQUEST );
             }
             /**
              * update postion point on the tile image when is valid
              */
             if ( osmmap_location->tilexy_pos_valid ) {
-                gui_take();
-                lv_obj_align( osmmap_app_pos_img, lv_obj_get_parent( osmmap_app_pos_img ), LV_ALIGN_IN_TOP_LEFT, osmmap_location->tilex_pos - 8 , osmmap_location->tiley_pos - 8 );
-                lv_obj_set_hidden( osmmap_app_pos_img, false );
-                gui_give();
+                osmmap_show_position();
             }
             else {
-                gui_take();
-                lv_obj_set_hidden( osmmap_app_pos_img, true );
-                gui_give();
+                osmmap_hide_position();
             }
             /**
              * clear update request flag

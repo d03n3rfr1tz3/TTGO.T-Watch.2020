@@ -27,6 +27,7 @@
 #include "gui/mainbar/setup_tile/watchface/watchface_tile.h"
 #include "watchface_manager_app.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/setup_tile/bluetooth_settings/bluetooth_message.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
@@ -367,12 +368,16 @@ static void watchface_manager_next_theme_event_cb(  lv_obj_t * obj, lv_event_t e
 
 void watchface_manager_app_set_progressbar( int16_t percent ) {
     WATCHFACE_MANAGER_APP_DEBUG_LOG("download percent: %d%%", percent );
+    gui_take();
     lv_bar_set_value( watchface_manager_app_info_progressbar, percent, LV_ANIM_ON );
+    gui_give();
 }
 
 void watchface_manager_app_set_progressbar_label( const char *label ) {
+    gui_take();
     lv_label_set_text( watchface_manager_app_progress_label, label );
     lv_obj_align( watchface_manager_app_progress_label, lv_obj_get_parent( watchface_manager_app_progress_label ), LV_ALIGN_CENTER, 0, -2 );
+    gui_give();
 }
 
 void watchface_manager_get_theme_json_cb( int32_t percent ) {
@@ -380,8 +385,10 @@ void watchface_manager_get_theme_json_cb( int32_t percent ) {
 }
 
 void watchface_manager_app_set_info_label( const char *label ) {
+    gui_take();
     lv_label_set_text( watchface_manager_app_theme_name_label, label );
     lv_obj_align( watchface_manager_app_theme_name_label, lv_obj_get_parent( watchface_manager_app_theme_name_label ), LV_ALIGN_CENTER, 0, 4 );
+    gui_give();
 }
 
 void watchface_manager_app_Task( void * pvParameters ) {
@@ -398,8 +405,10 @@ void watchface_manager_app_Task( void * pvParameters ) {
              */
             watchface_manager_update_theme_list( &watchface_theme );
             if ( watchface_manager_update_theme_prev( &watchface_theme ) ) {
+                gui_take();
                 lv_img_set_src( watchface_manager_preview_img, &watchface_theme.watchface_theme_prev );
                 lv_obj_align( watchface_manager_preview_img, watchface_manager_app_preview_cont, LV_ALIGN_CENTER, 0, 0 );
+                gui_give();
             }
             /**
              * clear update request flag
@@ -412,8 +421,10 @@ void watchface_manager_app_Task( void * pvParameters ) {
              */
             watchface_manager_next_theme_entry( &watchface_theme );
             if ( watchface_manager_update_theme_prev( &watchface_theme ) ) {
+                gui_take();
                 lv_img_set_src( watchface_manager_preview_img, &watchface_theme.watchface_theme_prev );
                 lv_obj_align( watchface_manager_preview_img, watchface_manager_app_preview_cont, LV_ALIGN_CENTER, 0, 0 );
+                gui_give();
             }
             /**
              * clear update request flag
@@ -426,8 +437,10 @@ void watchface_manager_app_Task( void * pvParameters ) {
              */
             watchface_manager_prev_theme_entry( &watchface_theme );
             if ( watchface_manager_update_theme_prev( &watchface_theme ) ) {
+                gui_take();
                 lv_img_set_src( watchface_manager_preview_img, &watchface_theme.watchface_theme_prev );
                 lv_obj_align( watchface_manager_preview_img, watchface_manager_app_preview_cont, LV_ALIGN_CENTER, 0, 0 );
+                gui_give();
             }
             /**
              * clear update request flag
@@ -439,8 +452,10 @@ void watchface_manager_app_Task( void * pvParameters ) {
              * get next theme entry
              */
             if ( watchface_manager_update_theme_prev( &watchface_theme ) ) {
+                gui_take();
                 lv_img_set_src( watchface_manager_preview_img, &watchface_theme.watchface_theme_prev );
                 lv_obj_align( watchface_manager_preview_img, watchface_manager_app_preview_cont, LV_ALIGN_CENTER, 0, 0 );
+                gui_give();
             }
             /**
              * clear update request flag
@@ -634,12 +649,13 @@ void watchface_manager_gen_theme_menu( watchface_theme_t *watchface_theme, lv_ob
         WATCHFACE_MANAGER_APP_ERROR_LOG("watchface theme list deserializeJson() failed: %s", error.c_str() );
     }
     else {
+        gui_take();
         /**
          * clear theme list
          */
         while ( lv_list_remove( theme_list, 0 ) );
         /**
-         * 
+         *
          */
         for( int i = 0; i < WATCHFACE_MAX_ENTRYS; i++ ) {
             if ( doc[ i ]["name"] ) {
@@ -651,6 +667,7 @@ void watchface_manager_gen_theme_menu( watchface_theme_t *watchface_theme, lv_ob
                 break;
             }
         }
+        gui_give();
     }
     doc.clear();
 }
@@ -669,7 +686,7 @@ void watchface_manager_set_theme_entry( watchface_theme_t *watchface_theme, cons
     DeserializationError error = deserializeJson( doc, (const char *)watchface_theme->watchface_theme_json_list );
 
     if ( error ) {
-        watchface_manager_app_set_progressbar_label( "json format error" );            
+        watchface_manager_app_set_progressbar_label( "json format error" );
         WATCHFACE_MANAGER_APP_ERROR_LOG("watchface theme list deserializeJson() failed: %s", error.c_str() );
     }
     else {
@@ -813,8 +830,10 @@ bool watchface_manager_update_theme_prev( watchface_theme_t *watchface_theme ) {
     /**
      * set download info img
      */
+    gui_take();
     lv_img_set_src( watchface_manager_preview_img, &download_32px );
     lv_obj_align( watchface_manager_preview_img, watchface_manager_app_preview_cont, LV_ALIGN_CENTER, 0, 0 );
+    gui_give();
     /**
      * get the preview image
      */
@@ -839,7 +858,9 @@ bool watchface_manager_update_theme_prev( watchface_theme_t *watchface_theme ) {
         /**
          * clear image cache
          */
+        gui_take();
         lv_img_cache_invalidate_src( &watchface_theme->watchface_theme_prev );
+        gui_give();
         /**
          * clear progressbar label
          */

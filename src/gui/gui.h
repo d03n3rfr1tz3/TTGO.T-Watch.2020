@@ -41,11 +41,12 @@
     void gui_force_redraw( bool force );
     /**
      * @brief take gui control to make LVGL threas safe
-     */    
+     * the mutex is recursive, therefore nesting is allowed
+     */
     bool gui_take( void );
     /**
-     * @brief take gui control to make LVGL threas safe
-     */    
+     * @brief give gui control to make LVGL threas safe
+     */
     void gui_give( void );
 
 #endif // _STATUSBAR_H

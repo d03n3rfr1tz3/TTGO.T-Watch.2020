@@ -24,6 +24,7 @@
 
 #include "config.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/widget_styles.h"
 #include "gui/widget_factory.h"
@@ -314,7 +315,8 @@ static bool mainbar_blectl_event_cb( EventBits_t event, void *arg ) {
 
 static bool mainbar_wifictl_event_cb( EventBits_t event, void *arg ) {
     static bool wifictl_state = false;
-    
+
+    gui_take();
     switch( event ) {
         case WIFICTL_ON:
             wifictl_state = true;
@@ -336,7 +338,8 @@ static bool mainbar_wifictl_event_cb( EventBits_t event, void *arg ) {
             break;
     }
     main_tile_align_widgets();
-    return( true );    
+    gui_give();
+    return( true );
 }
 
 static bool main_tile_style_event_cb( EventBits_t event, void *arg ){

@@ -24,6 +24,7 @@
 #include "kodi_remote_app.h"
 #include "kodi_remote_app_main.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
@@ -205,7 +206,7 @@ static void kodi_remote_setup_hibernate_callback ( void ) {
     nextmillis = 0;
 }
 
-static bool kodi_remote_main_wifictl_event_cb( EventBits_t event, void *arg ) {    
+static bool kodi_remote_main_wifictl_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
         case WIFICTL_CONNECT_IP:    kodi_remote_state = true;
                                     kodi_remote_app_hide_indicator();
@@ -451,8 +452,10 @@ void kodi_remote_get_active_players() {
 void kodi_remote_get_active_player_state() {
     int16_t player = kodi_remote_get_active_player_id();
     if (player < 0) {
+        gui_take();
         lv_obj_set_hidden( kodi_remote_play, false );
         lv_obj_set_hidden( kodi_remote_pause, true );
+        gui_give();
         kodi_remote_play_state = false;
         return;
     }
@@ -467,15 +470,17 @@ void kodi_remote_get_active_player_state() {
 
         if ( doc.containsKey("result") ) {
             if ( doc["result"].containsKey("speed") ) {
+                gui_take();
                 if( doc["result"]["speed"].as<uint8_t>() == 0 ) {
                     lv_obj_set_hidden( kodi_remote_play, false );
                     lv_obj_set_hidden( kodi_remote_pause, true );
                     kodi_remote_play_state = false;
                 } else {
                     lv_obj_set_hidden( kodi_remote_play, true );
-                    lv_obj_set_hidden( kodi_remote_pause, false );                
+                    lv_obj_set_hidden( kodi_remote_pause, false );
                     kodi_remote_play_state = true;
                 }
+                gui_give();
             }
         }
 

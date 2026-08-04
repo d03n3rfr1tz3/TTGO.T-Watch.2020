@@ -21,6 +21,7 @@
  */
 
 #include "config.h"
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "widget.h"
@@ -95,6 +96,7 @@ void widget_set_indicator( icon_t *widget, icon_indicator_t indicator ) {
         return;
     }
 
+    gui_take();
     switch( indicator ) {
         case ICON_INDICATOR_OK:      lv_img_set_src( widget->icon_indicator, &info_ok_16px );
                                      break;
@@ -114,6 +116,7 @@ void widget_set_indicator( icon_t *widget, icon_indicator_t indicator ) {
     lv_obj_align( widget->icon_indicator, widget->icon_cont, LV_ALIGN_IN_TOP_RIGHT, 0, 0 );
     lv_obj_set_hidden( widget->icon_indicator, false );
     lv_obj_invalidate( lv_scr_act() );
+    gui_give();
 }
 
 void widget_hide_indicator( icon_t *widget ) {
@@ -125,8 +128,10 @@ void widget_hide_indicator( icon_t *widget ) {
         return;
     }
 
+    gui_take();
     lv_obj_set_hidden( widget->icon_indicator, true );
     lv_obj_invalidate( lv_scr_act() );
+    gui_give();
 }
 
 void widget_set_icon( icon_t *widget, lv_obj_t *icon ) {

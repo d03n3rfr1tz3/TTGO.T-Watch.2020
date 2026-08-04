@@ -21,6 +21,7 @@
  */
 
 #include "config.h"
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/setup_tile/setup_tile.h"
 #include "setup.h"
@@ -80,6 +81,7 @@ void setup_set_indicator( icon_t *setup, icon_indicator_t indicator ) {
         return;
     }
 
+    gui_take();
     switch( indicator ) {
         case ICON_INDICATOR_OK:     lv_img_set_src( setup->icon_indicator, &info_ok_16px );
                                     break;
@@ -99,6 +101,7 @@ void setup_set_indicator( icon_t *setup, icon_indicator_t indicator ) {
     lv_obj_align( setup->icon_indicator, setup->icon_cont, LV_ALIGN_IN_TOP_RIGHT, 0, 0 );
     lv_obj_set_hidden( setup->icon_indicator, false );
     lv_obj_invalidate( lv_scr_act() );
+    gui_give();
 }
 
 void setup_hide_indicator( icon_t *setup ) {
@@ -110,8 +113,10 @@ void setup_hide_indicator( icon_t *setup ) {
         return;
     }
 
+    gui_take();
     lv_obj_set_hidden( setup->icon_indicator, true );
     lv_obj_invalidate( lv_scr_act() );
+    gui_give();
 }
 
 void setup_set_icon( icon_t *setup, lv_obj_t *icon ) {

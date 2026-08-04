@@ -595,6 +595,7 @@ bool statusbar_wifictl_event_cb( EventBits_t event, void *arg ) {
         return( true );
     }
 
+    gui_take();
     switch( event ) {
         case WIFICTL_CONNECT:       statusbar_style_icon( STATUSBAR_WIFI, STATUSBAR_STYLE_WHITE );
                                     statusbar_wifi_set_state( true, (char *)arg );
@@ -629,6 +630,7 @@ bool statusbar_wifictl_event_cb( EventBits_t event, void *arg ) {
                                     statusbar_show_icon( STATUSBAR_WIFI );
                                     break;
     }
+    gui_give();
     statusbar_refresh_update = true;
     return( true );
 }
@@ -818,6 +820,7 @@ void statusbar_wifi_set_state( bool state, const char *wifiname ) {
         return;
     }
 
+    gui_take();
     if( state ) {
         lv_imgbtn_set_state( statusbar_wifi, LV_BTN_STATE_RELEASED );
     }
@@ -828,6 +831,7 @@ void statusbar_wifi_set_state( bool state, const char *wifiname ) {
     lv_label_set_text( statusbar_wifiiplabel, "" );
     lv_obj_align( statusbar_wifilabel, statusbar_wifi, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
     lv_obj_align( statusbar_wifiiplabel, statusbar_wifilabel, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    gui_give();
 }
 
 void statusbar_wifi_set_ip_state( bool state, const char *ip ) {
@@ -839,8 +843,10 @@ void statusbar_wifi_set_ip_state( bool state, const char *ip ) {
         return;
     }
 
+    gui_take();
     lv_label_set_text( statusbar_wifiiplabel, ip );
     lv_obj_align( statusbar_wifiiplabel, statusbar_wifilabel, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    gui_give();
 }
 
 void statusbar_bluetooth_set_state( bool state ) {
@@ -852,12 +858,14 @@ void statusbar_bluetooth_set_state( bool state ) {
         return;
     }
 
+    gui_take();
     if ( state ) {
         lv_imgbtn_set_state( statusbar_bluetooth, LV_BTN_STATE_RELEASED );
     }
     else {
         lv_imgbtn_set_state( statusbar_bluetooth, LV_BTN_STATE_PRESSED );
     }
+    gui_give();
 }
 
 void statusbar_hide_icon( statusbar_icon_t icon ) {
@@ -873,7 +881,9 @@ void statusbar_hide_icon( statusbar_icon_t icon ) {
         return;
     }
 
+    gui_take();
     lv_obj_set_hidden( statusicon[ icon ].icon, true );
+    gui_give();
     statusbar_refresh_update = true;
 }
 
@@ -890,7 +900,9 @@ void statusbar_show_icon( statusbar_icon_t icon ) {
         return;
     }
 
+    gui_take();
     lv_obj_set_hidden( statusicon[ icon ].icon, false );
+    gui_give();
     statusbar_refresh_update = true;
 }
 
@@ -922,6 +934,7 @@ void statusbar_refresh( void ) {
 
     lv_obj_t *last_visible = NULL;
 
+    gui_take();
     for ( int i = 0 ; i < STATUSBAR_NUM ; i++ ) {
         if ( !lv_obj_get_hidden( statusicon[ i ].icon ) ) {
             if ( last_visible == NULL ) {
@@ -936,6 +949,7 @@ void statusbar_refresh( void ) {
             last_visible = statusicon[ i ].icon;
         }
     }
+    gui_give();
 }
 
 void statusbar_event( lv_obj_t * statusbar, lv_event_t event ) {

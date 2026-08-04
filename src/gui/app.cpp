@@ -22,6 +22,7 @@
 
 #include "config.h"
 #include "app.h"
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "utils/alloc.h"
@@ -132,6 +133,7 @@ void app_set_indicator( icon_t *app, icon_indicator_t indicator ) {
         return;
     }
 
+    gui_take();
     switch( indicator ) {
         case ICON_INDICATOR_OK:     lv_img_set_src( app->icon_indicator, &info_ok_16px );
                                     break;
@@ -151,6 +153,7 @@ void app_set_indicator( icon_t *app, icon_indicator_t indicator ) {
     lv_obj_align( app->icon_indicator, app->icon_cont, LV_ALIGN_IN_TOP_RIGHT, 0, 0 );
     lv_obj_set_hidden( app->icon_indicator, false );
     lv_obj_invalidate( lv_scr_act() );
+    gui_give();
 }
 
 void app_hide_indicator( icon_t *app ) {
@@ -162,8 +165,10 @@ void app_hide_indicator( icon_t *app ) {
         return;
     }
 
+    gui_take();
     lv_obj_set_hidden( app->icon_indicator, true );
     lv_obj_invalidate( lv_scr_act() );
+    gui_give();
 }
 
 void app_set_icon( icon_t *app, lv_obj_t *icon ) {

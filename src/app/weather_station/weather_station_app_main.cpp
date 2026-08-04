@@ -24,6 +24,7 @@
 #include "weather_station_app.h"
 #include "weather_station_app_main.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
@@ -255,7 +256,7 @@ void weather_station_app_main_setup( uint32_t tile_num ) {
     _weather_station_app_task = lv_task_create( weather_station_app_task, 1000, LV_TASK_PRIO_MID, NULL );
 }
 
-static bool weather_station_main_wifictl_event_cb( EventBits_t event, void *arg ) {    
+static bool weather_station_main_wifictl_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
         case WIFICTL_CONNECT_IP:    weather_station_state = true;
                                     weather_station_app_hide_indicator();
