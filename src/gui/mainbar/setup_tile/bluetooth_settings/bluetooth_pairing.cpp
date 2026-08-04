@@ -22,6 +22,7 @@
 #include "config.h"
 #include "bluetooth_pairing.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/statusbar.h"
 #include "gui/widget_factory.h"
@@ -93,24 +94,30 @@ bool bluetooth_pairing_style_change_event_cb( EventBits_t event, void * arg ) {
 bool bluetooth_pairing_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
         case BLECTL_PIN_AUTH:           powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
+                                        gui_take();
                                         mainbar_jump_to_tilenumber( bluetooth_pairing_tile_num, LV_ANIM_OFF, true );
                                         lv_label_set_text( bluetooth_pairing_info_label, (const char*)arg );
                                         lv_obj_align( bluetooth_pairing_info_label, bluetooth_pairing_img, LV_ALIGN_OUT_BOTTOM_MID, 0, 5 );
                                         lv_obj_invalidate( lv_scr_act() );
+                                        gui_give();
                                         motor_vibe(20);
                                         break;
         case BLECTL_PAIRING_SUCCESS:    powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
+                                        gui_take();
                                         lv_label_set_text( bluetooth_pairing_info_label, (const char*)arg );
                                         lv_obj_align( bluetooth_pairing_info_label, bluetooth_pairing_img, LV_ALIGN_OUT_BOTTOM_MID, 0, 5 );
                                         mainbar_jump_to_tilenumber( bluetooth_pairing_tile_num, LV_ANIM_OFF, true );
                                         lv_obj_invalidate( lv_scr_act() );
+                                        gui_give();
                                         motor_vibe(20);
                                         break;
         case BLECTL_PAIRING_ABORT:      powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
+                                        gui_take();
                                         lv_label_set_text( bluetooth_pairing_info_label, (const char*)arg );
                                         lv_obj_align( bluetooth_pairing_info_label, bluetooth_pairing_img, LV_ALIGN_OUT_BOTTOM_MID, 0, 5 );
                                         mainbar_jump_to_tilenumber( bluetooth_pairing_tile_num, LV_ANIM_OFF, true );
                                         lv_obj_invalidate( lv_scr_act() );
+                                        gui_give();
                                         motor_vibe(20);
                                         break;
     }

@@ -24,6 +24,7 @@
 #include "osmand_app.h"
 #include "osmand_app_main.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/setup_tile/bluetooth_settings/bluetooth_message.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
@@ -204,12 +205,16 @@ bool osmand_bluetooth_message_event_cb( EventBits_t event, void *arg ) {
             osmand_bluetooth_message_msg_pharse( *(BluetoothJsonRequest*)arg );
             break;
         case GADGETBRIDGE_CONNECT:
+            gui_take();
             lv_label_set_text( osmand_app_info_label, "wait for OsmAnd msg");
             lv_obj_align( osmand_app_info_label, osmand_app_distance_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 5 );
+            gui_give();
             break;
-        case GADGETBRIDGE_DISCONNECT:     
+        case GADGETBRIDGE_DISCONNECT:    
+            gui_take(); 
             lv_label_set_text( osmand_app_info_label, "no bluetooth connection");
             lv_obj_align( osmand_app_info_label, osmand_app_distance_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 5 );
+            gui_give();
             break;
     }
     return( true );
@@ -225,6 +230,8 @@ void osmand_bluetooth_message_msg_pharse( BluetoothJsonRequest &doc ) {
          * React to messages from "OsmAnd" and "OsmAnd~"
          */
         if ( !strcmp( doc["t"], "notify" ) && !strncmp( doc["src"], "OsmAnd", 6 ) ) {
+            gui_take();
+
             const char * title = doc["title"]; 
             if ( strstr( title, "?") ) {
                 const char * distance = doc["title"];
@@ -240,7 +247,10 @@ void osmand_bluetooth_message_msg_pharse( BluetoothJsonRequest &doc ) {
                 lv_label_set_text( osmand_app_info_label, doc["title"] );
                 lv_obj_align( osmand_app_info_label, osmand_app_distance_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 5 );
             }
+
+            gui_give();
         }
+        
         powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
     }
 

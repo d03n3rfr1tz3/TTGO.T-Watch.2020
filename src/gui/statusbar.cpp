@@ -384,26 +384,28 @@ bool statusbar_gpsctl_event_cb( EventBits_t event, void *arg ) {
         return( true );
     }
 
+    gui_take();
     switch( event ) {
-        case GPSCTL_DISABLE:  
+        case GPSCTL_DISABLE:
             statusbar_hide_icon( STATUSBAR_GPS );
             statusbar_style_icon( STATUSBAR_GPS, STATUSBAR_STYLE_GRAY );
             lv_imgbtn_set_state( statusbar_gps, LV_BTN_STATE_CHECKED_RELEASED );
             break;
-        case GPSCTL_ENABLE:  
+        case GPSCTL_ENABLE:
             statusbar_show_icon( STATUSBAR_GPS );
             statusbar_style_icon( STATUSBAR_GPS, STATUSBAR_STYLE_GRAY );
             lv_imgbtn_set_state( statusbar_gps, LV_BTN_STATE_RELEASED );
             break;
-        case GPSCTL_FIX:  
+        case GPSCTL_FIX:
             statusbar_show_icon( STATUSBAR_GPS );
             statusbar_style_icon( STATUSBAR_GPS, STATUSBAR_STYLE_WHITE );
             break;
-        case GPSCTL_NOFIX:  
+        case GPSCTL_NOFIX:
             statusbar_show_icon( STATUSBAR_GPS );
             statusbar_style_icon( STATUSBAR_GPS, STATUSBAR_STYLE_GRAY );
             break;
     }
+    gui_give();
     return( true );
 
 }
@@ -569,6 +571,7 @@ bool statusbar_blectl_event_cb( EventBits_t event, void *arg ) {
         return( true );
     }
 
+    gui_take();
     switch( event ) {
         case BLECTL_ON:             statusbar_show_icon( STATUSBAR_BLUETOOTH );
                                     statusbar_style_icon( STATUSBAR_BLUETOOTH, STATUSBAR_STYLE_GRAY );
@@ -582,6 +585,7 @@ bool statusbar_blectl_event_cb( EventBits_t event, void *arg ) {
         case BLECTL_DISCONNECT:     statusbar_style_icon( STATUSBAR_BLUETOOTH, STATUSBAR_STYLE_GRAY );
                                     break;
     }
+    gui_give();
     statusbar_refresh_update = true;
     return( true );
 }

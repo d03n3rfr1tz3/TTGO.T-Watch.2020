@@ -23,6 +23,7 @@
 #include "weather.h"
 #include "weather_fetch.h"
 #include "weather_setup.h"
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/statusbar.h"
@@ -300,8 +301,10 @@ bool weather_gpsctl_app_use_location_event_cb( EventBits_t event, void *arg ) {
                 snprintf( weather_config->lat, sizeof( weather_config->lat ), "%.2f", gps_data->lat );
                 snprintf( weather_config->lon, sizeof( weather_config->lon ), "%.2f", gps_data->lon );
                 weather_save_config();
+                gui_take();
                 lv_textarea_set_text( weather_lat_textfield, weather_config->lat );
                 lv_textarea_set_text( weather_lon_textfield, weather_config->lon );
+                gui_give();
             break;
     }
     return( true );

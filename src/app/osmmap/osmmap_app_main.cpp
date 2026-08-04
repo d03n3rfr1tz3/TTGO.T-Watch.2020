@@ -465,7 +465,9 @@ bool osmmap_gpsctl_event_cb( EventBits_t event, void *arg ) {
             gps_data = ( gps_data_t *)arg;
             osm_map_set_lon_lat( osmmap_location, gps_data->lon, gps_data->lat );
             snprintf( lonlat, sizeof( lonlat ), "%f° / %f°", gps_data->lat, gps_data->lon );
+            gui_take();
             lv_label_set_text( osmmap_lonlat_label, (const char*)lonlat );
+            gui_give();
             if ( osmmap_app_active )
                 osmmap_update_request();
             break;
@@ -477,7 +479,9 @@ bool osmmap_gpsctl_event_cb( EventBits_t event, void *arg ) {
             gps_data = ( gps_data_t *)arg;
             osm_map_set_lon_lat( osmmap_location, gps_data->lon, gps_data->lat );
             snprintf( lonlat, sizeof( lonlat ), "%f° / %f°", gps_data->lat, gps_data->lon );
+            gui_take();
             lv_label_set_text( osmmap_lonlat_label, (const char*)lonlat );
+            gui_give();
             if ( osmmap_app_active )
                 osmmap_update_request();
             break;

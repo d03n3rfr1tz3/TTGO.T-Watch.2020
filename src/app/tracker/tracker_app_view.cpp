@@ -28,6 +28,7 @@
 #include "tracker_app_view.h"
 #include "config/tracker_config.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/statusbar.h"
 #include "gui/app.h"
@@ -137,6 +138,7 @@ static bool tracker_app_view_button_cb( EventBits_t event, void *arg ) {
 }
 
 void tracker_app_view_add_data( gps_data_t *gps_data ) {
+    gui_take();
     lv_chart_set_next( tracker_speed_chart, tracker_speed_series, gps_data->speed_kmh );
     lv_chart_set_next( tracker_altitude_chart, tracker_altitude_series, gps_data->altitude_meters );
 
@@ -168,6 +170,7 @@ void tracker_app_view_add_data( gps_data_t *gps_data ) {
         wf_label_printf( tracker_altitude_min_label, tracker_altitude_chart, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_PADDING * 2, -THEME_PADDING  * 2, "%dm", tracker_altitude_min );
         wf_label_printf( tracker_altitude_max_label, tracker_altitude_chart, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING * 2, THEME_PADDING  * 2, "%dm", tracker_altitude_max );
     }
+    gui_give();
 }
 
 void tracker_app_view_clean_data( void ) {

@@ -209,6 +209,7 @@ void quickbar_setup( void ){
 }
 
 static bool quickbar_blectl_event_cb( EventBits_t event, void *arg ) {
+    gui_take();
     switch( event ) {
         case BLECTL_ON:
             bluetoothstate = true;
@@ -227,6 +228,7 @@ static bool quickbar_blectl_event_cb( EventBits_t event, void *arg ) {
                 wf_image_button_set_style( quickbar_bluetooth_btn, &quickbarstyle[ QUICKBAR_STYLE_GRAY ] );
             break;
     }
+    gui_give();
     return( true );
 }
 static bool quickbar_wifictl_event_cb( EventBits_t event, void *arg ) {

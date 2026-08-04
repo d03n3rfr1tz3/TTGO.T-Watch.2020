@@ -22,6 +22,7 @@
 #include "config.h"
 #include "gps_settings.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/setup_tile/setup_tile.h"
 #include "gui/statusbar.h"
@@ -167,8 +168,10 @@ bool gps_settings_latlon_update_cb( EventBits_t event, void *arg ) {
             break;
     }
     snprintf( msg, sizeof( msg ), "%s @ lat: %.3f lon: %.3f", gpsfix?"fix":"nofix", lat, lon );
+    gui_take();
     lv_label_set_text( gps_latlon_label, msg );
     lv_obj_align( gps_latlon_label, gps_settings_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -5 );
+    gui_give();
 
     return( true );
 }

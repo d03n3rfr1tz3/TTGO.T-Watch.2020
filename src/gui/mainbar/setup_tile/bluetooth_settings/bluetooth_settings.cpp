@@ -26,6 +26,7 @@
 #include "bluetooth_message.h"
 #include "bluetooth_media.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/setup_tile/setup_tile.h"
 #include "gui/statusbar.h"
@@ -140,6 +141,7 @@ uint32_t bluetooth_get_setup_tile_num() {
 }
 
 bool blectl_onoff_event_cb( EventBits_t event, void *arg ) {
+    gui_take();
     switch( event ) {
         case BLECTL_ON:
             lv_switch_on( bluetooth_enable_onoff, LV_ANIM_OFF );
@@ -148,6 +150,7 @@ bool blectl_onoff_event_cb( EventBits_t event, void *arg ) {
             lv_switch_off( bluetooth_enable_onoff, LV_ANIM_OFF );
             break;
     }
+    gui_give();
     return( true );
 }
 

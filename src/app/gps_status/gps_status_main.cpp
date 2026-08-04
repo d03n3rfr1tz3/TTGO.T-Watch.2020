@@ -25,6 +25,7 @@
 #include "gps_status.h"
 #include "gps_status_main.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
@@ -248,6 +249,7 @@ bool gpsctl_gps_status_event_cb( EventBits_t event, void *arg ) {
     char temp[30] = "";
     gps_data_t *gps_data = (gps_data_t*)arg;
 
+    gui_take();
     switch( event ) {
         case GPSCTL_FIX:
             lv_obj_set_hidden( satfix_value_on, false );
@@ -307,6 +309,7 @@ bool gpsctl_gps_status_event_cb( EventBits_t event, void *arg ) {
     lv_obj_align( speed_value, lv_obj_get_parent( speed_value ), LV_ALIGN_IN_RIGHT_MID, -5, 0);
     lv_obj_align( altitude_value, lv_obj_get_parent( altitude_value ), LV_ALIGN_IN_RIGHT_MID, -5, 0);
     lv_obj_align( source_value, lv_obj_get_parent( source_value ), LV_ALIGN_IN_RIGHT_MID, -5, 0);
+    gui_give();
 
     return( true );
 }

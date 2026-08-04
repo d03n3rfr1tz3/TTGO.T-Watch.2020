@@ -29,6 +29,7 @@
 #include "tracker_app_view.h"
 #include "config/tracker_config.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/statusbar.h"
 #include "gui/app.h"
@@ -212,14 +213,20 @@ static bool tracker_app_main_gps_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
         case GPSCTL_FIX:
             tracker_logging_gps_state = true;
-            if( tracker_logging_state )
+            if( tracker_logging_state ) {
+                gui_take();
                 lv_obj_set_style_local_line_color( tracker_progress_arc, LV_ARC_PART_INDIC, LV_STATE_DEFAULT, LV_COLOR_GREEN );
+                gui_give();
+            }
             counter = 0;
             break;
         case GPSCTL_NOFIX:
             tracker_logging_gps_state = false;
-            if( tracker_logging_state )
+            if( tracker_logging_state ) {
+                gui_take();
                 lv_obj_set_style_local_line_color( tracker_progress_arc, LV_ARC_PART_INDIC, LV_STATE_DEFAULT, LV_COLOR_BLUE );
+                gui_give();
+            }
             counter = 0;
             break;
         case GPSCTL_ENABLE:
@@ -228,8 +235,10 @@ static bool tracker_app_main_gps_event_cb( EventBits_t event, void *arg ) {
         case GPSCTL_DISABLE:
             tracker_logging_gps_state = false;
             tracker_logging_state = false;
+            gui_take();
             lv_obj_set_style_local_line_color( tracker_progress_arc, LV_ARC_PART_INDIC, LV_STATE_DEFAULT, LV_COLOR_RED );
             lv_arc_set_end_angle( tracker_progress_arc, 0 );
+            gui_give();
             counter = 0;
             break;
         case GPSCTL_UPDATE_LOCATION:
@@ -250,8 +259,10 @@ static bool tracker_app_main_gps_event_cb( EventBits_t event, void *arg ) {
                     counter = 0;
                 }
                 counter++;
+                gui_take();
                 wf_label_printf( tracker_info_label, mainbar_get_tile_obj( tracker_app_get_app_main_tile_num() ), LV_ALIGN_IN_TOP_MID, 0, THEME_PADDING, "%.3fkm\n%.0f°", distance, course );
                 lv_label_set_align( tracker_info_label, LV_LABEL_ALIGN_CENTER);
+                gui_give();
             }
             memcpy( tracker_gps_data, gps_data, sizeof( gps_data_t ) );
             break;

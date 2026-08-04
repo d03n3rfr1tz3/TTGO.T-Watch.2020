@@ -288,7 +288,8 @@ static bool mainbar_pmu_event_cb( EventBits_t event, void *arg ) {
 
 static bool mainbar_blectl_event_cb( EventBits_t event, void *arg ) {
     static bool blectl_state = false;
-    
+
+    gui_take();
     switch( event ) {
         case BLECTL_ON:
             blectl_state = true;
@@ -310,6 +311,7 @@ static bool mainbar_blectl_event_cb( EventBits_t event, void *arg ) {
             break;
     }
     main_tile_align_widgets();
+    gui_give();
     return( true );
 }
 
