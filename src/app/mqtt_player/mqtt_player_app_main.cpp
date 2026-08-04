@@ -171,9 +171,9 @@ static void mqtt_player_message_cb(char *topic, byte *payload, size_t length) {
     if (!length) return;
 
     mqtt_player_config_t *mqtt_player_config = mqtt_player_get_config();
-    if (strncmp(topic, mqtt_player_config->topic_base, strlen(mqtt_player_config->topic_base) - 1) != 0) return;
+    if (strncmp(topic, mqtt_player_config->topic_base, strlen(mqtt_player_config->topic_base)) != 0) return;
 
-    uint8_t topic_size = 64;
+    size_t topic_size = sizeof( mqtt_player_config->topic_base ) + sizeof( mqtt_player_config->topic_state );
     char *topic_compare = NULL;
     topic_compare = (char*)CALLOC( topic_size, sizeof(char) );
     if ( topic_compare == NULL ) {
@@ -184,11 +184,12 @@ static void mqtt_player_message_cb(char *topic, byte *payload, size_t length) {
     payload_msg = (char*)CALLOC( length + 1, sizeof(char) );
     if ( payload_msg == NULL ) {
         log_e("calloc failed");
+        free( topic_compare );
         return;
     }
     memcpy( payload_msg, payload, length );
 
-    snprintf( topic_compare, sizeof( topic_size * sizeof(char) ), "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_state );
+    snprintf( topic_compare, topic_size, "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_state );
     if (strncmp(topic, topic_compare, strlen(topic_compare)) == 0) {
         if( !strcmp( payload_msg, "pause" ) || !strcmp( payload_msg, "stop" ) ) {
             lv_obj_set_hidden( mqtt_player_play, false );
@@ -202,13 +203,13 @@ static void mqtt_player_message_cb(char *topic, byte *payload, size_t length) {
         }
     }
 
-    snprintf( topic_compare, sizeof( topic_size * sizeof(char) ), "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_artist );
+    snprintf( topic_compare, topic_size, "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_artist );
     if (strncmp(topic, topic_compare, strlen(topic_compare)) == 0) {
         lv_label_set_text( mqtt_player_artist, payload_msg );
         lv_obj_align( mqtt_player_artist, mqtt_player_main_tile, LV_ALIGN_IN_TOP_LEFT, 10, 10 );
     }
 
-    snprintf( topic_compare, sizeof( topic_size * sizeof(char) ), "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_title );
+    snprintf( topic_compare, topic_size, "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_title );
     if (strncmp(topic, topic_compare, strlen(topic_compare)) == 0) {
         lv_label_set_text( mqtt_player_title, payload_msg );
         lv_obj_align( mqtt_player_title, mqtt_player_play, LV_ALIGN_OUT_TOP_MID, 0, -16 );
