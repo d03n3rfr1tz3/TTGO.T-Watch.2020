@@ -83,6 +83,7 @@ static bool weather_station_main_wifictl_event_cb( EventBits_t event, void *arg 
 
 #ifndef NATIVE_64BIT
     TaskHandle_t weather_station_refresh_handle;
+    static volatile bool weather_station_refresh_running = false;
 #endif
 weather_station_result_t weather_station_refresh_result;
 
@@ -293,7 +294,11 @@ static void refresh_weather_station_event_cb( lv_obj_t * obj, lv_event_t event )
                                         #ifdef NATIVE_64BIT
                                             weather_station_refresh( NULL );
                                         #else
-                                            xTaskCreatePinnedToCore(weather_station_refresh, "weather_station_refresh", 3000, NULL, 0, &weather_station_refresh_handle, 1);
+                                            if ( !weather_station_refresh_running ) {
+                                                weather_station_refresh_running = true;
+                                                if ( xTaskCreatePinnedToCore(weather_station_refresh, "weather_station_refresh", 3072, NULL, 1, &weather_station_refresh_handle, 1) != pdPASS )
+                                                    weather_station_refresh_running = false;
+                                            }
                                         #endif
                                         break;
     }
@@ -309,7 +314,11 @@ void weather_station_app_task( lv_task_t * task ) {
         #ifdef NATIVE_64BIT
             weather_station_refresh( NULL );
         #else
-            xTaskCreatePinnedToCore(weather_station_refresh, "weather_station_refresh", 2500, NULL, 0, &weather_station_refresh_handle, 1);
+            if ( !weather_station_refresh_running ) {
+                weather_station_refresh_running = true;
+                if ( xTaskCreatePinnedToCore(weather_station_refresh, "weather_station_refresh", 3072, NULL, 1, &weather_station_refresh_handle, 1) != pdPASS )
+                    weather_station_refresh_running = false;
+            }
         #endif
     }
 
@@ -432,6 +441,7 @@ void weather_station_refresh(void *parameter) {
     weather_station_refresh_request();
 
     #ifndef NATIVE_64BIT
+        weather_station_refresh_running = false;
         vTaskDelete(NULL);
     #endif
 }

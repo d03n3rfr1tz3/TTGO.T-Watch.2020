@@ -98,6 +98,7 @@ static void kodi_remote_control_button(char cmd);
 
 #ifndef NATIVE_64BIT
     TaskHandle_t kodi_remote_refresh_handle;
+    static volatile bool kodi_remote_refresh_running = false;
 #endif
 kodi_remote_result_t kodi_remote_refresh_result;
 
@@ -367,7 +368,11 @@ void kodi_remote_app_task( lv_task_t * task ) {
         #ifdef NATIVE_64BIT
             kodi_remote_refresh( NULL );
         #else
-            xTaskCreatePinnedToCore(kodi_remote_refresh, "kodi_remote_refresh", 5000, NULL, 0, &kodi_remote_refresh_handle, 1);
+            if ( !kodi_remote_refresh_running ) {
+                kodi_remote_refresh_running = true;
+                if ( xTaskCreatePinnedToCore(kodi_remote_refresh, "kodi_remote_refresh", 4096, NULL, 1, &kodi_remote_refresh_handle, 1) != pdPASS )
+                    kodi_remote_refresh_running = false;
+            }
         #endif
     }
 
@@ -407,6 +412,7 @@ void kodi_remote_refresh(void *parameter) {
     }
 
     #ifndef NATIVE_64BIT
+        kodi_remote_refresh_running = false;
         vTaskDelete(NULL);
     #endif
 }

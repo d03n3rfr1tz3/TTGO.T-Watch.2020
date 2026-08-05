@@ -33,12 +33,14 @@
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/statusbar.h"
+#include "gui/gui.h"
 #include "gui/keyboard.h"
 #include "gui/widget_styles.h"
 
 lv_obj_t *wireless_app_main_tile = NULL;
 lv_style_t wireless_app_main_style;
-lv_obj_t * throbber = NULL; 
+lv_obj_t * throbber = NULL;
+static volatile bool wireless_spam_running = false;
 
 lv_task_t * _wireless_app_task;
 
@@ -152,7 +154,12 @@ void spam_task(void *pvParameter) {
 			line = 0;
 	}
         //ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        gui_take();
         lv_obj_del(throbber);
+        throbber = NULL;
+        gui_give();
+
+        wireless_spam_running = false;
         vTaskDelete(NULL);
 }
 
@@ -160,12 +167,15 @@ static void enter_wireless_app_next_event_cb( lv_obj_t * obj, lv_event_t event )
     switch( event ) {	
                 case(LV_EVENT_CLICKED):
 
+                    if ( wireless_spam_running ) break;
+                    wireless_spam_running = true;
+
                     throbber = lv_spinner_create(lv_scr_act(), NULL);
                     lv_obj_set_size(throbber, 100, 100);
                     lv_obj_align(throbber, NULL, LV_ALIGN_CENTER, 0, 0);
 	            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-	            wifi_config_t ap_config = { }; 
-		    strcpy((char *)ap_config.ap.ssid, "23pse"); 
+	            wifi_config_t ap_config = { };
+		    strcpy((char *)ap_config.ap.ssid, "23pse");
                     ap_config.ap.ssid_len = 0;
                     strcpy((char *)ap_config.ap.password, "00112233440");
 	            ap_config.ap.channel = 1;
@@ -176,7 +186,11 @@ static void enter_wireless_app_next_event_cb( lv_obj_t * obj, lv_event_t event )
 	            ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
 	            ESP_ERROR_CHECK(esp_wifi_start());
 				ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
-	            xTaskCreate(&spam_task, "spam_task", 4096, NULL, 5, NULL);
+	            if ( xTaskCreate(&spam_task, "spam_task", 2560, NULL, 5, NULL) != pdPASS ) {
+	                lv_obj_del(throbber);
+	                throbber = NULL;
+	                wireless_spam_running = false;
+	            }
                     break;
     }
 }

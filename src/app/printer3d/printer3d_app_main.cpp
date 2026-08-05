@@ -108,6 +108,7 @@ static bool printer3d_main_wifictl_event_cb( EventBits_t event, void *arg );
 #ifndef NATIVE_64BIT
     TaskHandle_t printer3d_refresh_handle;
     TaskHandle_t printer3d_mjpeg_handle;
+    static volatile bool printer3d_refresh_running = false;
 #endif
 printer3d_result_t printer3d_refresh_result;
 
@@ -317,7 +318,12 @@ void printer3d_app_task( lv_task_t * task ) {
         #ifdef NATIVE_64BIT
             printer3d_refresh( NULL );
         #else
-            xTaskCreatePinnedToCore(printer3d_refresh, "printer3d_refresh", 2500, NULL, 0, &printer3d_refresh_handle, 1);
+            // only start a refresh if the previous one already finished
+            if ( !printer3d_refresh_running ) {
+                printer3d_refresh_running = true;
+                if ( xTaskCreatePinnedToCore(printer3d_refresh, "printer3d_refresh", 2560, NULL, 1, &printer3d_refresh_handle, 1) != pdPASS )
+                    printer3d_refresh_running = false;
+            }
         #endif
 
         if (printer3d_open_state) {
@@ -549,6 +555,7 @@ void printer3d_refresh(void *parameter) {
     printer3d_refresh_request();
 
     #ifndef NATIVE_64BIT
+        printer3d_refresh_running = false;
         vTaskDelete(NULL);
     #endif
 }
@@ -889,6 +896,6 @@ void printer3d_mjpeg_init( void ) {
             return;
         }
 
-        xTaskCreatePinnedToCore(printer3d_mjpeg_task, "printer3d_mjpeg", 2500, NULL, 0, &printer3d_mjpeg_handle, 1);
+        xTaskCreatePinnedToCore(printer3d_mjpeg_task, "printer3d_mjpeg", 4096, NULL, 1, &printer3d_mjpeg_handle, 1);
     }
 }
