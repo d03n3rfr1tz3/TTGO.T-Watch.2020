@@ -33,6 +33,7 @@
 #include "gui/widget_factory.h"
 #include "gui/widget_styles.h"
 
+#include "hardware/framebuffer.h"
 #include "hardware/powermgm.h"
 #include "hardware/wifictl.h"
 #include "utils/json_psram_allocator.h"
@@ -78,7 +79,18 @@ lv_obj_t* printer3d_printbed_temp;
 #ifndef NATIVE_64BIT
     lv_style_t printer3d_app_video_style;
     lv_obj_t* printer3d_video_img;
-    static lv_img_dsc_t printer3d_video;
+    
+    #define PRINTER3D_MJPEG_STRIP_H     16
+    static bool mjpeg_visible = false;              /** @brief video tile is the tile on screen */
+    static uint8_t mjpeg_scale = 0;                 /** @brief jd_decomp scale, 0..3 */
+    static int32_t mjpeg_crop_x = 0;                /** @brief scaled source column shown at screen x 0 */
+    static int32_t mjpeg_crop_y = 0;                /** @brief scaled source row shown at screen y 0 */
+    static int32_t mjpeg_dst_x = 0;                 /** @brief left edge of the image on screen */
+    static int32_t mjpeg_dst_w = 0;                 /** @brief visible width of the image, strip stride */
+    static int32_t mjpeg_strip_top = -1;            /** @brief source row of the strip being collected */
+    static int32_t mjpeg_strip_y = 0;               /** @brief screen row the strip starts at */
+    static int32_t mjpeg_strip_h = 0;               /** @brief rows collected in the strip */
+    static int32_t mjpeg_strip_skip = 0;            /** @brief source rows cropped off the top of the strip */
 #endif
 
 LV_IMG_DECLARE(refresh_32px);
@@ -210,9 +222,6 @@ void printer3d_app_main_setup( uint32_t tile_num ) {
         lv_obj_add_style( printer3d_video_img, LV_OBJ_PART_MAIN, &printer3d_app_video_style );
         lv_img_set_src( printer3d_video_img, LV_SYMBOL_IMAGE );
         lv_obj_align( printer3d_video_img, printer3d_app_video_tile, LV_ALIGN_IN_TOP_LEFT, (RES_X_MAX / 2) - 16, (RES_Y_MAX / 2) - 16 );
-
-        lv_obj_t * video_exit_btn = wf_add_exit_button( printer3d_app_video_tile, exit_printer3d_app_main_event_cb );
-        lv_obj_align(video_exit_btn, printer3d_app_video_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
     #endif
 
     // callbacks
@@ -231,6 +240,10 @@ static void printer3d_setup_activate_callback ( void ) {
 static void printer3d_setup_hibernate_callback ( void ) {
     printer3d_open_state = false;
     nextmillis = 0;
+
+    gui_take();
+    statusbar_hide( false );
+    gui_give();
 }
 
 static bool printer3d_powermgm_event_cb(EventBits_t event, void *arg)
@@ -574,28 +587,76 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         if (buffer) {
             return stream->readBytes(buffer, size);
         } else {
-            char temp[size];
-            return stream->readBytes(temp, size);
+            uint8_t skip[ 64 ];
+            uint32_t done = 0;
+
+            while ( done < size ) {
+                uint32_t chunk = ( size - done ) > sizeof( skip ) ? sizeof( skip ) : ( size - done );
+                uint32_t got = stream->readBytes( skip, chunk );
+                if ( !got )
+                    break;
+                done += got;
+            }
+
+            return done;
+        }
+    }
+
+    static void printer3d_mjpeg_strip_flush( void ) {
+        if ( mjpeg_strip_h <= 0 || mjpeg_dst_w <= 0 || mjpeg_frame == nullptr )
+            return;
+
+        if ( mjpeg_visible && printer3d_state && printer3d_open_state ) {
+            gui_take();
+            framebuffer_push_image( mjpeg_dst_x, mjpeg_strip_y, mjpeg_dst_w, mjpeg_strip_h, ( lv_color_t* )mjpeg_frame );
+            gui_give();
         }
 
-        return 0;
+        mjpeg_strip_h = 0;
     }
 
     static int32_t printer3d_mjpeg_output(JDEC* decoder, void* data, JRECT* rect) {
-        uint8_t* buffer = (uint8_t*)data;
-        const uint16_t row_width = rect->right - rect->left + 1;
+        if (!printer3d_state || !printer3d_open_state) return 0;
+        if (!mjpeg_frame) return 0;
 
-        // write partial decoded image into frame buffer
-        for ( uint16_t y = rect->top; y <= rect->bottom; y++ ) {
-            if (!printer3d_state || !printer3d_open_state) break;
-            if (!decoder->width || !decoder->height) break;
-            if (!mjpeg_frame) break;
+        const int32_t src_width = rect->right - rect->left + 1;
 
-            // convert raw output into the corresponding color depth pixels
+        // a new row starts, push the collected strip and set up the next one
+        if ( rect->top != mjpeg_strip_top ) {
+            printer3d_mjpeg_strip_flush();
+            mjpeg_strip_top = rect->top;
+
+            int32_t first = rect->top - mjpeg_crop_y;
+            int32_t last = rect->bottom - mjpeg_crop_y;
+            mjpeg_strip_skip = first < 0 ? -first : 0;
+            mjpeg_strip_y = first + mjpeg_strip_skip;
+            if ( last > RES_Y_MAX - 1 ) last = RES_Y_MAX - 1;
+            mjpeg_strip_h = last - mjpeg_strip_y + 1;
+            if ( mjpeg_strip_h < 0 ) mjpeg_strip_h = 0;
+            if ( mjpeg_strip_h > PRINTER3D_MJPEG_STRIP_H ) mjpeg_strip_h = PRINTER3D_MJPEG_STRIP_H;
+        }
+
+        if ( mjpeg_strip_h <= 0 ) return 1;
+
+        // clip the block against the visible part of the image
+        int32_t left = rect->left - mjpeg_crop_x;
+        int32_t skip = left < mjpeg_dst_x ? mjpeg_dst_x - left : 0;
+        int32_t right = left + src_width - 1;
+        if ( right > mjpeg_dst_x + mjpeg_dst_w - 1 ) right = mjpeg_dst_x + mjpeg_dst_w - 1;
+
+        const int32_t copy_width = right - ( left + skip ) + 1;
+        if ( copy_width <= 0 ) return 1;
+
+        const int32_t pixelsize = sizeof( lv_color_t );
+        const int32_t start = ( left + skip - mjpeg_dst_x ) * pixelsize;
+
+        // convert raw output into the corresponding color depth pixels
+        for ( int32_t row = 0; row < mjpeg_strip_h; row++ ) {
+            uint8_t* buffer = (uint8_t*)data + ( ( row + mjpeg_strip_skip ) * src_width + skip ) * 3;
+            uint32_t offset = row * mjpeg_dst_w * pixelsize + start;
+
             #if LV_COLOR_DEPTH == 32
-                uint8_t pixelsize = 4;
-                uint32_t offset = y * decoder->width * pixelsize + rect->left * pixelsize;
-                for ( uint32_t i = 0; i < row_width; i++ ) {
+                for ( int32_t i = 0; i < copy_width; i++ ) {
                     mjpeg_frame[offset + 3] = 0xff;
                     mjpeg_frame[offset + 2] = *buffer++;
                     mjpeg_frame[offset + 1] = *buffer++;
@@ -603,9 +664,7 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                     offset += 4;
                 }
             #elif LV_COLOR_DEPTH == 16
-                uint8_t pixelsize = 2;
-                uint32_t offset = y * decoder->width * pixelsize + rect->left * pixelsize;
-                for ( uint32_t i = 0; i < row_width; i++ ) {
+                for ( int32_t i = 0; i < copy_width; i++ ) {
                     uint32_t col_16bit = (*buffer++ & 0xf8) << 8;
                     col_16bit |= (*buffer++ & 0xFC) << 3;
                     col_16bit |= (*buffer++ >> 3);
@@ -618,9 +677,7 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                     #endif
                 }
             #elif LV_COLOR_DEPTH == 8
-                uint8_t pixelsize = 1;
-                uint32_t offset = y * decoder->width * pixelsize + rect->left * pixelsize;
-                for ( uint32_t i = 0; i < row_width; i++ ) {
+                for ( int32_t i = 0; i < copy_width; i++ ) {
                     uint8_t col_8bit = (*buffer++ & 0xC0);
                     col_8bit |= (*buffer++ & 0xe0) >> 2;
                     col_8bit |= (*buffer++ & 0xe0) >> 5;
@@ -632,6 +689,30 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         }
 
         return 1;
+    }
+
+    static void printer3d_mjpeg_set_visible( bool visible ) {
+        if ( visible == mjpeg_visible )
+            return;
+
+        mjpeg_visible = visible;
+
+        gui_take();
+        statusbar_hide( visible );
+        lv_obj_set_hidden( printer3d_video_img, visible );
+        if ( !visible )
+            lv_obj_invalidate( printer3d_app_video_tile );
+        gui_give();
+    }
+
+    static void printer3d_mjpeg_update_visible( void ) {
+        lv_area_t tile_area;
+
+        gui_take();
+        lv_obj_get_coords( printer3d_app_video_tile, &tile_area );
+        gui_give();
+
+        printer3d_mjpeg_set_visible( tile_area.x1 == 0 && tile_area.y1 == 0 );
     }
 
     static void printer3d_mjpeg_stream(void) {
@@ -663,8 +744,11 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                 delay(10);
             }
 
-            // prepare frame buffer and decoder
-            JDEC* decoder = (JDEC*)MALLOC(sizeof(JDEC));
+            // prepare strip buffer and decoder, plain malloc to keep the hot path out of psram
+            mjpeg_frame = (uint8_t*)malloc( RES_X_MAX * PRINTER3D_MJPEG_STRIP_H * sizeof( lv_color_t ) );
+            if (mjpeg_frame == nullptr) log_e("3dprinter could not allocate the video strip buffer");
+
+            JDEC* decoder = mjpeg_frame == nullptr ? nullptr : (JDEC*)MALLOC(sizeof(JDEC));
             if (decoder == nullptr) log_e("3dprinter could not allocate the jpeg decoder");
 
             JRESULT result;
@@ -679,6 +763,8 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                     break;
                 }
 
+                printer3d_mjpeg_update_visible();
+
                 // wait for more frames
                 if (!stream.available()) {
                     log_d("3dprinter waiting for more data in video stream at %s", mjpeg_url);
@@ -691,54 +777,32 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                 if (result == JDR_OK) {
                     log_d("3dprinter successfully prepared a %dx%d video frame", decoder->width, decoder->height);
 
-                    // use decoded size to allocate memory
-                    bool first_frame = false;
-                    size_t mjpeg_size = decoder->width * decoder->height * LV_COLOR_DEPTH / 8;
-                    if (mjpeg_frame == nullptr) {
-                        mjpeg_frame = (uint8_t*)MALLOC(mjpeg_size);
-                        if (mjpeg_frame == nullptr) {
-                            log_e("3dprinter could not allocate a %d byte frame buffer", mjpeg_size);
-                            break;
-                        }
-                        first_frame = true;
-                    }
-                    
-                    result = jd_decomp( decoder, printer3d_mjpeg_output, 0 );
+                    // halve the image as long as it still covers the screen, the rest is cropped
+                    mjpeg_scale = 0;
+                    while ( mjpeg_scale < 3 && ( decoder->width >> ( mjpeg_scale + 1 ) ) >= RES_X_MAX
+                                            && ( decoder->height >> ( mjpeg_scale + 1 ) ) >= RES_Y_MAX ) mjpeg_scale++;
+
+                    int32_t scaled_w = decoder->width >> mjpeg_scale;
+                    int32_t scaled_h = decoder->height >> mjpeg_scale;
+                    mjpeg_crop_x = ( scaled_w - RES_X_MAX ) / 2;
+                    mjpeg_crop_y = ( scaled_h - RES_Y_MAX ) / 2;
+
+                    int32_t left = -mjpeg_crop_x;
+                    int32_t right = left + scaled_w - 1;
+                    if ( left < 0 ) left = 0;
+                    if ( right > RES_X_MAX - 1 ) right = RES_X_MAX - 1;
+                    mjpeg_dst_x = left;
+                    mjpeg_dst_w = right - left + 1;
+                    mjpeg_strip_top = -1;
+                    mjpeg_strip_h = 0;
+
+                    log_d("3dprinter shows a %dx%d video frame with scale 1/%d and crop %d/%d", decoder->width, decoder->height, 1 << mjpeg_scale, mjpeg_crop_x, mjpeg_crop_y);
+
+                    result = jd_decomp( decoder, printer3d_mjpeg_output, mjpeg_scale );
+                    printer3d_mjpeg_strip_flush();
+
                     if (result == JDR_OK) {
-                        log_d("3dprinter successfully decoded a %dx%d video frame with %d bytes", decoder->width, decoder->height, mjpeg_size);
-
-                        gui_take();
-
-                        printer3d_video.header.always_zero = 0;
-                        printer3d_video.header.cf = LV_IMG_CF_TRUE_COLOR;
-                        printer3d_video.header.w = decoder->width;
-                        printer3d_video.header.h = decoder->height;
-                        printer3d_video.data = mjpeg_frame;
-                        printer3d_video.data_size = mjpeg_size;
-
-                        if (first_frame) {
-                            bool landscape = decoder->width > decoder->height;
-                            uint8_t ratio = RES_Y_MAX * 100 / RES_X_MAX;
-                            uint16_t maxX = landscape ? (decoder->height * 100 / ratio) : decoder->width;
-                            uint16_t maxY = landscape ? decoder->height : (decoder->width * 100 / ratio);
-                            uint8_t zoomFactor = (landscape ? RES_Y_MAX : RES_X_MAX) * 100 / (landscape ? decoder->height : decoder->width);
-
-                            lv_obj_set_hidden( printer3d_video_img, true );
-                            lv_img_set_src( printer3d_video_img, &printer3d_video );
-                            lv_img_set_antialias( printer3d_video_img, false );
-                            lv_img_set_auto_size( printer3d_video_img, false );
-                            lv_obj_set_size( printer3d_video_img, decoder->width, decoder->height );
-                            lv_img_set_zoom( printer3d_video_img, LV_IMG_ZOOM_NONE * zoomFactor / 100 );
-                            lv_img_set_pivot( printer3d_video_img, 0, 0 );
-                            lv_img_set_offset_x( printer3d_video_img, landscape ? (maxX - decoder->width) / 2 : 0 );
-                            lv_img_set_offset_y( printer3d_video_img, landscape ? 0 : (maxY - decoder->height) / 2 );
-                            lv_obj_align( printer3d_video_img, printer3d_app_video_tile, LV_ALIGN_IN_TOP_LEFT, 0, 0 );
-                            lv_obj_set_hidden( printer3d_video_img, false );
-                        } else {
-                            lv_obj_invalidate( printer3d_video_img );
-                        }
-
-                        gui_give();
+                        log_d("3dprinter successfully decoded a %dx%d video frame", decoder->width, decoder->height);
                     } else {
                         log_d("3dprinter could not decode a video frame");
                     }
@@ -771,21 +835,31 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                             break;
                         }
                     }
+                } else {
+                    // read errors on a flaky connection, never spin without a break
+                    log_w("3dprinter could not read a video frame from %s", mjpeg_url);
+                    delay(100);
+                    if (failcount++ >= 3) break;
                 }
             }
 
-            if (mjpeg_frame != nullptr) {
-                free(mjpeg_frame);
-                mjpeg_frame = nullptr;
-            }
-
             free(decoder);
+        }
+
+        if (mjpeg_frame != nullptr) {
+            free(mjpeg_frame);
+            mjpeg_frame = nullptr;
         }
 
         if (mjpeg_buffer != nullptr) {
             free(mjpeg_buffer);
             mjpeg_buffer = nullptr;
         }
+
+        printer3d_mjpeg_set_visible( false );
+        gui_take();
+        statusbar_hide( false );
+        gui_give();
 
         mjpeg_client.end();
     }

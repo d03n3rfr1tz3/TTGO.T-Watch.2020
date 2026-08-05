@@ -428,3 +428,50 @@ static void framebuffer_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area,
     #endif
     lv_disp_flush_ready( disp_drv );
 }
+
+bool framebuffer_push_image( int32_t x, int32_t y, int32_t w, int32_t h, lv_color_t *data ) {
+    if ( !data || w <= 0 || h <= 0 )
+        return( false );
+
+    if ( x < 0 || y < 0 || x + w > LV_HOR_RES_MAX || y + h > LV_VER_RES_MAX )
+        return( false );
+
+    #ifdef NATIVE_64BIT
+        return( false );
+    #else
+        if ( !framebuffer_drawing )
+            return( false );
+        /**
+         * always blocking, no DMA. the pushed areas are small and this way we
+         * never have to interlock with the transfer flush_cb might have started
+         */
+        #if defined( M5PAPER )
+            return( false );
+        #elif defined( M5CORE2 )
+            tft.startWrite();
+            tft.setAddrWindow( x, y, w, h );
+            tft.pushColors( ( uint16_t* )data, w * h );
+            tft.endWrite();
+        #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+            TTGOClass *ttgo = TTGOClass::getWatch();
+            ttgo->tft->startWrite();
+            ttgo->tft->setAddrWindow( x, y, w, h );
+            ttgo->tft->pushPixels( ( uint16_t* )data, w * h );
+            ttgo->tft->endWrite();
+        #elif defined( LILYGO_WATCH_2021 ) || defined( WT32_SC01 )
+            /**
+             * flush_cb leaves a DMA transfer running on these boards, drain it first
+             */
+            if ( framebuffer_use_dma )
+                tft.endWrite();
+            tft.startWrite();
+            tft.pushImage( x, y, w, h, ( uint16_t* )data );
+            tft.flush();
+            tft.endWrite();
+        #else
+            return( false );
+        #endif
+
+        return( true );
+    #endif
+}

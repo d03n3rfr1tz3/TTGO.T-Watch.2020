@@ -58,4 +58,19 @@
      * @brief force framebuffer refresh to screen/display
      */
     void framebuffer_refresh( void );
+    /**
+     * @brief push an image directly to the display, bypassing lvgl
+     *
+     * the caller must hold the gui lock, the area must be inside the screen
+     * and the data must match the configured color depth
+     *
+     * @param x         left position on screen
+     * @param y         top position on screen
+     * @param w         width in pixel
+     * @param h         height in pixel
+     * @param data      pointer to w * h pixels
+     *
+     * @return  true if the image was pushed, false if not supported on this platform
+     */
+    bool framebuffer_push_image( int32_t x, int32_t y, int32_t w, int32_t h, lv_color_t *data );
 #endif // _FRAMEBUFFER_H
