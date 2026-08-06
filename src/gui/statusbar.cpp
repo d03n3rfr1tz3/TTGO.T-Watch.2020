@@ -419,8 +419,9 @@ bool statusbar_soundctl_event_cb( EventBits_t event, void *arg ) {
         return( true );
     }
 
+    gui_take();
     switch( event ) {
-        case SOUNDCTL_ENABLED:  
+        case SOUNDCTL_ENABLED:
             if ( *(bool*)arg ) {
                 statusbar_show_icon( STATUSBAR_VOLUME );
                 lv_img_set_src( statusbar_sound_icon, &sound_32px );
@@ -435,6 +436,7 @@ bool statusbar_soundctl_event_cb( EventBits_t event, void *arg ) {
             lv_slider_set_value( statusbar_volume_slider, sound_get_volume_config(), LV_ANIM_OFF );
             break;
     }
+    gui_give();
     return( true );
 }
 
@@ -447,11 +449,13 @@ bool statusbar_displayctl_event_cb( EventBits_t event, void *arg ) {
         return( true );
     }
 
+    gui_take();
     switch( event ) {
-        case DISPLAYCTL_BRIGHTNESS:  
+        case DISPLAYCTL_BRIGHTNESS:
             lv_slider_set_value( statusbar_brightness_slider, display_get_brightness(), LV_ANIM_OFF );
             break;
     }
+    gui_give();
     return( true );
 }
 
@@ -513,6 +517,7 @@ bool statusbar_pmuctl_event_cb( EventBits_t event, void *arg ) {
         return( true );
     }
 
+    gui_take();
     switch( event ) {
         case PMUCTL_STATUS:
             statusbar_pmuctl_update_batt(*(int32_t*)arg & PMUCTL_STATUS_PERCENT,
@@ -520,6 +525,7 @@ bool statusbar_pmuctl_event_cb( EventBits_t event, void *arg ) {
                                          *(int32_t*)arg & PMUCTL_STATUS_PLUG);
             break;
     }
+    gui_give();
     return( true );
 }
 
@@ -533,11 +539,13 @@ bool statusbar_bmactl_event_cb( EventBits_t event, void *arg ) {
         return( true );
     }
 
+    gui_take();
     switch( event ) {
         case BMACTL_STEPCOUNTER:    snprintf( stepcounter, sizeof( stepcounter ), "%d", *(uint32_t *)arg );
                                     lv_label_set_text( statusbar_stepcounterlabel, stepcounter );
                                     break;
     }
+    gui_give();
     return( true );
 }
 
