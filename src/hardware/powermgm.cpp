@@ -92,10 +92,14 @@ void powermgm_loop( void ) {
     static bool standby = true;
     #ifdef NATIVE_64BIT
         /**
-         * delay loop fpr 5ms
+         * delay loop for 5ms
          */
         SDL_Delay(5);
     #else
+        /**
+         * delay loop for 5ms
+         */
+        delay( 5 );
     #endif // NATIVE_64BIT
     /*
      * check if power button was release

@@ -598,7 +598,7 @@ void wifictl_standby( void ) {
 
     log_d("request wifictl standby");
     wifictl_off();
-    while( wifictl_get_event( WIFICTL_ACTIVE | WIFICTL_CONNECT | WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_SCAN | WIFICTL_SCAN_REQUEST | WIFICTL_WPS_REQUEST ) ) {
+    while( wifictl_get_event( WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_SCAN | WIFICTL_WPS_REQUEST ) ) {
 #ifndef NATIVE_64BIT
         yield();
 #endif

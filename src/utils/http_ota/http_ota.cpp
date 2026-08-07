@@ -136,6 +136,7 @@ bool http_ota_start_compressed( const char* url, const char* md5, int32_t firmwa
      */
     if( sslclient ) {
         sslclient->stop();
+        delete sslclient;
     }
 #endif
     return( retval );
@@ -275,6 +276,7 @@ bool http_ota_start_uncompressed( const char* url, const char* md5 ) {
      */
     if( sslclient ) {
         sslclient->stop();
+        delete sslclient;
     }
     /**
      * check if written bytes equal to downloaded bytes

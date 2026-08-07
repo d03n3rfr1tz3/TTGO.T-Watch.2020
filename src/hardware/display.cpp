@@ -46,6 +46,9 @@
 display_config_t display_config;
 callback_t *display_callback = NULL;
 
+#define DISPLAY_FADE_STEP_MS        2       /** @brief milliseconds per brightness step */
+#define DISPLAY_FADE_MAX_STEPS      8       /** @brief step limit after a long pause, e.g. standby */
+
 static uint8_t dest_brightness = 0;
 static uint8_t brightness = 0;
 
@@ -54,6 +57,9 @@ static bool display_powermgm_loop_cb( EventBits_t event, void *arg );
 static bool display_send_event_cb( EventBits_t event, void *arg );
 static void display_standby( void );
 static void display_wakeup( bool silence );
+#ifndef NATIVE_64BIT
+    static bool display_fade_brightness( void );
+#endif
 
 void display_setup( void ) {
     /**
@@ -114,6 +120,36 @@ static bool display_powermgm_event_cb( EventBits_t event, void *arg ) {
     return( true );
 }
 
+#ifndef NATIVE_64BIT
+/**
+ * step the backlight towards destination brightness
+ */
+static bool display_fade_brightness( void ) {
+    static uint32_t last_step = 0;
+
+    if ( dest_brightness == brightness ) {
+        last_step = millis();
+        return( false );
+    }
+
+    uint32_t steps = ( millis() - last_step ) / DISPLAY_FADE_STEP_MS;
+    if ( !steps )
+        return( false );
+        
+    if ( steps > DISPLAY_FADE_MAX_STEPS )
+        steps = DISPLAY_FADE_MAX_STEPS;
+
+    last_step = millis();
+
+    if ( brightness < dest_brightness )
+        brightness = ( uint32_t )( dest_brightness - brightness ) > steps ? ( uint8_t )( brightness + steps ) : dest_brightness;
+    else
+        brightness = ( uint32_t )( brightness - dest_brightness ) > steps ? ( uint8_t )( brightness - steps ) : dest_brightness;
+
+    return( true );
+}
+#endif
+
 static bool display_powermgm_loop_cb( EventBits_t event, void *arg ) {
     bool retval = false;
 
@@ -122,16 +158,8 @@ static bool display_powermgm_loop_cb( EventBits_t event, void *arg ) {
         #if defined( M5PAPER )
 
         #elif defined( M5CORE2 )
-            if ( dest_brightness != brightness ) {
-                if ( brightness < dest_brightness ) {
-                    brightness++;
-                    M5.Axp.SetLcdVoltage( 2532 + brightness );
-                }
-                else {
-                    brightness--;
-                    M5.Axp.SetLcdVoltage( 2532 + brightness );
-                }
-            }
+            if ( display_fade_brightness() )
+                M5.Axp.SetLcdVoltage( 2532 + brightness );
             /**
              * check timeout
              */
@@ -150,16 +178,8 @@ static bool display_powermgm_loop_cb( EventBits_t event, void *arg ) {
             /**
              * check if backlight adjust has change
              */
-            if ( dest_brightness != brightness ) {
-                if ( brightness < dest_brightness ) {
-                    brightness++;
-                    ttgo->bl->adjust( brightness );
-                }
-                else {
-                    brightness--;
-                    ttgo->bl->adjust( brightness );
-                }
-            }
+            if ( display_fade_brightness() )
+                ttgo->bl->adjust( brightness );
             /**
              * check timeout
              */
@@ -177,16 +197,8 @@ static bool display_powermgm_loop_cb( EventBits_t event, void *arg ) {
             /**
              * check if backlight adjust has change
              */
-            if ( dest_brightness != brightness ) {
-                if ( brightness < dest_brightness ) {
-                    brightness++;
-                    ledcWrite(0, brightness );
-                }
-                else {
-                    brightness--;
-                    ledcWrite(0, brightness );
-                }
-            }
+            if ( display_fade_brightness() )
+                ledcWrite(0, brightness );
             /**
              * check timeout
              */
@@ -204,16 +216,8 @@ static bool display_powermgm_loop_cb( EventBits_t event, void *arg ) {
             /**
              * check if backlight adjust has change
              */
-            if ( dest_brightness != brightness ) {
-                if ( brightness < dest_brightness ) {
-                    brightness++;
-                    ledcWrite(0, brightness );
-                }
-                else {
-                    brightness--;
-                    ledcWrite(0, brightness );
-                }
-            }
+            if ( display_fade_brightness() )
+                ledcWrite(0, brightness );
             /**
              * check timeout
              */

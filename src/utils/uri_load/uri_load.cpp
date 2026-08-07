@@ -78,10 +78,15 @@ uri_load_dsc_t *uri_load_create_dsc( void );
 void uri_load_set_filename_from_uri( uri_load_dsc_t *uri_load_dsc, const char *uri );
 void uri_load_set_url_from_uri( uri_load_dsc_t *uri_load_dsc, const char *uri );
 uri_load_dsc_t *uri_load_file_to_ram( uri_load_dsc_t *uri_load_dsc );
-uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc );
-uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc );
+uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t depth );
+uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t depth );
+static uri_load_dsc_t *uri_load_to_ram_depth( const char *uri, progress_cb_t *progresscb, uint8_t depth );
 
 uri_load_dsc_t *uri_load_to_ram( const char *uri, progress_cb_t *progresscb ) {
+    return( uri_load_to_ram_depth( uri, progresscb, 0 ) );
+}
+
+static uri_load_dsc_t *uri_load_to_ram_depth( const char *uri, progress_cb_t *progresscb, uint8_t depth ) {
     /**
      * alloc uri_load_dsc structure
      */
@@ -115,11 +120,11 @@ uri_load_dsc_t *uri_load_to_ram( const char *uri, progress_cb_t *progresscb ) {
          */
         if ( strstr( uri, "http://" ) ) {
             URI_LOAD_LOG("http source");
-            uri_load_dsc = uri_load_http_to_ram( uri_load_dsc );
+            uri_load_dsc = uri_load_http_to_ram( uri_load_dsc, depth );
         }
         else if ( strstr( uri, "https://" ) ) {
             URI_LOAD_LOG("https source");
-            uri_load_dsc = uri_load_https_to_ram( uri_load_dsc );
+            uri_load_dsc = uri_load_https_to_ram( uri_load_dsc, depth );
         }
         else if ( strstr( uri, "file://" ) ) {
             URI_LOAD_LOG("local files source");
@@ -177,11 +182,11 @@ bool uri_load_to_file( const char *uri, const char *path, const char *dest_filen
          */
         if ( strstr( uri, "http://" ) ) {
             URI_LOAD_LOG("http source");
-            uri_load_dsc = uri_load_http_to_ram( uri_load_dsc );
+            uri_load_dsc = uri_load_http_to_ram( uri_load_dsc, 0 );
         }
         else if ( strstr( uri, "https://" ) ) {
             URI_LOAD_LOG("https source");
-            uri_load_dsc = uri_load_https_to_ram( uri_load_dsc );
+            uri_load_dsc = uri_load_https_to_ram( uri_load_dsc, 0 );
         }
         else if ( strstr( uri, "file://" ) ) {
             URI_LOAD_LOG("local files source");
@@ -288,7 +293,7 @@ bool uri_load_to_file( const char *uri, const char *path, const char *dest_filen
     return( uri_load_to_file( uri, path, dest_filename, NULL ) );
 }
 
-uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc ) {
+uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t depth ) {
 #ifdef NATIVE_64BIT
     if ( uri_load_dsc ) {
         CURL *curl_handle;
@@ -400,6 +405,7 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc ) {
                 uint32_t bytes_left = uri_load_dsc->size;                           /** @brief download left byte counter */
                 uint8_t *data_write_p = uri_load_dsc->data;                         /** @brief write pointer for the raw file download */
                 WiFiClient *download_stream = download_client.getStreamPtr();       /** @brief get streampointer */
+                uint32_t last_progress = millis();                                  /** @brief timestamp of the last received chunk */
                 /**
                  * get download data
                  */
@@ -414,6 +420,17 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc ) {
                         data_write_p = data_write_p + c;
                         if ( uri_load_dsc->progresscb ) {
                             uri_load_dsc->progresscb( ( 100 * ( uri_load_dsc->size - bytes_left ) ) / uri_load_dsc->size );
+                        }
+                        last_progress = millis();
+                    }
+                    else {
+                        /**
+                         * give the cpu to other tasks and abort if the download stalls
+                         */
+                        delay( 5 );
+                        if ( millis() - last_progress > URI_LOAD_STALL_TIMEOUT ) {
+                            URI_LOAD_ERROR_LOG("download stalled");
+                            break;
                         }
                     }
                 }
@@ -452,11 +469,21 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc ) {
             /**
              * if we have a new location, try it
              */
-            if ( !location.isEmpty() ) {
+            if ( location.isEmpty() ) {
+                uri_load_free_all( uri_load_dsc );
+                uri_load_dsc = NULL;
+                URI_LOAD_ERROR_LOG("http connection abort, code: %d", httpCode );
+            }
+            else if ( depth >= URI_LOAD_MAX_REDIRECT ) {
+                uri_load_free_all( uri_load_dsc );
+                uri_load_dsc = NULL;
+                URI_LOAD_ERROR_LOG("too many redirects");
+            }
+            else {
                 /**
                  * get new location data
                  */
-                uri_load_dsc_t *_uri_load_dsc = uri_load_to_ram( location.c_str(), uri_load_dsc->progresscb );
+                uri_load_dsc_t *_uri_load_dsc = uri_load_to_ram_depth( location.c_str(), uri_load_dsc->progresscb, depth + 1 );
                 /**
                  * if was success, set data and file size to the old uri_load_dsc to save
                  * old filename and uri to hide redirect
@@ -475,11 +502,6 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc ) {
                     URI_LOAD_ERROR_LOG("redirect failed");
                 }
             }
-            else {
-                uri_load_free_all( uri_load_dsc );
-                uri_load_dsc = NULL;
-                URI_LOAD_ERROR_LOG("http connection abort, code: %d", httpCode );
-            }
             return( uri_load_dsc );
         }
         /**
@@ -494,7 +516,7 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc ) {
     return( uri_load_dsc );
 }
 
-uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc ) {
+uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t depth ) {
 #ifdef NATIVE_64BIT
     if ( uri_load_dsc ) {
         CURL *curl_handle;
@@ -589,10 +611,11 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc ) {
          * open http connection
          */
         heap_caps_malloc_extmem_enable( 1 );
-        WiFiClientSecure *client = new WiFiClientSecure;                            /** @brief SSL/TLS client connection */
-        client->setInsecure();                                                      /** allow insecure connection */
+        WiFiClientSecure client;                                                    /** @brief SSL/TLS client connection */
+        client.setInsecure();                                                       /** allow insecure connection */
         HTTPClient download_client;                                                 /** @brief http download client */
-        download_client.begin( *client, uri_load_dsc->uri );
+        download_client.setTimeout( 1500 );
+        download_client.begin( client, uri_load_dsc->uri );
         download_client.collectHeaders( headerKeys, numberOfHeaders );
         download_client.setUserAgent( HARDWARE_NAME "-" __FIRMWARE__ );
         int httpCode = download_client.GET();
@@ -616,6 +639,7 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc ) {
                 uint32_t bytes_left = uri_load_dsc->size;                           /** @brief download left byte counter */
                 uint8_t *data_write_p = uri_load_dsc->data;                         /** @brief write pointer for the raw file download */
                 WiFiClient *download_stream = download_client.getStreamPtr();       /** @brief get streampointer */
+                uint32_t last_progress = millis();                                  /** @brief timestamp of the last received chunk */
                 /**
                  * get download data
                  */
@@ -631,12 +655,23 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc ) {
                         if ( uri_load_dsc->progresscb ) {
                             uri_load_dsc->progresscb( ( 100 * ( uri_load_dsc->size - bytes_left ) ) / uri_load_dsc->size );
                         }
+                        last_progress = millis();
+                    }
+                    else {
+                        /**
+                         * give the cpu to other tasks and abort if the download stalls
+                         */
+                        delay( 5 );
+                        if ( millis() - last_progress > URI_LOAD_STALL_TIMEOUT ) {
+                            URI_LOAD_ERROR_LOG("download stalled");
+                            break;
+                        }
                     }
                 }
                 if ( bytes_left != 0 ) {
                     URI_LOAD_ERROR_LOG("download failed");
                     download_client.end();
-                    client->stop();
+                    client.stop();
                     uri_load_free_all( uri_load_dsc );
                     heap_caps_malloc_extmem_enable( 16 * 1024 );
                     return( NULL );
@@ -645,7 +680,7 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc ) {
             else {
                 URI_LOAD_ERROR_LOG("data alloc failed, %d bytes", uri_load_dsc->size );
                 download_client.end();
-                client->stop();
+                client.stop();
                 uri_load_free_all( uri_load_dsc );
                 heap_caps_malloc_extmem_enable( 16 * 1024 );
                 return( NULL );
@@ -669,15 +704,26 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc ) {
              * clean old connection
              */
             download_client.end();
-            client->stop();
+            client.stop();
+            heap_caps_malloc_extmem_enable( 16 * 1024 );
             /**
              * if we have a new location, try it
              */
-            if ( !location.isEmpty() ) {
+            if ( location.isEmpty() ) {
+                uri_load_free_all( uri_load_dsc );
+                uri_load_dsc = NULL;
+                URI_LOAD_ERROR_LOG("http connection abort, code: %d", httpCode );
+            }
+            else if ( depth >= URI_LOAD_MAX_REDIRECT ) {
+                uri_load_free_all( uri_load_dsc );
+                uri_load_dsc = NULL;
+                URI_LOAD_ERROR_LOG("too many redirects");
+            }
+            else {
                 /**
                  * get new location data
                  */
-                uri_load_dsc_t *_uri_load_dsc = uri_load_to_ram( location.c_str(), uri_load_dsc->progresscb );
+                uri_load_dsc_t *_uri_load_dsc = uri_load_to_ram_depth( location.c_str(), uri_load_dsc->progresscb, depth + 1 );
                 /**
                  * if was success, set data and file size to the old uri_load_dsc to save
                  * old filename and uri to hide redirect
@@ -696,18 +742,13 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc ) {
                     URI_LOAD_ERROR_LOG("redirect failed");
                 }
             }
-            else {
-                uri_load_free_all( uri_load_dsc );
-                uri_load_dsc = NULL;
-                URI_LOAD_ERROR_LOG("http connection abort, code: %d", httpCode );
-            }
             return( uri_load_dsc );
         }
         /**
          * close http connection
          */
         download_client.end();
-        client->stop();
+        client.stop();
         heap_caps_malloc_extmem_enable( 16 * 1024 );
     }
     else {

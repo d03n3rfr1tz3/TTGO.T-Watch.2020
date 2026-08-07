@@ -380,9 +380,9 @@ static void weather_station_refresh_request(void) {
         return;
     }
 
+    WiFiClientSecure sslclient;
     HTTPClient http_client;
-    WiFiClientSecure *sslclient = NULL;
-    
+
     http_client.setConnectTimeout(2000);
     http_client.setTimeout(3000);
     http_client.useHTTP10( true );
@@ -391,9 +391,8 @@ static void weather_station_refresh_request(void) {
         http_client.begin( weather_station_config->url );
     }
     else if( strstr( weather_station_config->url, "https://" ) ) {
-        sslclient = new WiFiClientSecure;
-        sslclient->setInsecure();
-        http_client.begin( *sslclient, weather_station_config->url );
+        sslclient.setInsecure();
+        http_client.begin( sslclient, weather_station_config->url );
     }
 
     int httpcode = http_client.GET();

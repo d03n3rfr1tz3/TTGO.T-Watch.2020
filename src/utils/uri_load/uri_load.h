@@ -29,6 +29,8 @@
     #define URI_LOAD_ERROR_LOG  log_e
 
     #define URI_BLOCK_SIZE      4096
+    #define URI_LOAD_MAX_REDIRECT   5
+    #define URI_LOAD_STALL_TIMEOUT  5000
 
     /**
      * @brief typedef for the callback function call
