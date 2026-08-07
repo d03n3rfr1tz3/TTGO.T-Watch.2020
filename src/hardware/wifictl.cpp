@@ -103,9 +103,8 @@ void wifictl_setup( void ) {
             wifictl_send_event_cb( WIFICTL_DISCONNECT, (void *)"wait for WPS" );
         }
         else {
-            wifictl_set_event( WIFICTL_SCAN );
+            wifictl_set_event( WIFICTL_SCAN_REQUEST );
             wifictl_send_event_cb( WIFICTL_DISCONNECT, (void *)"scan ..." );
-            WiFi.scanNetworks( true );
         }
         #ifdef ENABLE_MQTT
             mqtt_stop();
@@ -168,36 +167,14 @@ void wifictl_setup( void ) {
                 wifictl_config->networklist_tried[ entry ].ssid[ 0 ] = '\0';
                 wifictl_config->networklist_tried[ entry ].password[ 0 ] = '\0';
             }
-            /**
-             * connect if we discover an known network
-             */
-            for( int i = 0 ; i < len ; i++ ) {
-                if ( triedAny ) {
-                    break;
-                }
-                for ( int entry = 0 ; entry < NETWORKLIST_ENTRYS ; entry++ ) {
-                    if ( triedAny ) {
-                        break;
-                    }
-                    if ( !strcmp( wifictl_config->networklist[ entry ].ssid,  WiFi.SSID(i).c_str() ) ) {
-                        wifictl_send_event_cb( WIFICTL_MSG, (void *)"connecting ..." );
-                        WiFi.setHostname( wifictl_config->hostname );
-                        WiFi.begin( wifictl_config->networklist[ entry ].ssid, wifictl_config->networklist[ entry ].password );
-                        /**
-                         * remember the connection to this network was tried
-                         */
-                        strncpy( wifictl_config->networklist_tried[ entry ].ssid, wifictl_config->networklist[ entry ].ssid, sizeof( wifictl_config->networklist_tried[ entry ].ssid ) );
-                        triedAny = true;
-                    }
-                }
-            }
         }
-#ifdef ARDUNIO_NG
-        }, WiFiEvent_t::ARDUINO_EVENT_WIFI_SCAN_DONE);
-#else
+        WiFi.scanDelete();
+    #ifdef ARDUNIO_NG
+        }, WiFiEvent_t::ARDUINO_EVENT_WIFI_SCAN_DONE );
+    #else
         }, WiFiEvent_t::SYSTEM_EVENT_SCAN_DONE );
-#endif
-
+    #endif
+    
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
         wifictl_set_event( WIFICTL_CONNECT | WIFICTL_ACTIVE );
         if ( wifictl_get_event( WIFICTL_WPS_REQUEST ) ) {
@@ -244,9 +221,8 @@ void wifictl_setup( void ) {
             wifictl_send_event_cb( WIFICTL_ON, (void *)"wait for WPS" );
         }
         else {
-            wifictl_set_event( WIFICTL_SCAN );
+            wifictl_set_event( WIFICTL_SCAN_REQUEST );
             wifictl_send_event_cb( WIFICTL_ON, (void *)"scan ..." );
-            WiFi.scanNetworks( true );
         }
     #ifdef ARDUNIO_NG
         }, WiFiEvent_t::ARDUINO_EVENT_WIFI_READY );
@@ -261,7 +237,7 @@ void wifictl_setup( void ) {
         #ifdef ENABLE_MQTT
             mqtt_stop();
         # endif
-        wifictl_clear_event( WIFICTL_ACTIVE | WIFICTL_CONNECT | WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_SCAN | WIFICTL_WPS_REQUEST );
+        wifictl_clear_event( WIFICTL_ACTIVE | WIFICTL_CONNECT | WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_SCAN | WIFICTL_SCAN_REQUEST | WIFICTL_WPS_REQUEST );
         wifictl_send_event_cb( WIFICTL_OFF, (void *)"" );
     #ifdef ARDUNIO_NG
         }, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_STOP );
@@ -298,7 +274,6 @@ void wifictl_setup( void ) {
                               1,                /* Priority of the task */
                               &_wifictl_Task,   /* Task handle. */
                               0 );
-    vTaskSuspend( _wifictl_Task );
 #endif
     /*
      * register powermgm callback function
@@ -312,13 +287,6 @@ void wifictl_setup( void ) {
     #ifdef ENABLE_MQTT
         mqtt_init();
     # endif
-
-    /**
-     * change here your network for first use if WPS not work
-     * or setup via display not possible
-     */
-    if( !wifictl_is_known( "foo" ) )
-        wifictl_insert_network( "foo", "bar" );
 }
 
 bool wifictl_powermgm_event_cb( EventBits_t event, void *arg ) {
@@ -553,8 +521,8 @@ bool wifictl_insert_network( const char *ssid, const char *password ) {
         strncpy( wifictl_config->networklist[ entry ].password, password, sizeof( wifictl_config->networklist[ entry ].password ) );
         wifictl_save_config();
 #ifndef NATIVE_64BIT
-        WiFi.scanNetworks( true );
-        wifictl_set_event( WIFICTL_SCAN );
+        if ( wifictl_get_event( WIFICTL_ON ) && !WiFi.isConnected() )
+            wifictl_set_event( WIFICTL_SCAN_REQUEST );
 #endif
         retval = true;
         return( retval );
@@ -569,8 +537,8 @@ bool wifictl_insert_network( const char *ssid, const char *password ) {
         strncpy( wifictl_config->networklist[ entry ].password, password, sizeof( wifictl_config->networklist[ entry ].password ) );
         wifictl_save_config();
 #ifndef NATIVE_64BIT
-        WiFi.scanNetworks( true );
-        wifictl_set_event( WIFICTL_SCAN );
+        if ( wifictl_get_event( WIFICTL_ON ) && !WiFi.isConnected() )
+            wifictl_set_event( WIFICTL_SCAN_REQUEST );
 #endif
         retval = true;
         return( retval );
@@ -594,9 +562,6 @@ void wifictl_on( void ) {
 #endif
     }
     wifictl_set_event( WIFICTL_ON_REQUEST | WIFICTL_FIRST_RUN );
-#ifndef NATIVE_64BIT
-    vTaskResume( _wifictl_Task );
-#endif
 }
 
 void wifictl_off( void ) {
@@ -620,9 +585,6 @@ void wifictl_off( void ) {
     }
 
     wifictl_set_event( WIFICTL_OFF_REQUEST );
-#ifndef NATIVE_64BIT
-    vTaskResume( _wifictl_Task );
-#endif
 }
 
 void wifictl_standby( void ) {
@@ -636,7 +598,7 @@ void wifictl_standby( void ) {
 
     log_d("request wifictl standby");
     wifictl_off();
-    while( wifictl_get_event( WIFICTL_ACTIVE | WIFICTL_CONNECT | WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_SCAN | WIFICTL_WPS_REQUEST ) ) { 
+    while( wifictl_get_event( WIFICTL_ACTIVE | WIFICTL_CONNECT | WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_SCAN | WIFICTL_SCAN_REQUEST | WIFICTL_WPS_REQUEST ) ) {
 #ifndef NATIVE_64BIT
         yield();
 #endif
@@ -710,7 +672,14 @@ void wifictl_Task( lv_task_t * task ) {
         log_w("confused by wifictl on/off at the same time. off request accept");
     }
 
-    if ( wifictl_get_event( WIFICTL_OFF_REQUEST ) ) {
+    if ( wifictl_get_event( WIFICTL_SCAN_REQUEST ) ) {
+        WiFi.scanNetworks( true );
+
+        log_d("request wifictl scan started");
+        wifictl_set_event( WIFICTL_SCAN );
+        wifictl_clear_event( WIFICTL_SCAN_REQUEST );
+    }
+    else if ( wifictl_get_event( WIFICTL_OFF_REQUEST ) ) {
         log_d("request wifictl off done");
         wifictl_set_event( WIFICTL_OFF );
         wifictl_clear_event( WIFICTL_ON );
@@ -750,19 +719,30 @@ void wifictl_Task( void * pvParameters ) {
         }
 
         if ( wifictl_get_event( WIFICTL_OFF_REQUEST ) ) {
+            WiFi.disconnect(true);
             WiFi.mode( WIFI_OFF );
+            esp_wifi_stop();
+
             log_d("request wifictl off done");
             wifictl_set_event( WIFICTL_OFF );
-            wifictl_clear_event( WIFICTL_ON );
+            wifictl_clear_event( WIFICTL_ON | WIFICTL_ON_REQUEST | WIFICTL_OFF_REQUEST | WIFICTL_SCAN_REQUEST | WIFICTL_ACTIVE | WIFICTL_CONNECT );
         }
         else if ( wifictl_get_event( WIFICTL_ON_REQUEST ) ) {
+            esp_wifi_start();
             WiFi.mode( WIFI_STA );
+
             log_d("request wifictl on done");
-            wifictl_set_event( WIFICTL_ON );
-            wifictl_clear_event( WIFICTL_OFF );
+            wifictl_set_event( WIFICTL_ON | WIFICTL_SCAN_REQUEST );
+            wifictl_clear_event( WIFICTL_OFF | WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_CONNECT );
         }
-        wifictl_clear_event( WIFICTL_OFF_REQUEST | WIFICTL_ACTIVE | WIFICTL_CONNECT | WIFICTL_SCAN | WIFICTL_ON_REQUEST );
-        vTaskSuspend( _wifictl_Task );
+        else if ( wifictl_get_event( WIFICTL_SCAN_REQUEST ) ) {
+            int res = WiFi.scanNetworks( true );
+            log_i("WiFi WIFICTL_SCAN: scanNetworks %i", res);
+
+            log_i("request wifictl scan started");
+            wifictl_set_event( WIFICTL_SCAN );
+            wifictl_clear_event( WIFICTL_SCAN_REQUEST );
+        }
     }
 }
 #endif

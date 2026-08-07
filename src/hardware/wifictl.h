@@ -54,10 +54,11 @@
         WIFICTL_WPS_FAILED             = _BV(10),           /** @brief wifi wps auth request failed event */
         WIFICTL_MSG                    = _BV(12),           /** @brief wifi info msg event */
         WIFICTL_SCAN                   = _BV(13),           /** @brief wifi scan event */
-        WIFICTL_SCAN_DONE              = _BV(14),           /** @brief wifi scan done event */
-        WIFICTL_SCAN_ENTRY             = _BV(15),           /** @brief wifi scan entry event */
-        WIFICTL_FIRST_RUN              = _BV(16),           /** @brief wifi first run preventer */
-        WIFICTL_AUTOON                 = _BV(17)            /** @brief wifi autoon event */
+        WIFICTL_SCAN_REQUEST           = _BV(14),           /** @brief wifi scan request event */
+        WIFICTL_SCAN_DONE              = _BV(15),           /** @brief wifi scan done event */
+        WIFICTL_SCAN_ENTRY             = _BV(16),           /** @brief wifi scan entry event */
+        WIFICTL_FIRST_RUN              = _BV(17),           /** @brief wifi first run preventer */
+        WIFICTL_AUTOON                 = _BV(18)            /** @brief wifi autoon event */
     };
     /**
      * @brief setup wifi controller routine
