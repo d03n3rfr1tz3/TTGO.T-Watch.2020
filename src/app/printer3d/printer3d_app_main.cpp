@@ -83,6 +83,8 @@ lv_obj_t* printer3d_printbed_temp;
     lv_obj_t* printer3d_video_img;
 
     #define PRINTER3D_MJPEG_STRIP_H          16
+    #define PRINTER3D_MJPEG_SCALE_ONE  ( 1 << 16 ) /** @brief q16 step of 1.0, the decoder output is shown as it is */
+    #define PRINTER3D_MJPEG_SCALE_MAX      2048    /** @brief widest decoder output the q16 arithmetic stays exact for */
     #define PRINTER3D_MJPEG_READ_TIMEOUT   2000    /** @brief ms without a single byte before a read gives up */
     #define PRINTER3D_MJPEG_SEEK_MAX     262144    /** @brief max bytes discarded while looking for the next frame */
     #define PRINTER3D_MJPEG_STALL_TIMEOUT 10000    /** @brief ms without a decoded frame before the stream is dropped */
@@ -99,14 +101,20 @@ lv_obj_t* printer3d_printbed_temp;
     static uint64_t mjpeg_nextmillis = 0;           /** @brief reconnect window, independent of the printer poll */
     static bool mjpeg_visible = false;              /** @brief video tile is the tile on screen */
     static uint8_t mjpeg_scale = 0;                 /** @brief jd_decomp scale, 0..3 */
-    static int32_t mjpeg_crop_x = 0;                /** @brief scaled source column shown at screen x 0 */
-    static int32_t mjpeg_crop_y = 0;                /** @brief scaled source row shown at screen y 0 */
+    static uint32_t mjpeg_step = PRINTER3D_MJPEG_SCALE_ONE; /** @brief q16 shrink applied on top of jd_decomp */
+    static int32_t mjpeg_final_w = 0;               /** @brief image width after mjpeg_step, before cropping */
+    static int32_t mjpeg_final_h = 0;               /** @brief image height after mjpeg_step, before cropping */
+    static int32_t mjpeg_crop_x = 0;                /** @brief final image column shown at screen x 0 */
+    static int32_t mjpeg_crop_y = 0;                /** @brief final image row shown at screen y 0 */
     static int32_t mjpeg_dst_x = 0;                 /** @brief left edge of the image on screen */
     static int32_t mjpeg_dst_w = 0;                 /** @brief visible width of the image, strip stride */
     static int32_t mjpeg_strip_top = -1;            /** @brief source row of the strip being collected */
     static int32_t mjpeg_strip_y = 0;               /** @brief screen row the strip starts at */
     static int32_t mjpeg_strip_h = 0;               /** @brief rows collected in the strip */
     static int32_t mjpeg_strip_skip = 0;            /** @brief source rows cropped off the top of the strip */
+    static int32_t mjpeg_strip_dy = 0;              /** @brief first final image row of the strip, resampling only */
+    static int32_t mjpeg_next_dy = 0;               /** @brief next final image row not produced yet */
+    static int32_t mjpeg_next_dx = 0;               /** @brief next final image column not produced yet */
 #endif
 
 LV_IMG_DECLARE(refresh_32px);
@@ -820,10 +828,36 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         mjpeg_strip_h = 0;
     }
 
-    static int32_t printer3d_mjpeg_output(JDEC* decoder, void* data, JRECT* rect) {
-        if (!printer3d_state || !printer3d_open_state) return 0;
-        if (!mjpeg_frame) return 0;
+    /** @brief write one rgb888 pixel in the color depth of the display */
+    static inline void printer3d_mjpeg_put_pixel( uint8_t* dst, uint8_t r, uint8_t g, uint8_t b ) {
+        #if LV_COLOR_DEPTH == 32
+            dst[ 0 ] = b;
+            dst[ 1 ] = g;
+            dst[ 2 ] = r;
+            dst[ 3 ] = 0xff;
+        #elif LV_COLOR_DEPTH == 16
+            uint32_t col_16bit = ( r & 0xf8 ) << 8;
+            col_16bit |= ( g & 0xFC ) << 3;
+            col_16bit |= ( b >> 3 );
+            #ifdef LV_BIG_ENDIAN_SYSTEM
+                dst[ 0 ] = col_16bit >> 8;
+                dst[ 1 ] = col_16bit & 0xff;
+            #else
+                dst[ 0 ] = col_16bit & 0xff;
+                dst[ 1 ] = col_16bit >> 8;
+            #endif
+        #elif LV_COLOR_DEPTH == 8
+            uint8_t col_8bit = ( r & 0xC0 );
+            col_8bit |= ( g & 0xe0 ) >> 2;
+            col_8bit |= ( b & 0xe0 ) >> 5;
+            dst[ 0 ] = col_8bit;
+        #else
+            #error Unsupported LV_COLOR_DEPTH
+        #endif
+    }
 
+    /** @brief the jd_decomp scale already fits the screen, the block is copied pixel by pixel */
+    static int32_t printer3d_mjpeg_output_copy( void* data, JRECT* rect ) {
         const int32_t src_width = rect->right - rect->left + 1;
 
         // a new row starts, push the collected strip and set up the next one
@@ -860,40 +894,111 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
             uint8_t* buffer = (uint8_t*)data + ( ( row + mjpeg_strip_skip ) * src_width + skip ) * 3;
             uint32_t offset = row * mjpeg_dst_w * pixelsize + start;
 
-            #if LV_COLOR_DEPTH == 32
-                for ( int32_t i = 0; i < copy_width; i++ ) {
-                    mjpeg_frame[offset + 3] = 0xff;
-                    mjpeg_frame[offset + 2] = *buffer++;
-                    mjpeg_frame[offset + 1] = *buffer++;
-                    mjpeg_frame[offset + 0] = *buffer++;
-                    offset += 4;
-                }
-            #elif LV_COLOR_DEPTH == 16
-                for ( int32_t i = 0; i < copy_width; i++ ) {
-                    uint32_t col_16bit = (*buffer++ & 0xf8) << 8;
-                    col_16bit |= (*buffer++ & 0xFC) << 3;
-                    col_16bit |= (*buffer++ >> 3);
-                    #ifdef LV_BIG_ENDIAN_SYSTEM
-                        mjpeg_frame[offset++] = col_16bit >> 8;
-                        mjpeg_frame[offset++] = col_16bit & 0xff;
-                    #else
-                        mjpeg_frame[offset++] = col_16bit & 0xff;
-                        mjpeg_frame[offset++] = col_16bit >> 8;
-                    #endif
-                }
-            #elif LV_COLOR_DEPTH == 8
-                for ( int32_t i = 0; i < copy_width; i++ ) {
-                    uint8_t col_8bit = (*buffer++ & 0xC0);
-                    col_8bit |= (*buffer++ & 0xe0) >> 2;
-                    col_8bit |= (*buffer++ & 0xe0) >> 5;
-                    mjpeg_frame[offset++] = col_8bit;
-                }
-            #else
-                #error Unsupported LV_COLOR_DEPTH
-            #endif
+            for ( int32_t i = 0; i < copy_width; i++ ) {
+                printer3d_mjpeg_put_pixel( mjpeg_frame + offset, buffer[ 0 ], buffer[ 1 ], buffer[ 2 ] );
+                buffer += 3;
+                offset += pixelsize;
+            }
         }
 
         return 1;
+    }
+
+    /** @brief bilinear shrink between two jd_decomp steps */
+    static int32_t printer3d_mjpeg_output_resample( void* data, JRECT* rect ) {
+        const int32_t src_width = rect->right - rect->left + 1;
+        const int32_t pixelsize = sizeof( lv_color_t );
+
+        // a new mcu row starts, push the collected strip and take the final rows this block covers
+        if ( rect->top != mjpeg_strip_top ) {
+            printer3d_mjpeg_strip_flush();
+            mjpeg_strip_top = rect->top;
+            mjpeg_next_dx = 0;
+
+            // a truncated mcu row leaves the counter behind, never sample above the block
+            while ( mjpeg_next_dy < mjpeg_final_h &&
+                    ( int32_t )( ( uint32_t )mjpeg_next_dy * mjpeg_step >> 16 ) < rect->top ) mjpeg_next_dy++;
+
+            mjpeg_strip_dy = mjpeg_next_dy;
+            while ( mjpeg_next_dy < mjpeg_final_h &&
+                    ( int32_t )( ( uint32_t )mjpeg_next_dy * mjpeg_step >> 16 ) <= rect->bottom ) mjpeg_next_dy++;
+
+            int32_t first = mjpeg_strip_dy - mjpeg_crop_y;
+            int32_t last = mjpeg_next_dy - 1 - mjpeg_crop_y;
+            mjpeg_strip_skip = first < 0 ? -first : 0;
+            mjpeg_strip_y = first + mjpeg_strip_skip;
+            if ( last > RES_Y_MAX - 1 ) last = RES_Y_MAX - 1;
+            mjpeg_strip_h = last - mjpeg_strip_y + 1;
+            if ( mjpeg_strip_h < 0 ) mjpeg_strip_h = 0;
+            if ( mjpeg_strip_h > PRINTER3D_MJPEG_STRIP_H ) mjpeg_strip_h = PRINTER3D_MJPEG_STRIP_H;
+        }
+
+        // take the final columns this block covers, the counter runs on even if nothing is drawn
+        while ( mjpeg_next_dx < mjpeg_final_w &&
+                ( int32_t )( ( uint32_t )mjpeg_next_dx * mjpeg_step >> 16 ) < rect->left ) mjpeg_next_dx++;
+
+        int32_t dx_first = mjpeg_next_dx;
+        while ( mjpeg_next_dx < mjpeg_final_w &&
+                ( int32_t )( ( uint32_t )mjpeg_next_dx * mjpeg_step >> 16 ) <= rect->right ) mjpeg_next_dx++;
+        int32_t dx_last = mjpeg_next_dx - 1;
+
+        if ( mjpeg_strip_h <= 0 ) return 1;
+
+        // clip the columns against the visible part of the image
+        if ( dx_first - mjpeg_crop_x < mjpeg_dst_x ) dx_first = mjpeg_dst_x + mjpeg_crop_x;
+        if ( dx_last - mjpeg_crop_x > mjpeg_dst_x + mjpeg_dst_w - 1 ) dx_last = mjpeg_dst_x + mjpeg_dst_w - 1 + mjpeg_crop_x;
+        if ( dx_last < dx_first ) return 1;
+
+        const int32_t last_row = rect->bottom - rect->top;
+        const int32_t last_col = src_width - 1;
+        const int32_t start = ( dx_first - mjpeg_crop_x - mjpeg_dst_x ) * pixelsize;
+
+        for ( int32_t row = 0; row < mjpeg_strip_h; row++ ) {
+            uint32_t ypos = ( uint32_t )( mjpeg_strip_dy + mjpeg_strip_skip + row ) * mjpeg_step;
+            int32_t sy = ( int32_t )( ypos >> 16 ) - rect->top;
+            uint32_t wy = ( ypos >> 8 ) & 0xff;
+            // the row below belongs to the next mcu row, that pixel stays nearest neighbour
+            if ( sy >= last_row ) { sy = last_row; wy = 0; }
+
+            const uint8_t* top = (const uint8_t*)data + sy * src_width * 3;
+            const uint8_t* bottom = wy ? top + src_width * 3 : top;
+            uint32_t offset = row * mjpeg_dst_w * pixelsize + start;
+
+            for ( int32_t dx = dx_first; dx <= dx_last; dx++ ) {
+                uint32_t xpos = ( uint32_t )dx * mjpeg_step;
+                int32_t sx = ( int32_t )( xpos >> 16 ) - rect->left;
+                uint32_t wx = ( xpos >> 8 ) & 0xff;
+                // same at the right edge of the block
+                if ( sx >= last_col ) { sx = last_col; wx = 0; }
+
+                const uint8_t* a = top + sx * 3;
+                const uint8_t* b = bottom + sx * 3;
+                const uint8_t* a2 = wx ? a + 3 : a;
+                const uint8_t* b2 = wx ? b + 3 : b;
+
+                uint8_t rgb[ 3 ];
+                for ( int32_t i = 0; i < 3; i++ ) {
+                    uint32_t upper = a[ i ] * ( 256 - wx ) + a2[ i ] * wx;
+                    uint32_t lower = b[ i ] * ( 256 - wx ) + b2[ i ] * wx;
+                    rgb[ i ] = ( uint8_t )( ( upper * ( 256 - wy ) + lower * wy ) >> 16 );
+                }
+
+                printer3d_mjpeg_put_pixel( mjpeg_frame + offset, rgb[ 0 ], rgb[ 1 ], rgb[ 2 ] );
+                offset += pixelsize;
+            }
+        }
+
+        return 1;
+    }
+
+    static int32_t printer3d_mjpeg_output( JDEC* decoder, void* data, JRECT* rect ) {
+        if (!printer3d_state || !printer3d_open_state) return 0;
+        if (!mjpeg_frame) return 0;
+
+        if ( mjpeg_step == PRINTER3D_MJPEG_SCALE_ONE )
+            return printer3d_mjpeg_output_copy( data, rect );
+
+        return printer3d_mjpeg_output_resample( data, rect );
     }
 
     static void printer3d_mjpeg_set_visible( bool visible ) {
@@ -1042,19 +1147,32 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
 
                     int32_t scaled_w = decoder->width >> mjpeg_scale;
                     int32_t scaled_h = decoder->height >> mjpeg_scale;
-                    mjpeg_crop_x = ( scaled_w - RES_X_MAX ) / 2;
-                    mjpeg_crop_y = ( scaled_h - RES_Y_MAX ) / 2;
+
+                    // shrink the rest of the way, the smaller step is the one that still covers the screen
+                    uint32_t step_x = ( ( uint32_t )scaled_w << 16 ) / RES_X_MAX;
+                    uint32_t step_y = ( ( uint32_t )scaled_h << 16 ) / RES_Y_MAX;
+                    mjpeg_step = step_x < step_y ? step_x : step_y;
+                    if ( mjpeg_step < PRINTER3D_MJPEG_SCALE_ONE ||
+                         scaled_w > PRINTER3D_MJPEG_SCALE_MAX || scaled_h > PRINTER3D_MJPEG_SCALE_MAX )
+                        mjpeg_step = PRINTER3D_MJPEG_SCALE_ONE;
+
+                    mjpeg_final_w = ( ( uint32_t )scaled_w << 16 ) / mjpeg_step;
+                    mjpeg_final_h = ( ( uint32_t )scaled_h << 16 ) / mjpeg_step;
+                    mjpeg_crop_x = ( mjpeg_final_w - RES_X_MAX ) / 2;
+                    mjpeg_crop_y = ( mjpeg_final_h - RES_Y_MAX ) / 2;
 
                     int32_t left = -mjpeg_crop_x;
-                    int32_t right = left + scaled_w - 1;
+                    int32_t right = left + mjpeg_final_w - 1;
                     if ( left < 0 ) left = 0;
                     if ( right > RES_X_MAX - 1 ) right = RES_X_MAX - 1;
                     mjpeg_dst_x = left;
                     mjpeg_dst_w = right - left + 1;
                     mjpeg_strip_top = -1;
                     mjpeg_strip_h = 0;
+                    mjpeg_next_dy = 0;
+                    mjpeg_next_dx = 0;
 
-                    log_d("3dprinter shows a %dx%d video frame with scale 1/%d and crop %d/%d", decoder->width, decoder->height, 1 << mjpeg_scale, mjpeg_crop_x, mjpeg_crop_y);
+                    log_d("3dprinter shows a %dx%d video frame as %dx%d with scale 1/%d, step %d/65536 and crop %d/%d", decoder->width, decoder->height, mjpeg_final_w, mjpeg_final_h, 1 << mjpeg_scale, mjpeg_step, mjpeg_crop_x, mjpeg_crop_y);
 
                     result = jd_decomp( decoder, printer3d_mjpeg_output, mjpeg_scale );
                     printer3d_mjpeg_strip_flush();
