@@ -118,8 +118,9 @@ icon_t *app_register( const char* appname, const lv_img_dsc_t *icon, lv_event_cb
     lv_obj_align( app->icon_indicator, app->icon_cont, LV_ALIGN_IN_TOP_RIGHT, 0, 0 );
     lv_obj_set_hidden( app->icon_indicator, true );
     mainbar_add_slide_element( app->icon_img );
-    
-    lv_obj_invalidate( lv_scr_act() );
+
+    lv_obj_invalidate( app->icon_cont );
+    lv_obj_invalidate( app->label );
 
     return( app );
 }
@@ -152,7 +153,7 @@ void app_set_indicator( icon_t *app, icon_indicator_t indicator ) {
     }
     lv_obj_align( app->icon_indicator, app->icon_cont, LV_ALIGN_IN_TOP_RIGHT, 0, 0 );
     lv_obj_set_hidden( app->icon_indicator, false );
-    lv_obj_invalidate( lv_scr_act() );
+    lv_obj_invalidate( app->icon_indicator );
     gui_give();
 }
 
@@ -167,7 +168,7 @@ void app_hide_indicator( icon_t *app ) {
 
     gui_take();
     lv_obj_set_hidden( app->icon_indicator, true );
-    lv_obj_invalidate( lv_scr_act() );
+    lv_obj_invalidate( app->icon_cont );
     gui_give();
 }
 
@@ -186,7 +187,7 @@ void app_set_icon( icon_t *app, lv_obj_t *icon ) {
     lv_imgbtn_set_src( app->icon_img, LV_BTN_STATE_CHECKED_PRESSED, icon);
     lv_obj_reset_style_list( app->icon_img, LV_OBJ_PART_MAIN );
     lv_obj_align( app->icon_img , app->icon_cont, LV_ALIGN_IN_TOP_LEFT, 0, 0 );
-    lv_obj_invalidate( lv_scr_act() );
+    lv_obj_invalidate( app->icon_cont );
 }
 
 int32_t app_get_active_app_entrys( void ) {

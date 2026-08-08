@@ -55,9 +55,11 @@ volatile bool printer3d_state = false;
 volatile bool printer3d_open_state = false;
 static uint64_t nextmillis = 0;
 
-static uint8_t* mjpeg_buffer = nullptr;
-static uint8_t* mjpeg_frame = nullptr;
-static char* mjpeg_url;
+#ifndef NATIVE_64BIT
+    static uint8_t* mjpeg_buffer = nullptr;
+    static uint8_t* mjpeg_frame = nullptr;
+    static char* mjpeg_url;
+#endif
 
 lv_obj_t *printer3d_app_main_tile = NULL;
 lv_obj_t *printer3d_app_video_tile = NULL;
@@ -79,10 +81,12 @@ lv_obj_t* printer3d_printbed_temp;
 #ifndef NATIVE_64BIT
     lv_style_t printer3d_app_video_style;
     lv_obj_t* printer3d_video_img;
-    
-    #define PRINTER3D_MJPEG_STRIP_H     16
-    #define PRINTER3D_MJPEG_READ_TIMEOUT 2000       /** @brief ms without a single byte before a read gives up */
-    #define PRINTER3D_MJPEG_SEEK_MAX    262144      /** @brief max bytes discarded while looking for the next frame */
+
+    #define PRINTER3D_MJPEG_STRIP_H          16
+    #define PRINTER3D_MJPEG_READ_TIMEOUT   2000    /** @brief ms without a single byte before a read gives up */
+    #define PRINTER3D_MJPEG_SEEK_MAX     262144    /** @brief max bytes discarded while looking for the next frame */
+    #define PRINTER3D_MJPEG_STALL_TIMEOUT 10000    /** @brief ms without a decoded frame before the stream is dropped */
+    #define PRINTER3D_MJPEG_RETRY          5000    /** @brief ms before a dropped stream is picked up again */
 
     typedef struct {
         WiFiClient* stream;                         /** @brief the http body */
@@ -92,6 +96,7 @@ lv_obj_t* printer3d_printbed_temp;
         uint16_t pending_pos;
     } mjpeg_stream_src_t;
 
+    static uint64_t mjpeg_nextmillis = 0;           /** @brief reconnect window, independent of the printer poll */
     static bool mjpeg_visible = false;              /** @brief video tile is the tile on screen */
     static uint8_t mjpeg_scale = 0;                 /** @brief jd_decomp scale, 0..3 */
     static int32_t mjpeg_crop_x = 0;                /** @brief scaled source column shown at screen x 0 */
@@ -120,13 +125,16 @@ static bool printer3d_main_wifictl_event_cb( EventBits_t event, void *arg );
     TaskHandle_t printer3d_refresh_handle;
     TaskHandle_t printer3d_mjpeg_handle;
     static volatile bool printer3d_refresh_running = false;
+    static volatile bool printer3d_mjpeg_running = false;
 #endif
 printer3d_result_t printer3d_refresh_result;
 
 void printer3d_refresh(void *parameter);
 void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const char* command);
 void printer3d_app_task( lv_task_t * task );
-void printer3d_mjpeg_init( void );
+#ifndef NATIVE_64BIT
+    void printer3d_mjpeg_init( void );
+#endif
 
 void printer3d_app_main_setup( uint32_t tile_num ) {
 
@@ -237,7 +245,7 @@ void printer3d_app_main_setup( uint32_t tile_num ) {
     #endif
 
     // callbacks
-    powermgm_register_cb( POWERMGM_STANDBY | POWERMGM_STANDBY_REQUEST, printer3d_powermgm_event_cb, "printer3d powermgm");
+    powermgm_register_cb( POWERMGM_STANDBY | POWERMGM_STANDBY_REQUEST | POWERMGM_WAKEUP, printer3d_powermgm_event_cb, "printer3d powermgm");
     wifictl_register_cb( WIFICTL_OFF | WIFICTL_CONNECT_IP | WIFICTL_DISCONNECT, printer3d_main_wifictl_event_cb, "printer3d main" );
 
     // create an task that runs every second
@@ -247,15 +255,42 @@ void printer3d_app_main_setup( uint32_t tile_num ) {
 static void printer3d_setup_activate_callback ( void ) {
     printer3d_open_state = true;
     nextmillis = 0;
+    #ifndef NATIVE_64BIT
+        mjpeg_nextmillis = 0;
+    #endif
 }
 
 static void printer3d_setup_hibernate_callback ( void ) {
     printer3d_open_state = false;
     nextmillis = 0;
+    #ifndef NATIVE_64BIT
+        mjpeg_nextmillis = 0;
+    #endif
 
     gui_take();
     statusbar_hide( false );
     gui_give();
+}
+
+/** @brief true if one of the app tiles is the tile currently on screen */
+static bool printer3d_tile_on_screen( void ) {
+    lv_area_t area;
+    bool onscreen = false;
+
+    gui_take();
+    if ( printer3d_app_main_tile != NULL ) {
+        lv_obj_get_coords( printer3d_app_main_tile, &area );
+        onscreen = area.x1 == 0 && area.y1 == 0;
+    }
+    #ifndef NATIVE_64BIT
+        if ( !onscreen && printer3d_app_video_tile != NULL && strlen( printer3d_get_config()->camera ) > 0 ) {
+            lv_obj_get_coords( printer3d_app_video_tile, &area );
+            onscreen = area.x1 == 0 && area.y1 == 0;
+        }
+    #endif
+    gui_give();
+
+    return( onscreen );
 }
 
 static bool printer3d_powermgm_event_cb(EventBits_t event, void *arg)
@@ -266,6 +301,13 @@ static bool printer3d_powermgm_event_cb(EventBits_t event, void *arg)
             break;
         case( POWERMGM_STANDBY_REQUEST ):
             printer3d_open_state = false;
+            break;
+        case( POWERMGM_WAKEUP ):
+            printer3d_open_state = printer3d_tile_on_screen();
+            nextmillis = 0;
+            #ifndef NATIVE_64BIT
+                mjpeg_nextmillis = 0;
+            #endif
             break;
     }
     return( true );
@@ -336,11 +378,14 @@ void printer3d_app_task( lv_task_t * task ) {
                     printer3d_refresh_running = false;
             }
         #endif
+    }
 
-        if (printer3d_open_state) {
+    #ifndef NATIVE_64BIT
+        if (printer3d_open_state && mjpeg_nextmillis < millis()) {
+            mjpeg_nextmillis = millis() + PRINTER3D_MJPEG_RETRY;
             printer3d_mjpeg_init();
         }
-    }
+    #endif
 
     if (printer3d_refresh_result.changed) {
         printer3d_refresh_result.changed = false;
@@ -587,9 +632,13 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
     }
 
     size_t pos = 0;
-    while (client.available() && pos < buffer_size - 1) {
-        size_t got = client.readBytes(buffer + pos, buffer_size - 1 - pos);
-        if (!got) break;
+    while (pos < buffer_size - 1) {
+        size_t avail = client.available();
+        if (!avail) break;
+        if (avail > buffer_size - 1 - pos) avail = buffer_size - 1 - pos;
+
+        int got = client.read((uint8_t*)buffer + pos, avail);
+        if (got <= 0) break;
         pos += got;
     }
     buffer[pos] = '\0';
@@ -606,16 +655,18 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         while ( src->pending_pos < src->pending_len && got < size )
             buffer[ got++ ] = src->pending[ src->pending_pos++ ];
 
-        // WiFiClient::read never blocks, so the wait needs an own deadline and an own yield
         while ( got < size ) {
+            if ( !printer3d_state || !printer3d_open_state )
+                break;
+            if ( !src->stream->connected() && !src->stream->available() )
+                break;
+
             int received = src->stream->read( buffer + got, size - got );
             if ( received > 0 ) {
                 got += received;
                 continue;
             }
             if ( received < 0 )
-                break;
-            if ( !src->stream->connected() && !src->stream->available() )
                 break;
             if ( millis() > deadline ) {
                 log_d("3dprinter timed out while reading the video stream");
@@ -882,12 +933,6 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         int httpcode = mjpeg_client.GET();
         if (httpcode < 200 || httpcode >= 400) {
             log_w("3dprinter could not connect to video stream at %s", mjpeg_url);
-            
-            if (mjpeg_buffer != nullptr) {
-                free(mjpeg_buffer);
-                mjpeg_buffer = nullptr;
-            }
-            return;
         } else {
             log_i("3dprinter connected to video stream at %s", mjpeg_url);
 
@@ -945,6 +990,7 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
             uint8_t failcount = 0;
             uint32_t framecount = 0;
             uint64_t framemillis = millis();
+            uint64_t stallmillis = millis();
             bool laststream = false;
             while (src != nullptr && !laststream) {
                 if (!printer3d_state || !printer3d_open_state) {
@@ -953,6 +999,11 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                 }
                 if (!stream.connected() && !stream.available()) {
                     log_w("3dprinter lost connection to video stream at %s", mjpeg_url);
+                    break;
+                }
+                // a half open connection stays connected without ever delivering again
+                if (millis() - stallmillis >= PRINTER3D_MJPEG_STALL_TIMEOUT) {
+                    log_w("3dprinter got no video frame from %s for %d ms", mjpeg_url, PRINTER3D_MJPEG_STALL_TIMEOUT);
                     break;
                 }
 
@@ -1011,6 +1062,7 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                     if (result == JDR_OK) {
                         log_d("3dprinter successfully decoded a %dx%d video frame", decoder->width, decoder->height);
                         framecount++;
+                        stallmillis = millis();
                     } else {
                         log_d("3dprinter could not decode a video frame");
                     }
@@ -1072,28 +1124,33 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
     void printer3d_mjpeg_task(void *parameter) {
         printer3d_mjpeg_stream();
 
+        printer3d_mjpeg_handle = NULL;
+        printer3d_mjpeg_running = false;
         vTaskDelete(NULL);
     }
-#endif
 
-void printer3d_mjpeg_init( void ) {
-    if (!printer3d_state) return;
-    if (!printer3d_open_state) return;
+    void printer3d_mjpeg_init( void ) {
+        if (!printer3d_state) return;
+        if (!printer3d_open_state) return;
+        if (printer3d_mjpeg_running) return;
 
-    #ifdef NATIVE_64BIT
-        return;
-    #endif
+        printer3d_config_t *printer3d_config = printer3d_get_config();
+        if (mjpeg_buffer == nullptr && strlen(printer3d_config->camera) > 0) {
+            mjpeg_url = printer3d_config->camera;
 
-    printer3d_config_t *printer3d_config = printer3d_get_config();
-    if (mjpeg_buffer == nullptr && strlen(printer3d_config->camera) > 0) {
-        mjpeg_url = printer3d_config->camera;
+            mjpeg_buffer = (uint8_t*)malloc(PRINTER3D_MJPEG_BUFFER_SIZE);
+            if (mjpeg_buffer == nullptr) {
+                log_e("3dprinter could not allocate the video stream buffer");
+                return;
+            }
 
-        mjpeg_buffer = (uint8_t*)malloc(PRINTER3D_MJPEG_BUFFER_SIZE);
-        if (mjpeg_buffer == nullptr) {
-            log_e("3dprinter could not allocate the video stream buffer");
-            return;
+            printer3d_mjpeg_running = true;
+            if (xTaskCreatePinnedToCore(printer3d_mjpeg_task, "printer3d_mjpeg", 4096, NULL, 1, &printer3d_mjpeg_handle, 1) != pdPASS) {
+                log_e("3dprinter could not start the video stream task");
+                printer3d_mjpeg_running = false;
+                free(mjpeg_buffer);
+                mjpeg_buffer = nullptr;
+            }
         }
-
-        xTaskCreatePinnedToCore(printer3d_mjpeg_task, "printer3d_mjpeg", 4096, NULL, 1, &printer3d_mjpeg_handle, 1);
     }
-}
+#endif
