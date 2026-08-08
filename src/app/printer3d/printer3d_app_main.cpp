@@ -81,6 +81,17 @@ lv_obj_t* printer3d_printbed_temp;
     lv_obj_t* printer3d_video_img;
     
     #define PRINTER3D_MJPEG_STRIP_H     16
+    #define PRINTER3D_MJPEG_READ_TIMEOUT 2000       /** @brief ms without a single byte before a read gives up */
+    #define PRINTER3D_MJPEG_SEEK_MAX    262144      /** @brief max bytes discarded while looking for the next frame */
+
+    typedef struct {
+        WiFiClient* stream;                         /** @brief the http body */
+        size_t remaining;                           /** @brief unread bytes of the current frame, SIZE_MAX if unknown */
+        uint8_t pending[ JD_SZBUF ];                /** @brief bytes read ahead, handed out before the socket */
+        uint16_t pending_len;
+        uint16_t pending_pos;
+    } mjpeg_stream_src_t;
+
     static bool mjpeg_visible = false;              /** @brief video tile is the tile on screen */
     static uint8_t mjpeg_scale = 0;                 /** @brief jd_decomp scale, 0..3 */
     static int32_t mjpeg_crop_x = 0;                /** @brief scaled source column shown at screen x 0 */
@@ -587,26 +598,162 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
 }
 
 #ifndef NATIVE_64BIT
+    static uint32_t printer3d_mjpeg_read( mjpeg_stream_src_t* src, uint8_t* buffer, uint32_t size ) {
+        uint64_t deadline = millis() + PRINTER3D_MJPEG_READ_TIMEOUT;
+        uint32_t got = 0;
+
+        // hand out what has been read ahead before touching the socket
+        while ( src->pending_pos < src->pending_len && got < size )
+            buffer[ got++ ] = src->pending[ src->pending_pos++ ];
+
+        // WiFiClient::read never blocks, so the wait needs an own deadline and an own yield
+        while ( got < size ) {
+            int received = src->stream->read( buffer + got, size - got );
+            if ( received > 0 ) {
+                got += received;
+                continue;
+            }
+            if ( received < 0 )
+                break;
+            if ( !src->stream->connected() && !src->stream->available() )
+                break;
+            if ( millis() > deadline ) {
+                log_d("3dprinter timed out while reading the video stream");
+                break;
+            }
+            delay( 1 );
+        }
+
+        return got;
+    }
+
+    static uint32_t printer3d_mjpeg_skip( mjpeg_stream_src_t* src, uint32_t size ) {
+        uint8_t skip[ 64 ];
+        uint32_t done = 0;
+
+        while ( done < size ) {
+            uint32_t chunk = ( size - done ) > sizeof( skip ) ? sizeof( skip ) : ( size - done );
+            uint32_t got = printer3d_mjpeg_read( src, skip, chunk );
+            if ( !got )
+                break;
+            done += got;
+        }
+
+        return done;
+    }
+
     static uint32_t printer3d_mjpeg_input(JDEC* decoder, uint8_t* buffer, uint32_t size) {
-        WiFiClient* stream = (WiFiClient*)decoder->device;
+        mjpeg_stream_src_t* src = (mjpeg_stream_src_t*)decoder->device;
 
-        // read from the image stream
-        if (buffer) {
-            return stream->readBytes(buffer, size);
-        } else {
-            uint8_t skip[ 64 ];
-            uint32_t done = 0;
+        // never hand out more than belongs to the current frame
+        if ( size > src->remaining )
+            size = src->remaining;
+        if ( !size )
+            return 0;
 
-            while ( done < size ) {
-                uint32_t chunk = ( size - done ) > sizeof( skip ) ? sizeof( skip ) : ( size - done );
-                uint32_t got = stream->readBytes( skip, chunk );
-                if ( !got )
-                    break;
-                done += got;
+        uint32_t got = buffer ? printer3d_mjpeg_read( src, buffer, size )
+                              : printer3d_mjpeg_skip( src, size );
+        src->remaining -= got;
+
+        return got;
+    }
+
+    /** @brief read a single line, returns its length without the line break or -1 if the stream is gone */
+    static int32_t printer3d_mjpeg_read_line( mjpeg_stream_src_t* src, char* line, size_t size ) {
+        size_t pos = 0;
+
+        while ( true ) {
+            uint8_t byte;
+            if ( !printer3d_mjpeg_read( src, &byte, 1 ) )
+                return -1;
+            if ( byte == '\n' )
+                break;
+            if ( byte != '\r' && pos < size - 1 )
+                line[ pos++ ] = ( char )byte;
+        }
+
+        line[ pos ] = '\0';
+        return pos;
+    }
+
+    /** @brief consume the part header of a multipart frame, returns its length or 0 if the server sent none */
+    static size_t printer3d_mjpeg_read_part( mjpeg_stream_src_t* src, const char* boundary, bool* last ) {
+        char line[ 128 ];
+        size_t content_length = 0;
+        bool header = false;
+
+        while ( printer3d_mjpeg_read_line( src, line, sizeof( line ) ) >= 0 ) {
+            // the previous frame ends with a line break, so skip empty lines until the boundary shows up
+            if ( !line[ 0 ] ) {
+                if ( header )
+                    return content_length;
+                continue;
             }
 
-            return done;
+            if ( !header ) {
+                size_t length = strlen( line );
+                header = true;
+
+                // a boundary with a trailing -- closes the stream
+                if ( length >= 4 && !strcmp( line + length - 2, "--" ) ) {
+                    *last = true;
+                    return 0;
+                }
+                if ( boundary[ 0 ] && !strstr( line, boundary ) )
+                    log_d("3dprinter received an unexpected boundary: %s", line);
+                continue;
+            }
+
+            if ( !strncasecmp( line, "content-length:", 15 ) )
+                content_length = strtoul( line + 15, NULL, 10 );
         }
+
+        *last = true;
+        return 0;
+    }
+
+    /** @brief discard bytes until the end of the current image, the stream then stands on the next one */
+    static bool printer3d_mjpeg_seek_eoi( mjpeg_stream_src_t* src ) {
+        uint8_t block[ 64 ];
+        uint32_t scanned = 0;
+        uint8_t last = 0;
+
+        while ( scanned < PRINTER3D_MJPEG_SEEK_MAX ) {
+            // scan what has been read ahead first, it is not copied around
+            if ( src->pending_pos < src->pending_len ) {
+                while ( src->pending_pos < src->pending_len ) {
+                    uint8_t byte = src->pending[ src->pending_pos++ ];
+                    scanned++;
+                    if ( last == 0xFF && byte == 0xD9 )
+                        return true;
+                    last = byte;
+                }
+                continue;
+            }
+
+            // never ask for more than is there, the read would only wait for it
+            int available = src->stream->available();
+            uint32_t want = available > ( int )sizeof( block ) ? sizeof( block )
+                                                               : ( available > 0 ? ( uint32_t )available : 1 );
+            uint32_t got = printer3d_mjpeg_read( src, block, want );
+            if ( !got )
+                return false;
+            scanned += got;
+
+            for ( uint32_t i = 0; i < got; i++ ) {
+                if ( last == 0xFF && block[ i ] == 0xD9 ) {
+                    // push the rest back, the next image starts right here
+                    src->pending_len = got - i - 1;
+                    src->pending_pos = 0;
+                    memcpy( src->pending, block + i + 1, src->pending_len );
+                    return true;
+                }
+                last = block[ i ];
+            }
+        }
+
+        log_w("3dprinter could not find the end of an image in %d bytes", scanned);
+        return false;
     }
 
     static void printer3d_mjpeg_strip_flush( void ) {
@@ -729,6 +876,9 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         mjpeg_client.setTimeout(3000);
         mjpeg_client.begin(mjpeg_url);
 
+        const char* headerkeys[] = { "Content-Type" };
+        mjpeg_client.collectHeaders( headerkeys, 1 );
+
         int httpcode = mjpeg_client.GET();
         if (httpcode < 200 || httpcode >= 400) {
             log_w("3dprinter could not connect to video stream at %s", mjpeg_url);
@@ -741,9 +891,32 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         } else {
             log_i("3dprinter connected to video stream at %s", mjpeg_url);
 
+            // find out how the frames are framed, the media type also tells single images from streams
+            char media[ 32 ] = "";
+            char boundary[ 72 ] = "";
+            String content_type = mjpeg_client.header( "Content-Type" );
+            String content_type_lower = content_type;
+            content_type_lower.toLowerCase();
+
+            int separator = content_type_lower.indexOf( ';' );
+            snprintf( media, sizeof( media ), "%s", ( separator < 0 ? content_type_lower : content_type_lower.substring( 0, separator ) ).c_str() );
+
+            int position = content_type_lower.indexOf( "boundary=" );
+            if ( position >= 0 ) {
+                String value = content_type.substring( position + 9 );
+                int end = value.indexOf( ';' );
+                if ( end >= 0 ) value = value.substring( 0, end );
+                value.replace( "\"", "" );
+                value.trim();
+                snprintf( boundary, sizeof( boundary ), "%s", value.c_str() );
+            }
+
+            bool multipart = !strncmp( media, "multipart/", 10 );
+            log_d("3dprinter video source is of type '%s' with boundary '%s', reading it as %s", media, boundary, multipart ? "multipart" : "plain stream");
+
             // prepare stream
             WiFiClient stream = mjpeg_client.getStream();
-            stream.setTimeout(5);
+            stream.setTimeout(2);
 
             // give it about 3 seconds receive something
             for (uint8_t i = 0; i < 30; i++) {
@@ -758,14 +931,27 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
             JDEC* decoder = mjpeg_frame == nullptr ? nullptr : (JDEC*)MALLOC(sizeof(JDEC));
             if (decoder == nullptr) log_e("3dprinter could not allocate the jpeg decoder");
 
+            // the read ahead buffer is too big for the task stack
+            mjpeg_stream_src_t* src = decoder == nullptr ? nullptr : (mjpeg_stream_src_t*)malloc(sizeof(mjpeg_stream_src_t));
+            if (src == nullptr) log_e("3dprinter could not allocate the video stream reader");
+            else {
+                src->stream = &stream;
+                src->remaining = 0;
+                src->pending_len = 0;
+                src->pending_pos = 0;
+            }
+
             JRESULT result;
             uint8_t failcount = 0;
-            while (decoder != nullptr) {
+            uint32_t framecount = 0;
+            uint64_t framemillis = millis();
+            bool laststream = false;
+            while (src != nullptr && !laststream) {
                 if (!printer3d_state || !printer3d_open_state) {
                     log_i("3dprinter closing connection to video stream at %s", mjpeg_url);
                     break;
                 }
-                if (!stream.connected()) {
+                if (!stream.connected() && !stream.available()) {
                     log_w("3dprinter lost connection to video stream at %s", mjpeg_url);
                     break;
                 }
@@ -773,14 +959,28 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                 printer3d_mjpeg_update_visible();
 
                 // wait for more frames
-                if (!stream.available()) {
+                if (!stream.available() && src->pending_pos >= src->pending_len) {
                     log_d("3dprinter waiting for more data in video stream at %s", mjpeg_url);
                     delay(100);
                     continue;
                 }
 
+                // consume the boundary and the part header, the stream then stands on the image itself
+                size_t framesize = 0;
+                if (multipart) {
+                    framesize = printer3d_mjpeg_read_part( src, boundary, &laststream );
+                    if (laststream) {
+                        log_i("3dprinter reached the end of the video stream at %s", mjpeg_url);
+                        break;
+                    }
+                    if (!framesize) log_d("3dprinter received a video frame without a content length");
+                }
+
+                // without a length the end of the frame can only be found by looking for it
+                src->remaining = framesize ? framesize : SIZE_MAX;
+
                 // decode frames and notify lvgl image
-                result = jd_prepare( decoder, printer3d_mjpeg_input, mjpeg_buffer, PRINTER3D_MJPEG_BUFFER_SIZE, &(stream) );
+                result = jd_prepare( decoder, printer3d_mjpeg_input, mjpeg_buffer, PRINTER3D_MJPEG_BUFFER_SIZE, src );
                 if (result == JDR_OK) {
                     log_d("3dprinter successfully prepared a %dx%d video frame", decoder->width, decoder->height);
 
@@ -810,46 +1010,44 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
 
                     if (result == JDR_OK) {
                         log_d("3dprinter successfully decoded a %dx%d video frame", decoder->width, decoder->height);
+                        framecount++;
                     } else {
                         log_d("3dprinter could not decode a video frame");
+                    }
+
+                    // tjpgd reads ahead in blocks, take the surplus back or the end of the image is lost
+                    if (!framesize && decoder->dctr) {
+                        src->pending_len = decoder->dctr > sizeof( src->pending ) ? sizeof( src->pending ) : decoder->dctr;
+                        src->pending_pos = 0;
+                        memcpy( src->pending, decoder->dptr + 1, src->pending_len );
                     }
 
                     // give the µC some time to breath after each frame
                     failcount = 0;
                     delay(10);
-                } else if (result == JDR_FMT1 || result == JDR_FMT2 || result == JDR_FMT3) {
-                    // close connection after multiple wrong frames
-                    if (result == JDR_FMT2 || result == JDR_FMT3) {
-                        log_w("3dprinter received not supported format or JPEG from %s", mjpeg_url);
-                        if (failcount++ >= 3) break;
-                    } else log_d("3dprinter needs to find the next video frame");
-
-                    // try to jump to the next end-of-image 0xFFD9 marker
-                    bool found = false;
-                    while ( !found && printer3d_state && printer3d_open_state && stream.connected() ) {
-                        uint16_t available = stream.available();
-                        if (!available) {
-                            delay(1);
-                            continue;
-                        }
-
-                        for ( uint16_t i = 0; i < available; i++ ) {
-                            if (stream.read() != 0xFF) continue;
-                            if (stream.read() != 0xD9) continue;
-
-                            log_d("3dprinter found the next video frame");
-                            found = true;
-                            break;
-                        }
-                    }
                 } else {
-                    // read errors on a flaky connection, never spin without a break
-                    log_w("3dprinter could not read a video frame from %s", mjpeg_url);
+                    // wrong marker or read errors on a flaky connection, never spin without a break
+                    log_w("3dprinter could not read a video frame from %s, error %d", mjpeg_url, result);
                     delay(100);
                     if (failcount++ >= 3) break;
                 }
+
+                // step to the start of the next frame
+                if (framesize) {
+                    if (src->remaining) printer3d_mjpeg_skip( src, src->remaining );
+                } else if (!printer3d_mjpeg_seek_eoi( src )) {
+                    log_w("3dprinter could not find the next video frame at %s", mjpeg_url);
+                    if (failcount++ >= 3) break;
+                }
+
+                if (millis() - framemillis >= 10000) {
+                    log_d("3dprinter decoded %d video frames in %d ms", framecount, (uint32_t)(millis() - framemillis));
+                    framecount = 0;
+                    framemillis = millis();
+                }
             }
 
+            free(src);
             free(decoder);
         }
 
