@@ -73,7 +73,6 @@ void Application::onButtonOpenSettingsClicked() {
     log_d("enter settings");
     if (configuration != nullptr)
         configuration->load();
-    statusbar_hide(true);
     navigateToSettings(true);
 }
 
@@ -89,21 +88,20 @@ void Application::onButtonCloseSettingsClicked() {
 void Application::onAppIconClicked() {
   icon().hideIndicator();
   navigateToMain(false);
-  statusbar_hide(true);
 }
 
 void Application::onDesktopWidgetClicked() {
   icon().hideIndicator();
   navigateToMain(false);
-  statusbar_hide(true);
 }
 
+// the statusbar state belongs to the mainbar history, never hide it around the jump
 Application& Application::navigateToMain(bool animate, int id) {
-    mainbar_jump_to_tilenumber(initialTileId + id, (animate ? LV_ANIM_ON : LV_ANIM_OFF) );
+    mainbar_jump_to_tilenumber(initialTileId + id, (animate ? LV_ANIM_ON : LV_ANIM_OFF), true );
     return *this;
 }
 
 Application& Application::navigateToSettings(bool animate, int id) {
-  mainbar_jump_to_tilenumber(initialTileId + userPageCount + id, (animate ? LV_ANIM_ON : LV_ANIM_OFF) );
+  mainbar_jump_to_tilenumber(initialTileId + userPageCount + id, (animate ? LV_ANIM_ON : LV_ANIM_OFF), true );
   return *this;
 }

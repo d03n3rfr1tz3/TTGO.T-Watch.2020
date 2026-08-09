@@ -20,7 +20,6 @@
  */
 
 #include "config.h"
-#include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/app_tile/app_tile.h" //TODO: Swap this with a game app tile
 #include "gui/widget_styles.h"
 
@@ -59,6 +58,5 @@ bool GameIconBase::RegisterAppIcon()
 
 void GameIconBase::ReturnToMenu()
 {
-    // Return to the watch's main tile
-    mainbar_jump_to_tilenumber(app_tile_get_tile_num(), LV_ANIM_OFF); //TODO: have a game tile instead of app tile
+    //TODO: have a game tile instead of app tile
 }

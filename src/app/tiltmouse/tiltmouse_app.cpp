@@ -77,8 +77,7 @@ uint32_t tiltmouse_app_get_app_main_tile_num( void ) {
 void enter_tiltmouse_app_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):       tiltmouse_activate();
-                                        mainbar_jump_to_tilenumber( tiltmouse_app_main_tile_num, LV_ANIM_OFF );
-                                        statusbar_hide( true );
+                                        mainbar_jump_to_tilenumber( tiltmouse_app_main_tile_num, LV_ANIM_OFF, true );
                                         app_hide_indicator( tiltmouse_app );
                                         break;
     }    

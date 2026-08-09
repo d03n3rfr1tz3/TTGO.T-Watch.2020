@@ -164,7 +164,7 @@ static void exit_NetTools_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
                                         
                                         
                                         NetTools_save_config();
-                                        mainbar_jump_to_tilenumber( NetTools_get_app_main_tile_num(), LV_ANIM_ON );
+                                        mainbar_jump_back();
                                         break;
     }
 }

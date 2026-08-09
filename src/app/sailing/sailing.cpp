@@ -115,9 +115,8 @@ uint32_t sailing_get_app_setup_tile_num( void ) {
  */
 static void enter_sailing_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       statusbar_hide( false );
-                                        app_hide_indicator( sailing );
-                                        mainbar_jump_to_tilenumber( sailing_main_tile_num, LV_ANIM_OFF );
+        case( LV_EVENT_CLICKED ):       app_hide_indicator( sailing );
+                                        mainbar_jump_to_tilenumber( sailing_main_tile_num, LV_ANIM_OFF, false );
                                         break;
     }    
 }

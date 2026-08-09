@@ -56,8 +56,8 @@ void mqtt_player_setup_setup( uint32_t tile_num ) {
 
 static void exit_mqtt_player_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( mqtt_player_get_app_main_tile_num(), LV_ANIM_ON );
-                                        mqtt_player_save_config();
+        case( LV_EVENT_CLICKED ):       mqtt_player_save_config();
+                                        mainbar_jump_back();
                                         break;
     }
 }

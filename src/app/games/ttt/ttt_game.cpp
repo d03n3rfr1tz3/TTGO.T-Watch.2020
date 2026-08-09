@@ -98,7 +98,7 @@ static void DelayedRelease(void* param)
 void TicTacToeIcon::OnExitClicked()
 {
     motor_vibe(1);
-    mainbar_jump_to_tilenumber(app_tile_get_tile_num(), LV_ANIM_OFF);
+    ReturnToMenu();
 
     /* Delay this until the next task handler cycle */
     log_d("Queuing async release");

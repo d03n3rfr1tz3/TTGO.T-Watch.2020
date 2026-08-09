@@ -106,8 +106,7 @@ uint32_t mqtt_player_get_app_setup_tile_num( void ) {
  */
 static void enter_mqtt_player_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( mqtt_player_main_tile_num, LV_ANIM_OFF );
-                                        statusbar_hide( true );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( mqtt_player_main_tile_num, LV_ANIM_OFF, true );
                                         app_hide_indicator( mqtt_player_app );
                                         mqtt_start();
                                         break;

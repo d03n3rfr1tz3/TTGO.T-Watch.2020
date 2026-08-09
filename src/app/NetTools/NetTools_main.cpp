@@ -198,8 +198,7 @@ static void tasmota_toggle_NetTools( int toggle_num){
 //Enter and Exit App Events,
 static void enter_NetTools_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       statusbar_hide( true );
-                                        mainbar_jump_to_tilenumber( NetTools_get_app_setup_tile_num(), LV_ANIM_ON );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( NetTools_get_app_setup_tile_num(), LV_ANIM_ON, true );
                                         break;
     }
 }

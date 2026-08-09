@@ -221,8 +221,7 @@ static void mqtt_player_message_cb(char *topic, byte *payload, size_t length) {
 
 static void enter_mqtt_player_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       statusbar_hide( true );
-                                        mainbar_jump_to_tilenumber( mqtt_player_get_app_setup_tile_num(), LV_ANIM_ON );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( mqtt_player_get_app_setup_tile_num(), LV_ANIM_ON, true );
                                         break;
     }
 }

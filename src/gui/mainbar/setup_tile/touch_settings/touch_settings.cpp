@@ -141,8 +141,7 @@ bool touch_settings_event_cb( EventBits_t event, void *arg ) {
 static void touch_settings_calibration_btn_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):
-            mainbar_jump_to_tilenumber( touch_calibration_get_tile_num(), LV_ANIM_OFF );
-            statusbar_hide( true );
+            mainbar_jump_to_tilenumber( touch_calibration_get_tile_num(), LV_ANIM_OFF, true );
             break;
     }
 }

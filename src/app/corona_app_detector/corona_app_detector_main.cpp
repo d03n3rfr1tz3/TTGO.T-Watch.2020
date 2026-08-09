@@ -60,8 +60,7 @@ void corona_app_detector_main_setup( uint32_t tile_num ) {
 
 static void enter_corona_app_detector_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       statusbar_hide( true );
-                                        mainbar_jump_to_tilenumber( corona_app_detector_get_main_tile_num(), LV_ANIM_ON );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( corona_app_detector_get_setup_tile_num(), LV_ANIM_ON, true );
                                         break;
     }
 }

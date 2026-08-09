@@ -116,9 +116,8 @@ uint32_t NetTools_get_app_setup_tile_num( void ) {
  */
 static void enter_NetTools_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       statusbar_hide( true );
-                                        app_hide_indicator( NetTools );
-                                        mainbar_jump_to_tilenumber( NetTools_main_tile_num, LV_ANIM_OFF );
+        case( LV_EVENT_CLICKED ):       app_hide_indicator( NetTools );
+                                        mainbar_jump_to_tilenumber( NetTools_main_tile_num, LV_ANIM_OFF, true );
                                         break;
     }    
 }

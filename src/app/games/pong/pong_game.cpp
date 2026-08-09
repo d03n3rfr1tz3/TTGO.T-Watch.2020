@@ -108,7 +108,7 @@ static void DelayedRelease(void* param)
 void PongIcon::OnExitClicked()
 {
     motor_vibe(1);
-    mainbar_jump_to_tilenumber(app_tile_get_tile_num(), LV_ANIM_OFF);
+    ReturnToMenu();
     IsActive = false;
 
     /* Delay this until the next task handler cycle */

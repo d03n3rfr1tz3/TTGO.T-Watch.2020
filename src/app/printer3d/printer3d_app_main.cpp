@@ -281,10 +281,6 @@ static void printer3d_setup_hibernate_callback ( void ) {
     #ifndef NATIVE_64BIT
         mjpeg_nextmillis = 0;
     #endif
-
-    gui_take();
-    statusbar_hide( false );
-    gui_give();
 }
 
 /** @brief true if one of the app tiles is the tile currently on screen */
@@ -345,8 +341,7 @@ static bool printer3d_main_wifictl_event_cb( EventBits_t event, void *arg ) {
 
 static void enter_printer3d_app_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( printer3d_app_get_app_setup_tile_num(), LV_ANIM_ON );
-                                        statusbar_hide( true );
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( printer3d_app_get_app_setup_tile_num(), LV_ANIM_ON, true );
                                         nextmillis = 0;
                                         break;
     }
@@ -1016,7 +1011,6 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         mjpeg_visible = visible;
 
         gui_take();
-        statusbar_hide( visible );
         lv_obj_set_hidden( printer3d_video_img, visible );
         if ( !visible )
             lv_obj_invalidate( printer3d_app_video_tile );
@@ -1304,9 +1298,6 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         }
 
         printer3d_mjpeg_set_visible( false );
-        gui_take();
-        statusbar_hide( false );
-        gui_give();
     }
 
     void printer3d_mjpeg_task(void *parameter) {
