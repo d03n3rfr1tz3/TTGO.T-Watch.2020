@@ -788,11 +788,18 @@ JRESULT jd_prepare (
 	for (;;) {
 		/* Get a JPEG marker */
 		if (jd->infunc(jd, seg, 4) != 4) return JDR_INP;
+		ofs += 4;		/* Number of bytes loaded */
 		marker = LDB_WORD(seg);		/* Marker */
+		while (marker == 0xFFFF) {	/* Skip any fill bytes in front of the marker (T.81 B.1.1.2) */
+			seg[0] = seg[1]; seg[1] = seg[2]; seg[2] = seg[3];
+			if (jd->infunc(jd, seg + 3, 1) != 1) return JDR_INP;
+			ofs++;
+			marker = LDB_WORD(seg);
+		}
 		len = LDB_WORD(seg + 2);	/* Length field */
 		if (len <= 2 || (marker >> 8) != 0xFF) return JDR_FMT1;
 		len -= 2;		/* Content size excluding length field */
-		ofs += 4 + len;	/* Number of bytes loaded */
+		ofs += len;
 
 		switch (marker & 0xFF) {
 		case 0xC0:	/* SOF0 (baseline JPEG) */
