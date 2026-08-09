@@ -55,6 +55,7 @@
 #endif
 
 bool wifi_init = false;
+static bool wifictl_scan_blocked = false;                   /** @brief an app owns the driver, hold off scanning */
 callback_t *wifictl_callback = NULL;
 
 void wifictl_send_event_cb( EventBits_t event, char *msg );
@@ -221,7 +222,8 @@ void wifictl_setup( void ) {
             wifictl_send_event_cb( WIFICTL_ON, (void *)"wait for WPS" );
         }
         else {
-            wifictl_set_event( WIFICTL_SCAN_REQUEST );
+            if ( !wifictl_scan_blocked )
+                wifictl_set_event( WIFICTL_SCAN_REQUEST );
             wifictl_send_event_cb( WIFICTL_ON, (void *)"scan ..." );
         }
     #ifdef ARDUNIO_NG
@@ -342,6 +344,10 @@ void wifictl_set_autoon( bool autoon ) {
     wifictl_config->autoon = autoon;
     wifictl_send_event_cb( WIFICTL_AUTOON, (void*)&autoon );
     wifictl_save_config();
+}
+
+void wifictl_block_scan( bool block ) {
+    wifictl_scan_blocked = block;
 }
 
 void wifictl_set_enable_on_standby( bool enable ) {
@@ -730,12 +736,13 @@ void wifictl_Task( void * pvParameters ) {
         else if ( wifictl_get_event( WIFICTL_ON_REQUEST ) ) {
             esp_wifi_start();
             WiFi.mode( WIFI_STA );
+            esp_wifi_set_ps( WIFI_PS_MAX_MODEM );
 
             log_d("request wifictl on done");
             wifictl_set_event( WIFICTL_ON | WIFICTL_SCAN_REQUEST );
             wifictl_clear_event( WIFICTL_OFF | WIFICTL_OFF_REQUEST | WIFICTL_ON_REQUEST | WIFICTL_CONNECT );
         }
-        else if ( wifictl_get_event( WIFICTL_SCAN_REQUEST ) ) {
+        else if ( !wifictl_scan_blocked && wifictl_get_event( WIFICTL_SCAN_REQUEST ) ) {
             int res = WiFi.scanNetworks( true );
             log_i("WiFi WIFICTL_SCAN: scanNetworks %i", res);
 

@@ -21,6 +21,7 @@
 
 #include "hardware/wifictl.h"
 #include "hardware/display.h"
+#include "hardware/powermgm.h"
 
 #include "wifimon_app.h"
 #include "wifimon_app_main.h"
@@ -44,7 +45,8 @@
     #include "esp_wifi.h"
 
     void wifimon_sniffer_packet_handler( void* buff, wifi_promiscuous_pkt_type_t type );
-    static wifi_country_t wifi_country = {.cc="CN", .schan = 1, .nchan = 13}; 
+    static wifi_country_t wifi_country = {.cc="CN", .schan = 1, .nchan = 13};
+    static bool wifimon_sniffer_active = false;
 #endif
 
 lv_obj_t *wifimon_app_main_tile = NULL;
@@ -55,6 +57,10 @@ lv_chart_series_t *ser2 = NULL;
 lv_chart_series_t *ser3 = NULL;
 lv_task_t *_wifimon_app_task = NULL;
 int wifimon_display_timeout = 0;
+static bool wifimon_app_active = false;         /** @brief app owns the wifi driver */
+static bool wifimon_wifi_state = false;         /** @brief wifi state before the app took over */
+static bool wifimon_wifi_off = false;           /** @brief wifictl has really switched the wifi off */
+static uint8_t wifimon_wifi_off_timeout = 0;
 
 LV_IMG_DECLARE(exit_dark_48px);
 LV_IMG_DECLARE(wifimon_app_32px);
@@ -65,6 +71,7 @@ static void wifimon_sniffer_set_channel( uint8_t channel );
 static void wifimon_app_task( lv_task_t * task );
 static void wifimon_activate_cb( void );
 static void wifimon_hibernate_cb( void );
+static bool wifimon_wifictl_event_cb( EventBits_t event, void *arg );
 
 uint8_t level = 0, channel = 1;
 int data = 0, mgmt = 0, misc = 0; 
@@ -154,6 +161,24 @@ void wifimon_app_main_setup( uint32_t tile_num ) {
 
     mainbar_add_tile_activate_cb( tile_num, wifimon_activate_cb );
     mainbar_add_tile_hibernate_cb( tile_num, wifimon_hibernate_cb );
+    wifictl_register_cb( WIFICTL_ON | WIFICTL_OFF, wifimon_wifictl_event_cb, "wifimon main" );
+}
+
+/**
+ * @brief keep track of the wifi state while the app is not running.
+ */
+static bool wifimon_wifictl_event_cb( EventBits_t event, void *arg ) {
+    switch( event ) {
+        case WIFICTL_ON:    if ( !wifimon_app_active )
+                                wifimon_wifi_state = true;
+                            break;
+        case WIFICTL_OFF:   if ( wifimon_app_active )
+                                wifimon_wifi_off = true;
+                            else
+                                wifimon_wifi_state = false;
+                            break;
+    }
+    return( true );
 }
 
 static void exit_wifimon_app_main_event_cb( lv_obj_t * obj, lv_event_t event ) {
@@ -171,9 +196,24 @@ static void wifimon_hibernate_cb( void ) {
 #ifdef NATIVE_64BIT
 
 #else
-    esp_wifi_set_promiscuous( false ); 
+    if ( wifimon_sniffer_active ) {
+        esp_wifi_set_promiscuous( false );
+        esp_wifi_set_promiscuous_rx_cb( NULL );
+        esp_wifi_stop();
+        wifimon_sniffer_active = false;
+    }
 #endif
-    wifictl_off();
+    wifimon_app_active = false;
+    wifictl_block_scan( false );
+    /**
+     * restore wifi state
+     */
+    if ( !powermgm_get_event( POWERMGM_STANDBY ) ) {
+        if ( wifimon_wifi_state )
+            wifictl_on();
+        else
+            wifictl_off();
+    }
     /**
      * restore display timeout time
      */
@@ -182,25 +222,13 @@ static void wifimon_hibernate_cb( void ) {
 
 static void wifimon_activate_cb( void ) {
     /**
-     * restart wifi
+     * take over the wifi driver
      */
+    wifimon_app_active = true;
+    wifictl_block_scan( true );
+    wifimon_wifi_off = !wifimon_wifi_state;
+    wifimon_wifi_off_timeout = 3;
     wifictl_off();
-    /**
-     * setup promiscuous mode
-     */
-#ifdef NATIVE_64BIT
-
-#else
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    esp_wifi_init( &cfg );
-    esp_wifi_set_country( &wifi_country );
-    esp_wifi_set_mode( WIFI_MODE_NULL ); 
-    esp_wifi_start();
-    esp_wifi_set_promiscuous( true );
-    esp_wifi_set_promiscuous_rx_cb( &wifimon_sniffer_packet_handler );
-    lv_roller_set_selected( channel_select, 0, LV_ANIM_OFF );
-    wifimon_sniffer_set_channel( 1 );
-#endif
     /**
      * start stats fetch task
      */
@@ -213,6 +241,28 @@ static void wifimon_activate_cb( void ) {
 }
 
 static void wifimon_app_task( lv_task_t * task ) {
+#ifndef NATIVE_64BIT
+    /**
+     * setup promiscuous mode as soon as wifictl really switched the wifi off
+     */
+    if ( !wifimon_sniffer_active ) {
+        if ( !wifimon_wifi_off && wifimon_wifi_off_timeout ) {
+            wifimon_wifi_off_timeout--;
+            return;
+        }
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        esp_wifi_init( &cfg );
+        esp_wifi_set_country( &wifi_country );
+        esp_wifi_set_mode( WIFI_MODE_NULL );
+        esp_wifi_start();
+        esp_wifi_set_promiscuous( true );
+        esp_wifi_set_promiscuous_rx_cb( &wifimon_sniffer_packet_handler );
+        lv_roller_set_selected( channel_select, 0, LV_ANIM_OFF );
+        wifimon_sniffer_set_channel( 1 );
+        wifimon_sniffer_active = true;
+        return;
+    }
+#endif
     /**
      * limit scale
      */

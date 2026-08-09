@@ -138,6 +138,12 @@
      */
     void wifictl_set_autoon( bool autoon );
     /**
+     * @brief   block or unblock the automatic wifi scan while an app owns the driver
+     *
+     * @param   block   true stops wifictl from scanning, false resumes normal operation
+     */
+    void wifictl_block_scan( bool block );
+    /**
      * @brief   start an wifi wps peering
      */
     void wifictl_start_wps( void );

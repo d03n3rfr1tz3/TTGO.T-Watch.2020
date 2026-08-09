@@ -23,8 +23,12 @@
 #endif
 #include <math.h>
 #include <lwip/sockets.h>
+#include <WiFi.h>
 
 #include "esp_wifi.h"
+
+#include "hardware/wifictl.h"
+#include "hardware/powermgm.h"
 
 #include "wireless_app.h"
 #include "wireless_app_main.h"
@@ -39,10 +43,16 @@
 
 lv_obj_t *wireless_app_main_tile = NULL;
 lv_style_t wireless_app_main_style;
-lv_obj_t * throbber = NULL;
-static volatile bool wireless_spam_running = false;
+static lv_obj_t * throbber = NULL;
+static lv_task_t * _wireless_app_task = NULL;
 
-lv_task_t * _wireless_app_task;
+static bool wireless_wifi_owned = false;                /** @brief app has taken over the wifi driver */
+static bool wireless_wifi_state = false;                /** @brief wifi state before the app took over */
+static bool wireless_wifi_off = false;                  /** @brief wifictl has really switched the wifi off */
+static uint8_t wireless_wifi_off_timeout = 0;
+static bool wireless_ap_active = false;                 /** @brief our beacon ap is up */
+static volatile bool wireless_spam_running = false;
+static volatile bool wireless_spam_abort = false;
 
 LV_IMG_DECLARE(wireless_app_32px);
 LV_IMG_DECLARE(exit_32px);
@@ -51,10 +61,15 @@ LV_FONT_DECLARE(Ubuntu_72px);
 
 static void exit_wireless_app_main_event_cb( lv_obj_t * obj, lv_event_t event );
 static void enter_wireless_app_next_event_cb( lv_obj_t * obj, lv_event_t event );
+static void wireless_activate_cb( void );
+static void wireless_hibernate_cb( void );
+static bool wireless_wifictl_event_cb( EventBits_t event, void *arg );
+static bool wireless_ap_start( void );
+static void wireless_wifi_release( void );
+void spam_task( void *pvParameter );
 void wireless_app_task( lv_task_t * task );
 
 esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len, bool en_sys_seq);
-esp_err_t esp_wifi_internal_tx(wifi_interface_t ifx, const void *buffer, int len);
 
 uint8_t beacon_raw[] = {
 	0x80, 0x00,							// 0-1: Frame Control
@@ -87,11 +102,8 @@ char *rick_ssids[] = {
 #define SRCADDR_OFFSET 10
 #define BSSID_OFFSET 16
 #define SEQNUM_OFFSET 22
+#define DSCHANNEL_OFFSET 50
 #define TOTAL_LINES (sizeof(rick_ssids) / sizeof(char *))
-
-esp_err_t event_handler(void *ctx, system_event_t *event) {
-	return ESP_OK;
-}
 
 void wireless_app_main_setup( uint32_t tile_num ) {
 
@@ -115,21 +127,143 @@ void wireless_app_main_setup( uint32_t tile_num ) {
     lv_obj_add_style(next_btn, LV_IMGBTN_PART_MAIN, &wireless_app_main_style );
     lv_obj_align(next_btn, wireless_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, (LV_HOR_RES / 2) -5 , -10 );
     lv_obj_set_event_cb( next_btn, enter_wireless_app_next_event_cb );
+
+    mainbar_add_tile_activate_cb( tile_num, wireless_activate_cb );
+    mainbar_add_tile_hibernate_cb( tile_num, wireless_hibernate_cb );
+    wifictl_register_cb( WIFICTL_ON | WIFICTL_OFF, wireless_wifictl_event_cb, "wireless main" );
+}
+
+/**
+ * @brief keep track of the wifi state while the app does not own the driver.
+ */
+static bool wireless_wifictl_event_cb( EventBits_t event, void *arg ) {
+    switch( event ) {
+        case WIFICTL_ON:    if ( !wireless_wifi_owned )
+                                wireless_wifi_state = true;
+                            break;
+        case WIFICTL_OFF:   if ( wireless_wifi_owned )
+                                wireless_wifi_off = true;
+                            else
+                                wireless_wifi_state = false;
+                            break;
+    }
+    return( true );
+}
+
+/**
+ * @brief bring up our own beacon ap.
+ */
+static bool wireless_ap_start( void ) {
+    if ( !WiFi.mode( WIFI_MODE_STA ) ) {
+        log_e("start beacon radio failed: set mode");
+        return( false );
+    }
+    esp_wifi_set_ps( WIFI_PS_MIN_MODEM );
+    wireless_ap_active = true;
+    log_d("start beacon radio");
+    return( true );
+}
+
+/**
+ * @brief tear down our own beacon ap and hand the wifi back to wifictl.
+ */
+static void wireless_wifi_release( void ) {
+    if ( wireless_ap_active ) {
+        WiFi.mode( WIFI_OFF );
+        wireless_ap_active = false;
+    }
+    if ( throbber ) {
+        lv_obj_del( throbber );
+        throbber = NULL;
+    }
+    if ( !wireless_wifi_owned )
+        return;
+    wireless_wifi_owned = false;
+    wifictl_block_scan( false );
+    /**
+     * never switch the wifi on while going to standby
+     */
+    if ( powermgm_get_event( POWERMGM_STANDBY ) )
+        return;
+    /**
+     * restore wifi state, exactly one request
+     */
+    if ( wireless_wifi_state )
+        wifictl_on();
+    else
+        wifictl_off();
+}
+
+static void wireless_activate_cb( void ) {
+    if ( !_wireless_app_task )
+        _wireless_app_task = lv_task_create( wireless_app_task, 1000, LV_TASK_PRIO_MID, NULL );
+}
+
+static void wireless_hibernate_cb( void ) {
+    if ( _wireless_app_task ) {
+        lv_task_del( _wireless_app_task );
+        _wireless_app_task = NULL;
+    }
+    wireless_spam_abort = true;
+    
+    for ( uint8_t i = 0 ; i < 50 && wireless_spam_running ; i++ )
+        delay( 1 );
+
+    wireless_wifi_release();
+}
+
+void wireless_app_task( lv_task_t * task ) {
+    /**
+     * start the beacon ap as soon as wifictl really switched the wifi off
+     */
+    if ( wireless_wifi_owned && !wireless_ap_active ) {
+        /**
+         * stop pressed before the session even started, hand the wifi back
+         */
+        if ( wireless_spam_abort ) {
+            wireless_wifi_release();
+            return;
+        }
+        if ( !wireless_wifi_off && wireless_wifi_off_timeout ) {
+            wireless_wifi_off_timeout--;
+            return;
+        }
+        if ( !wireless_ap_start() ) {
+            wireless_wifi_release();
+            return;
+        }
+        wireless_spam_abort = false;
+        wireless_spam_running = true;
+        if ( xTaskCreate( &spam_task, "spam_task", 2560, NULL, 5, NULL ) != pdPASS ) {
+            wireless_spam_running = false;
+            wireless_wifi_release();
+        }
+        return;
+    }
+    /**
+     * spam_task has finished on its own, drop the spinner and give the wifi back
+     */
+    if ( wireless_ap_active && !wireless_spam_running )
+        wireless_wifi_release();
 }
 
 void spam_task(void *pvParameter) {
 	uint8_t line = 0;
-                   int x;
+	uint8_t channel = 1;
+	uint32_t tx_ok = 0, tx_fail = 0;
 
 	// Keep track of beacon sequence numbers on a per-songline-basis
 	uint16_t seqnum[TOTAL_LINES] = { 0 };
 
-	for (x=0;x<666;x++) 
-        {
+	esp_wifi_set_channel( channel, WIFI_SECOND_CHAN_NONE );
+	beacon_raw[DSCHANNEL_OFFSET] = channel;
+
+	while ( !wireless_spam_abort )
+    {
 		vTaskDelay(10);
 
 		// Insert line of Rick Astley's "Never Gonna Give You Up" into beacon packet
-		log_i("%i %i %s", strlen(rick_ssids[line]), TOTAL_LINES, rick_ssids[line]);
+		log_d("%i %i %s", strlen(rick_ssids[line]), TOTAL_LINES, rick_ssids[line]);
 
 		uint8_t beacon_rick[200];
 		memcpy(beacon_rick, beacon_raw, BEACON_SSID_OFFSET - 1);
@@ -148,49 +282,49 @@ void spam_task(void *pvParameter) {
 		if (seqnum[line] > 0xfff)
 			seqnum[line] = 0;
 
-		esp_wifi_80211_tx(WIFI_IF_AP, beacon_rick, sizeof(beacon_raw) + strlen(rick_ssids[line]), false);
+		if ( esp_wifi_80211_tx(WIFI_IF_STA, beacon_rick, sizeof(beacon_raw) + strlen(rick_ssids[line]), false) == ESP_OK )
+			tx_ok++;
+		else
+			tx_fail++;
 
-		if (++line >= TOTAL_LINES)
+		// after a full pass through all song lines, hop to the next channel
+		if (++line >= TOTAL_LINES) {
 			line = 0;
+			if (++channel > 13)
+				channel = 1;
+			esp_wifi_set_channel( channel, WIFI_SECOND_CHAN_NONE );
+			beacon_raw[DSCHANNEL_OFFSET] = channel;     // keep DS byte in sync with the radio
+		}
 	}
-        //ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-        gui_take();
-        lv_obj_del(throbber);
-        throbber = NULL;
-        gui_give();
-
-        wireless_spam_running = false;
-        vTaskDelete(NULL);
+    log_d("beacon tx: %u ok, %u failed", tx_ok, tx_fail );
+    wireless_spam_running = false;
+    vTaskDelete(NULL);
 }
 
 static void enter_wireless_app_next_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {	
                 case(LV_EVENT_CLICKED):
 
-                    if ( wireless_spam_running ) break;
-                    wireless_spam_running = true;
+                    /**
+                     * second press stops the running beacon session
+                     */
+                    if ( wireless_wifi_owned ) {
+                        wireless_spam_abort = true;
+                        break;
+                    }
+                    /**
+                     * take over the wifi driver
+                     */
+                    wireless_wifi_owned = true;
+                    wireless_spam_abort = false;
+                    wifictl_block_scan( true );
+                    wireless_wifi_off = !wireless_wifi_state;
+                    wireless_wifi_off_timeout = 3;
+                    wifictl_off();
 
-                    throbber = lv_spinner_create(lv_scr_act(), NULL);
+                    throbber = lv_spinner_create(wireless_app_main_tile, NULL);
                     lv_obj_set_size(throbber, 100, 100);
                     lv_obj_align(throbber, NULL, LV_ALIGN_CENTER, 0, 0);
-	            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-	            wifi_config_t ap_config = { };
-		    strcpy((char *)ap_config.ap.ssid, "23pse");
-                    ap_config.ap.ssid_len = 0;
-                    strcpy((char *)ap_config.ap.password, "00112233440");
-	            ap_config.ap.channel = 1;
-	            ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
-	            ap_config.ap.ssid_hidden = 1;
-	            ap_config.ap.max_connection = 1;
-	            ap_config.ap.beacon_interval = 60000;
-	            ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
-	            ESP_ERROR_CHECK(esp_wifi_start());
-				ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
-	            if ( xTaskCreate(&spam_task, "spam_task", 2560, NULL, 5, NULL) != pdPASS ) {
-	                lv_obj_del(throbber);
-	                throbber = NULL;
-	                wireless_spam_running = false;
-	            }
                     break;
     }
 }
@@ -198,7 +332,6 @@ static void enter_wireless_app_next_event_cb( lv_obj_t * obj, lv_event_t event )
 static void exit_wireless_app_main_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):       mainbar_jump_back();
-										ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MAX_MODEM));
                                         break;
     }
 }
