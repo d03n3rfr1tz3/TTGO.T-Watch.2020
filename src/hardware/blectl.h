@@ -34,28 +34,32 @@
 
     #define BLECTL_SCAN_TIME             30
     /**
+     * gatt setup
+     */
+    #define BLECTL_SETUP                 _BV(0)        /** @brief event mask for blectl gatt setup, apps add their services here */
+    /**
      * connection state
      */
-    #define BLECTL_CONNECT               _BV(0)         /** @brief event mask for blectl connect to an client */
-    #define BLECTL_DISCONNECT            _BV(1)         /** @brief event mask for blectl disconnect */
-    #define BLECTL_AUTHWAIT              _BV(2)         /** @brief event mask for blectl wait for auth to get connect */
+    #define BLECTL_CONNECT               _BV(1)         /** @brief event mask for blectl connect to an client */
+    #define BLECTL_DISCONNECT            _BV(2)         /** @brief event mask for blectl disconnect */
+    #define BLECTL_AUTHWAIT              _BV(3)         /** @brief event mask for blectl wait for auth to get connect */
     /**
      * power state
      */
-    #define BLECTL_STANDBY               _BV(3)         /** @brief event mask for blectl standby */
-    #define BLECTL_ON                    _BV(4)         /** @brief event mask for blectl on */
-    #define BLECTL_OFF                   _BV(5)         /** @brief event mask for blectl off */
+    #define BLECTL_STANDBY               _BV(4)         /** @brief event mask for blectl standby */
+    #define BLECTL_ON                    _BV(5)         /** @brief event mask for blectl on */
+    #define BLECTL_OFF                   _BV(6)         /** @brief event mask for blectl off */
     /**
      * pairing state
      */
-    #define BLECTL_PIN_AUTH              _BV(6)         /** @brief event mask for blectl for pin auth, callback arg is (uint32*) */
-    #define BLECTL_PAIRING               _BV(7)         /** @brief event mask for blectl pairing requested */
-    #define BLECTL_PAIRING_SUCCESS       _BV(8)         /** @brief event mask for blectl pairing success */
-    #define BLECTL_PAIRING_ABORT         _BV(9)         /** @brief event mask for blectl pairing abort */
+    #define BLECTL_PIN_AUTH              _BV(7)         /** @brief event mask for blectl for pin auth, callback arg is (uint32*) */
+    #define BLECTL_PAIRING               _BV(8)         /** @brief event mask for blectl pairing requested */
+    #define BLECTL_PAIRING_SUCCESS       _BV(9)         /** @brief event mask for blectl pairing success */
+    #define BLECTL_PAIRING_ABORT         _BV(10)         /** @brief event mask for blectl pairing abort */
     /**
      * config updates
      */
-    #define BLECTL_CONFIG_UPDATE         _BV(10)        /** @brief event mask for blectl config update */
+    #define BLECTL_CONFIG_UPDATE         _BV(11)        /** @brief event mask for blectl config update */
     /**
      * @brief ble setup function
      */
@@ -91,7 +95,8 @@
      *                                      BLECTL_PIN_AUTH,
      *                                      BLECTL_PAIRING,
      *                                      BLECTL_PAIRING_SUCCESS,
-     *                                      BLECTL_PAIRING_ABORT
+     *                                      BLECTL_PAIRING_ABORT,
+     *                                      BLECTL_SETUP
      * @param   blectl_event_cb     pointer to the callback function
      * @param   id                  pointer to an string
      */

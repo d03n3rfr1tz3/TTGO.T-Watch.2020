@@ -24,7 +24,5 @@
 
 
     void tiltmouse_app_main_setup( uint32_t tile_num );
-    void tiltmouse_activate();
-    void tiltmouse_deactivate();
 
 #endif // _TILTMOUSE_APP_MAIN_H

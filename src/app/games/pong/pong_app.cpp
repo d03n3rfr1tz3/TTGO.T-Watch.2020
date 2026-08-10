@@ -466,21 +466,25 @@ void PongApp::UpdatePlayer1()
 
     if ( !bma_get_accel( acc_x, acc_y, acc_z ) ) return;
 
+    // simple low pass
+    control_acc_x += ( acc_x - control_acc_x ) / PLAYER_SMOOTHING;
+    control_acc_y += ( acc_y - control_acc_y ) / PLAYER_SMOOTHING;
+
     // set new position by accelerator
     int16_t new_position = 0;
     switch (control_orientation) {
         case 270:
-            new_position = 0 - acc_x * 0.2;
+            new_position = 0 - control_acc_x * 0.2;
             break;
         case 180:
-            new_position = acc_y * 0.2;
+            new_position = control_acc_y * 0.2;
             break;
         case 90:
-            new_position = acc_x * 0.2;
+            new_position = control_acc_x * 0.2;
             break;
         case 0:
         default:
-            new_position = 0 - acc_y * 0.2;
+            new_position = 0 - control_acc_y * 0.2;
             break;
     }
 

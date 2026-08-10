@@ -32,6 +32,7 @@
 #define PLAYER_HEIGHT 40
 #define PLAYER_BOUNDARY ((FIELD_HEIGHT / 2) - (PLAYER_HEIGHT / 2))
 #define PLAYER_SPEED_MAX 10
+#define PLAYER_SMOOTHING 2
 #define BALL_WIDTH 8
 #define BALL_HEIGHT 8
 #define BALL_SPEED_MIN 3
@@ -49,7 +50,9 @@ private:
     bool pong_inited = false;
     bool pong_active = false;
     uint32_t control_orientation;
-    
+    int16_t control_acc_x = 0;
+    int16_t control_acc_y = 0;
+
     // Gameplay data
     uint8_t ball_speed = BALL_SPEED_MIN;
     uint16_t ball_bounce = 0;

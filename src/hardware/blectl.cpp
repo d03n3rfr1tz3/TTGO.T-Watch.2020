@@ -138,7 +138,7 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
             return( false );
         };
 
-        void onAuthenticationComplete(ble_gap_conn_desc* desc){
+        void onAuthenticationComplete(ble_gap_conn_desc* desc) {
             if(!desc->sec_state.encrypted) {
                 if ( blectl_get_event( BLECTL_PIN_AUTH ) ) {
                     log_d("BLECTL pairing abort");
@@ -227,6 +227,11 @@ void blectl_setup( void ) {
         gadgetbridge_setup();
         blebatctl_setup();
         blestepctl_setup();
+        /*
+         * let apps add their own gatt services.
+         * the server is created but not started yet.
+         */
+        blectl_send_event_cb( BLECTL_SETUP, (void *)NULL );
         /*
          * Start advertising
          */
