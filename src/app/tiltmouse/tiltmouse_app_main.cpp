@@ -207,7 +207,7 @@ static void tiltmouse_restart_advertising( void )
 
 static void tiltmouse_activate_cb( void )
 {
-    if (tiltmouse_hid_role || !pHID) return;
+    if (tiltmouse_hid_role || !pHID || !pHIDMouse) return;
 
     BLEAdvertising *pAdvertising = blectl_get_ble_advertising();
     pAdvertising->addServiceUUID(pHID->hidService()->getUUID());
@@ -217,7 +217,7 @@ static void tiltmouse_activate_cb( void )
     tiltmouse_acc_x = 0;
     tiltmouse_acc_y = 0;
 
-    log_i("tiltmouse hid report handle: 0x%04x, blectl connect: %d, authwait: %d", pHIDMouse->getHandle(), blectl_get_event( BLECTL_CONNECT ), blectl_get_event( BLECTL_AUTHWAIT ) );
+    log_d("tiltmouse HID report handle: 0x%04x", pHIDMouse->getHandle() );
     tiltmouse_hid_role = true;
     tiltmouse_active = true;
 }
@@ -232,7 +232,7 @@ static void tiltmouse_hibernate_cb( void )
     pAdvertising->setAppearance( 0x00c0 );
     tiltmouse_restart_advertising();
 
-    log_i("tiltmouse hid role released, blectl connect: %d, authwait: %d", blectl_get_event( BLECTL_CONNECT ), blectl_get_event( BLECTL_AUTHWAIT ) );
+    log_d("tiltmouse HID role released");
     tiltmouse_hid_role = false;
 }
 

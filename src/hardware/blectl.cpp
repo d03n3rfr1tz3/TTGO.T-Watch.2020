@@ -69,29 +69,36 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
 
 #ifdef NATIVE_64BIT
 #else
-    NimBLEServer *pServer = NULL;                          
+    NimBLEServer *pServer = NULL;
     NimBLEAdvertising *pAdvertising = NULL;
+    static uint16_t blectl_conn_handle = BLE_HS_CONN_HANDLE_NONE;   /** @brief connection that owns the connection state */
 
     class ServerCallbacks: public NimBLEServerCallbacks {
-        void onConnect(NimBLEServer* pServer) {
-            log_i("Client connected");
-        };
-
         void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) {
             pServer->updateConnParams(desc->conn_handle, blectl_config.minInterval, blectl_config.maxInterval, blectl_config.latency, blectl_config.timeout );
+            log_d("BLE connect, handle: 0x%04x, address: %s", desc->conn_handle, NimBLEAddress(desc->peer_ota_addr).toString().c_str() );
+            powermgm_resume_from_ISR();
+
+            ble_gap_conn_desc owner;
+            if ( blectl_conn_handle != BLE_HS_CONN_HANDLE_NONE &&
+                 ble_gap_conn_find( blectl_conn_handle, &owner ) == 0 )
+                 return;
+
+            blectl_conn_handle = desc->conn_handle;
             blectl_set_event( BLECTL_AUTHWAIT );
             blectl_clear_event( BLECTL_DISCONNECT | BLECTL_CONNECT );
-            powermgm_resume_from_ISR();
-            log_d("BLE authwait");
             blectl_send_event_cb( BLECTL_AUTHWAIT, (void *)"authwait" );
-            log_i("Client address: %s", NimBLEAddress(desc->peer_ota_addr).toString().c_str() );
         };
 
-        void onDisconnect(NimBLEServer* pServer) {
-            log_d("BLE disconnected");
-            blectl_set_event( BLECTL_DISCONNECT );
-            blectl_clear_event( BLECTL_CONNECT | BLECTL_AUTHWAIT );
-            blectl_send_event_cb( BLECTL_DISCONNECT, (void *)"disconnected" );
+        void onDisconnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) {
+            log_d("BLE disconnect, handle: 0x%04x, address: %s", desc->conn_handle, NimBLEAddress(desc->peer_ota_addr).toString().c_str() );
+
+            if ( desc->conn_handle == blectl_conn_handle || pServer->getConnectedCount() == 0 ) {
+                blectl_conn_handle = BLE_HS_CONN_HANDLE_NONE;
+                blectl_set_event( BLECTL_DISCONNECT );
+                blectl_clear_event( BLECTL_CONNECT | BLECTL_AUTHWAIT );
+                blectl_send_event_cb( BLECTL_DISCONNECT, (void *)"disconnected" );
+            }
             powermgm_resume_from_ISR();
 
             if ( blectl_get_advertising() && !pServer->getAdvertising()->isAdvertising() ) {
@@ -138,7 +145,7 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
             return( false );
         };
 
-        void onAuthenticationComplete(ble_gap_conn_desc* desc) {
+        void onAuthenticationComplete(ble_gap_conn_desc* desc){
             if(!desc->sec_state.encrypted) {
                 if ( blectl_get_event( BLECTL_PIN_AUTH ) ) {
                     log_d("BLECTL pairing abort");
@@ -149,9 +156,12 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
                 }
                 if ( blectl_get_event( BLECTL_AUTHWAIT | BLECTL_CONNECT ) ) {
                     log_d("BLECTL authentication unsuccessful, client disconnected");
-                    blectl_clear_event( BLECTL_AUTHWAIT | BLECTL_CONNECT );
-                    blectl_set_event( BLECTL_DISCONNECT );
-                    blectl_send_event_cb( BLECTL_DISCONNECT, (void *) "disconnected" );
+                    if ( desc->conn_handle == blectl_conn_handle ) {
+                        blectl_conn_handle = BLE_HS_CONN_HANDLE_NONE;
+                        blectl_clear_event( BLECTL_AUTHWAIT | BLECTL_CONNECT );
+                        blectl_set_event( BLECTL_DISCONNECT );
+                        blectl_send_event_cb( BLECTL_DISCONNECT, (void *) "disconnected" );
+                    }
                     NimBLEDevice::getServer()->disconnect(desc->conn_handle);
                     return;
                 }
@@ -165,6 +175,7 @@ static bool blectl_powermgm_event_cb( EventBits_t event, void *arg );
                 }
                 if ( blectl_get_event( BLECTL_AUTHWAIT ) ) {
                     log_d("BLECTL authentication successful, client connected");
+                    blectl_conn_handle = desc->conn_handle;
                     blectl_clear_event( BLECTL_AUTHWAIT | BLECTL_DISCONNECT );
                     blectl_set_event( BLECTL_CONNECT );
                     blectl_send_event_cb( BLECTL_CONNECT, (void *) "connected" );
@@ -262,10 +273,10 @@ bool blectl_powermgm_event_cb( EventBits_t event, void *arg ) {
                 log_d("go standby");
             }
             break;
-        case POWERMGM_WAKEUP:           
+        case POWERMGM_WAKEUP:
             log_d("go wakeup");
             break;
-        case POWERMGM_SILENCE_WAKEUP:   
+        case POWERMGM_SILENCE_WAKEUP:
             log_d("go silence wakeup");
             break;
     }
