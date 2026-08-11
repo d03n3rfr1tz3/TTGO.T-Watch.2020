@@ -182,6 +182,7 @@ bool timesync_blectl_event_cb( EventBits_t event, void *arg ) {
                 new_now.tv_usec = 0;
                 if ( settimeofday(&new_now, NULL) == 0 ) {
                     log_d("new time: %d", new_now.tv_sec );
+                    timesync_send_event_cb( TIME_SYNC_UPDATE, (void *)NULL );
                 }
                 else {
                     log_e("set new time failed, errno = %d", errno );
@@ -358,7 +359,7 @@ void timesync_get_current_datestring( char * buf, size_t buf_len ) {
     time( &now );
     localtime_r( &now, &info );
 
-    strftime( buf, sizeof( buf_len ), "%a %d.%b %Y", &info );
+    strftime( buf, buf_len, "%a %d.%b %Y", &info );
 }
 
 bool timesync_is_between( struct tm start, struct tm end ) {

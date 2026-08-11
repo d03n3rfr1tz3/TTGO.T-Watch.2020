@@ -513,9 +513,9 @@ bool bluetooth_message_queue_msg( BluetoothJsonRequest &doc ) {
             }
         }
         /*
-        * if msg an notify or weather msg?
+        * if msg an notify msg?
         */
-        if( !strcmp( doc["t"], "notify" ) || !strcmp( doc["t"], "weather" ) ) {
+        if( !strcmp( doc["t"], "notify" ) ) {
             int len = doc.memoryUsage();
             char *msg = (char *)MALLOC_ASSERT( len, "bluetooth message alloc failed" );
 
@@ -647,7 +647,7 @@ void bluetooth_message_show_msg( int32_t entry ) {
          * if msg an notify msg?
          */
         if( doc.containsKey("t" ) ) {
-            if( !strcmp( doc["t"], "notify" ) || !strcmp( doc["t"], "weather" ) ) {
+            if( !strcmp( doc["t"], "notify" ) ) {
                 /*
                 * set the receive time string
                 */
@@ -680,13 +680,6 @@ void bluetooth_message_show_msg( int32_t entry ) {
                 }
                 else if ( doc.containsKey("title") ) {
                     lv_label_set_text( bluetooth_message_msg_label, doc["title"] );
-                }
-                else if ( doc.containsKey("temp") && doc.containsKey("loc") && doc.containsKey("txt") ) {
-                    /*
-                    * add special case when a weather information is set
-                    */
-                    int temperature = doc["temp"];
-                    wf_label_printf( bluetooth_message_msg_label, "%s / %d °C / %s", doc["loc"].as<String>().c_str(), temperature - 273, doc["txt"].as<String>().c_str() );
                 }
                 else {
                     lv_label_set_text( bluetooth_message_msg_label, "" );

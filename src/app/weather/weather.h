@@ -50,6 +50,18 @@
 
     weather_config_t *weather_get_config( void );
 
+    /**
+     * @brief get the container with the current weather
+     *
+     * @return  pointer to the today structure
+     */
+    weather_forcast_t *weather_get_today( void );
+
+    /**
+     * @brief update the weather widget from the today structure
+     */
+    void weather_widget_update( void );
+
     void weather_jump_to_forecast( void );
 
     void weather_jump_to_setup( void );

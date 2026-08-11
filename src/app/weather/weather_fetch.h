@@ -46,5 +46,13 @@
      * @return  200 ok, otherwise failed
      */
     int weather_fetch_forecast( weather_config_t *weather_config, weather_forcast_t * weather_forecast );
+    /**
+     * @brief format speed and direction into the wind string of a forecast container
+     *
+     * @param container         pointer to the forecast structure
+     * @param speed             wind speed, unit depends on the config
+     * @param directionDegree   wind direction in degree
+     */
+    void weather_wind_to_string( weather_forcast_t* container, int speed, int directionDegree );
 
 #endif // _WEATHER_FETCH_H

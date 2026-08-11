@@ -21,6 +21,9 @@
  */
 #include "config.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "resolve_owm_icon.h"
 
 LV_IMG_DECLARE(owm01d_64px);
@@ -70,5 +73,22 @@ const void * resolve_owm_icon( char *iconname ) {
         }
     }
     return( &owm01d_64px );
+}
+
+void resolve_owm_iconname( uint16_t code, bool night, char *iconname, size_t len ) {
+    const char *group = "01";
+
+    if ( code >= 200 && code < 300 )        group = "11";       /** @brief thunderstorm */
+    else if ( code >= 300 && code < 400 )   group = "09";       /** @brief drizzle */
+    else if ( code == 511 )                 group = "13";       /** @brief freezing rain */
+    else if ( code >= 500 && code < 505 )   group = "10";       /** @brief rain */
+    else if ( code >= 505 && code < 600 )   group = "09";       /** @brief shower rain */
+    else if ( code >= 600 && code < 700 )   group = "13";       /** @brief snow */
+    else if ( code >= 700 && code < 800 )   group = "50";       /** @brief mist, fog, dust */
+    else if ( code == 801 )                 group = "02";       /** @brief few clouds */
+    else if ( code == 802 )                 group = "03";       /** @brief scattered clouds */
+    else if ( code == 803 || code == 804 )  group = "04";       /** @brief broken clouds */
+
+    snprintf( iconname, len, "%s%s", group, night ? "n" : "d" );
 }
 

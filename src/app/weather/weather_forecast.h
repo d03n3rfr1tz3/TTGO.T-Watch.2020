@@ -12,5 +12,15 @@
 
     void weather_forecast_tile_setup( uint32_t tile_num );
     void weather_forecast_sync( void );
+    /**
+     * @brief update the forecast tile from the forecast structures
+     */
+    void weather_forecast_update( void );
+    /**
+     * @brief get the forecast structures
+     *
+     * @return  pointer to an array of WEATHER_MAX_FORECAST entries or NULL
+     */
+    weather_forcast_t *weather_forecast_get_data( void );
 
 #endif // _WEATHER_FORECAST_H

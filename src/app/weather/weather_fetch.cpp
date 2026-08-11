@@ -27,11 +27,6 @@
 #include "utils/json_psram_allocator.h"
 #include "utils/uri_load/uri_load.h"
 
-/**
- * Utility function to convert numbers to directions
- */
-static void weather_wind_to_string( weather_forcast_t* container, int speed, int directionDegree);
-
 int weather_fetch_today( weather_config_t *weather_config, weather_forcast_t *weather_today ) {
     char url[512]="";
     int httpcode = -1;

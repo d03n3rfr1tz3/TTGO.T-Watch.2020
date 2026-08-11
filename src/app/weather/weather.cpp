@@ -21,6 +21,7 @@
  */
 #include "config.h"
 #include "weather.h"
+#include "weather_ble.h"
 #include "weather_fetch.h"
 #include "weather_forecast.h"
 #include "weather_setup.h"
@@ -56,6 +57,7 @@
  */
 weather_config_t weather_config;
 weather_forcast_t weather_today;
+static bool weather_wifi_connected = false;
 /*
  * app tiles
  */
@@ -119,16 +121,21 @@ void weather_app_setup( void ) {
     weather_sync_event_handle = xEventGroupCreate();
 #endif
 
-    wifictl_register_cb( WIFICTL_OFF | WIFICTL_CONNECT, weather_wifictl_event_cb, "weather" );
+    wifictl_register_cb( WIFICTL_OFF | WIFICTL_CONNECT | WIFICTL_DISCONNECT, weather_wifictl_event_cb, "weather" );
+    weather_ble_setup();
 }
 
 bool weather_wifictl_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
-        case WIFICTL_CONNECT:       if ( weather_config.autosync ) {
+        case WIFICTL_CONNECT:       weather_wifi_connected = true;
+                                    if ( weather_config.autosync ) {
                                         weather_sync_request();
                                     }
                                     break;
-        case WIFICTL_OFF:           widget_hide_indicator( weather_widget );
+        case WIFICTL_DISCONNECT:    weather_wifi_connected = false;
+                                    break;
+        case WIFICTL_OFF:           weather_wifi_connected = false;
+                                    widget_hide_indicator( weather_widget );
                                     break;
     }
     return( true );
@@ -158,6 +165,18 @@ void weather_jump_to_setup( void ) {
 }
 
 void weather_sync_request( void ) {
+    /**
+     * ask gadgetbridge, independent of wifi
+     */
+    weather_ble_request();
+    /**
+     * only bother openweathermap when it can work out
+     */
+    if ( !weather_wifi_connected || strlen( weather_config.apikey ) == 0 ) {
+        log_d("skip weather http sync, no wifi or no apikey");
+        return;
+    }
+
 #ifdef NATIVE_64BIT
     weather_sync_Task( NULL );
 #else
@@ -181,6 +200,10 @@ weather_config_t *weather_get_config( void ) {
     return( &weather_config );
 }
 
+weather_forcast_t *weather_get_today( void ) {
+    return( &weather_today );
+}
+
 void weather_sync_Task( void * pvParameters ) {
 #ifndef NATIVE_64BIT
     log_i("start weather widget task, heap: %d", ESP.getFreeHeap() );
@@ -200,11 +223,14 @@ void weather_sync_Task( void * pvParameters ) {
 }
 
 void weather_widget_sync( void ) {
-    uint32_t retval = weather_fetch_today( &weather_config, &weather_today );
+    weather_fetch_today( &weather_config, &weather_today );
+    weather_widget_update();
+}
 
+void weather_widget_update( void ) {
     gui_take();
 
-    if ( retval == 200 ) {
+    if ( weather_today.valide ) {
         widget_set_label( weather_widget, weather_today.temp );
         widget_set_icon( weather_widget, (lv_obj_t*)resolve_owm_icon( weather_today.icon ) );
         widget_set_indicator( weather_widget, ICON_INDICATOR_OK );
