@@ -28,6 +28,7 @@ bool gpsctl_config_t::onSave(JsonDocument& doc) {
     doc["autoon"] = autoon;
     doc["enable_on_standby"] = enable_on_standby;
     doc["gps_over_ip"] = gps_over_ip;
+    doc["gps_over_ble"] = gps_over_ble;
     doc["app_use_gps"] = app_use_gps;
     doc["TXPin"] = TXPin;
     doc["RXPin"] = RXPin;
@@ -39,6 +40,7 @@ bool gpsctl_config_t::onLoad(JsonDocument& doc) {
     autoon = doc["autoon"] | false;
     enable_on_standby = doc["enable_on_standby"] | false;
     gps_over_ip = doc["gps_over_ip"] | false;
+    gps_over_ble = doc["gps_over_ble"] | GPSCTL_GPS_OVER_BLE_DEFAULT;
     app_use_gps = doc["app_use_gps"] | false;
     TXPin = doc["TXPin"] | -1;
     RXPin = doc["RXPin"] | -1;
@@ -50,6 +52,7 @@ bool gpsctl_config_t::onDefault( void ) {
     autoon = false;
     enable_on_standby = false;
     gps_over_ip = false;
+    gps_over_ble = GPSCTL_GPS_OVER_BLE_DEFAULT;
     app_use_gps = false;
     TXPin = -1;
     RXPin = -1;

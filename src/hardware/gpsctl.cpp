@@ -191,6 +191,8 @@ bool gpsctl_powermgm_loop_cb( EventBits_t event, void *arg ) {
         nextmillis = millis() + GPSCTL_INTERVAL;
         #ifdef NATIVE_64BIT
         #else
+            if ( !gps_serial || ( !gps.location.isValid() && gps_data.gps_source != GPS_SOURCE_GPS ) )
+                return( true );
             /*
             * store valid state
             */
@@ -541,6 +543,16 @@ void gpsctl_set_gps_over_ip( bool gps_over_ip ) {
     gpsctl_send_cb( GPSCTL_UPDATE_CONFIG, NULL );
 }
 
+bool gpsctl_get_gps_over_ble( void ) {
+    return( gpsctl_config.gps_over_ble );
+}
+
+void gpsctl_set_gps_over_ble( bool gps_over_ble ) {
+    gpsctl_config.gps_over_ble = gps_over_ble;
+    gpsctl_config.save();
+    gpsctl_send_cb( GPSCTL_UPDATE_CONFIG, NULL );
+}
+
 bool gpsctl_get_enable_on_standby( void ) {
     return( gpsctl_config.enable_on_standby );
 }
@@ -576,12 +588,17 @@ void gpsctl_set_location( double lat, double lon, double altitude, double speed,
      */
     gpsctl_send_cb( GPSCTL_UPDATE_LOCATION, (void*)&gps_data );
     gpsctl_send_cb( GPSCTL_UPDATE_ALTITUDE, (void*)&gps_data );
+    gpsctl_send_cb( GPSCTL_UPDATE_SPEED, (void*)&gps_data );
     /*
      * send SET_APP_LOCATION if enabled
      */
     if ( gpsctl_get_app_use_gps() && app_location ) {
         gpsctl_send_cb( GPSCTL_SET_APP_LOCATION, (void*)&gps_data );
     }
+}
+
+gps_data_t *gpsctl_get_gps_data( void ) {
+    return( &gps_data );
 }
 
 const char *gpsctl_get_source_str( gps_source_t gps_source ) {

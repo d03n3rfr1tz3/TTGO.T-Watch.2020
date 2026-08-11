@@ -134,6 +134,18 @@
      */
     void gpsctl_set_gps_over_ip( bool gps_over_ip );
     /**
+     * @brief get gps over bluetooth config
+     *
+     * @return  true if enable
+     */
+    bool gpsctl_get_gps_over_ble( void );
+    /**
+     * @brief set gps over bluetooth config
+     *
+     * @param   gps_over_ble true enable, false disable
+     */
+    void gpsctl_set_gps_over_ble( bool gps_over_ble );
+    /**
      * @brief get gps an standby config
      * 
      * @return  true if enable
@@ -168,6 +180,12 @@
      * @param   app_location true to inform app for a new location like weather app
      */
     void gpsctl_set_location( double lat, double lon, double altitude, double speed, gps_source_t gps_source , bool app_location );
+    /**
+     * @brief get the current gps data
+     *
+     * @return  pointer to the current gps data
+     */
+    gps_data_t *gpsctl_get_gps_data( void );
     /**
      * @brief get gps source string
      * 

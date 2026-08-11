@@ -101,8 +101,10 @@ static bool gadgetbridge_blectl_event_cb( EventBits_t event, void *arg );
                                                  * Send message
                                                  */
                                                 powermgm_resume_from_ISR();
-                                                if ( xQueueSendFromISR( gadgetbridge_msg_receive_queue, &buff, 0 ) != pdTRUE )
+                                                if ( xQueueSendFromISR( gadgetbridge_msg_receive_queue, &buff, 0 ) != pdTRUE ) {
                                                     log_e("fail to send a receive BLE msg (%d bytes)", size );
+                                                    free( buff );
+                                                }
                                                 gadgetbridge_RX_msg.clear();
                                                 break;
                                             }
@@ -234,8 +236,10 @@ bool gadgetbridge_send_msg( const char *format, ... ) {
              * if we have a string, send it via msg_queue
              */
             if( buffer ) {
-                if ( xQueueSend( gadgetbridge_msg_transmit_queue, &buffer, 0 ) != pdTRUE )
+                if ( xQueueSend( gadgetbridge_msg_transmit_queue, &buffer, 0 ) != pdTRUE ) {
                     log_e("fail to send msg");
+                    free( buffer );
+                }
                 else
                     retval = true;
             }
@@ -257,11 +261,12 @@ static void gadgetbridge_send_next_msg( char *msg ) {
     if ( !gadgetbridge_msg.active && blectl_get_event( BLECTL_CONNECT ) ) {
 
         size_t size = strlen( (const char*)msg ) + 1;
+        /**
+         * resize the buffer for every msg, a fixed size overflows on longer msg
+         */
+        gadgetbridge_msg.msg = (char *)REALLOC_ASSERT( gadgetbridge_msg.msg, size, "blectl_msg.msg realloc failed" );
 
-        if ( gadgetbridge_msg.msg == NULL )
-            gadgetbridge_msg.msg = (char *)CALLOC_ASSERT( size, 1, "blectl_msg.msg calloc failed" );
-
-        strncpy( gadgetbridge_msg.msg, msg, size );
+        strlcpy( gadgetbridge_msg.msg, msg, size );
         gadgetbridge_msg.active = true;
         gadgetbridge_msg.msglen = size;
         gadgetbridge_msg.msgpos = 0;

@@ -27,6 +27,15 @@
     #define GPSCTL_JSON_CONFIG_FILE  "/gpsctl.json"           /** @brief defines json config file name */
 
     /**
+     * boards with an own gps receiver do not ask the phone by default.
+     */
+    #if defined( M5PAPER ) || defined( M5CORE2 ) || defined( LILYGO_WATCH_2020_V2 )
+        #define GPSCTL_GPS_OVER_BLE_DEFAULT     false
+    #else
+        #define GPSCTL_GPS_OVER_BLE_DEFAULT     true
+    #endif
+
+    /**
      * @brief gpxctl config structure in memory
      */
     class gpsctl_config_t : public BaseJsonConfig {
@@ -36,6 +45,7 @@
         bool enable_on_standby = false;         /** @brief enable on standby on/off */
         bool app_use_gps = false;               /** @brief permission for apps, to get gps location */
         bool gps_over_ip = false;               /** @brief enable gps over ip */
+        bool gps_over_ble = GPSCTL_GPS_OVER_BLE_DEFAULT;    /** @brief enable gps over bluetooth/gadgetbridge */
         int32_t TXPin = -1;                     /** @brief enable gps modules on M5stack use PIN as TX*/
         int32_t RXPin = -1;                     /** @brief enable gps modules on M5stack use PIN as RX */
 

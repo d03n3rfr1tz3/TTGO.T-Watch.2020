@@ -325,4 +325,14 @@ void gps_status_activate_cb(void)
     gps_status_block_return_maintile = display_get_block_return_maintile();
     /** overwrite "block the maintile" value */
     display_set_block_return_maintile( true );
+    /** show the current state, we only get events while the app is open */
+    gps_data_t *gps_data = gpsctl_get_gps_data();
+    gpsctl_gps_status_event_cb( gps_data->gpsfix ? GPSCTL_FIX : GPSCTL_NOFIX, (void*)gps_data );
+    if ( gps_data->gpsfix ) {
+        gpsctl_gps_status_event_cb( GPSCTL_UPDATE_LOCATION, (void*)gps_data );
+        gpsctl_gps_status_event_cb( GPSCTL_UPDATE_SATELLITE, (void*)gps_data );
+        gpsctl_gps_status_event_cb( GPSCTL_UPDATE_SPEED, (void*)gps_data );
+        gpsctl_gps_status_event_cb( GPSCTL_UPDATE_ALTITUDE, (void*)gps_data );
+        gpsctl_gps_status_event_cb( GPSCTL_UPDATE_SOURCE, (void*)gps_data );
+    }
 }

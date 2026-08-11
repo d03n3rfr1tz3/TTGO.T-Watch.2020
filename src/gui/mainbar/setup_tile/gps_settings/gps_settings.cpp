@@ -33,33 +33,50 @@
 #include "hardware/gpsctl.h"
 
 lv_obj_t *gps_settings_tile = NULL;
+lv_obj_t *gps_settings_tile_2 = NULL;
 uint32_t gps_tile_num;
+uint32_t gps_tile_num_2;
 
 lv_obj_t *autoon_onoff = NULL;
 lv_obj_t *enable_on_standby_onoff = NULL;
 lv_obj_t *app_use_gps_onoff = NULL;
 lv_obj_t *fakegps_onoff = NULL;
+lv_obj_t *blegps_onoff = NULL;
 lv_obj_t *gps_latlon_label = NULL;
 lv_obj_t *gps_port_list = NULL;
 
 LV_IMG_DECLARE(gps_64px);
+LV_IMG_DECLARE(up_32px);
+LV_IMG_DECLARE(down_32px);
 
 static void enter_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event );
 static void exit_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event );
+static void down_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event );
+static void up_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event );
 static void autoon_onoff_event_handler( lv_obj_t * obj, lv_event_t event);
 static void enable_on_standby_onoff_event_handler( lv_obj_t * obj, lv_event_t event);
 static void app_use_gps_onoff_event_handler( lv_obj_t * obj, lv_event_t event);
 static void fakegps_onoff_event_handler( lv_obj_t * obj, lv_event_t event);
+static void blegps_onoff_event_handler( lv_obj_t * obj, lv_event_t event);
 static void gps_port_list_event_handler( lv_obj_t *obj, lv_event_t event );
 bool gps_settings_config_update_cb( EventBits_t event, void *arg );
 bool gps_settings_latlon_update_cb( EventBits_t event, void *arg );
 
 void gps_settings_tile_setup( void ) {
+    lv_obj_t *header_2 = NULL;
     // get an app tile and copy mainstyle
-    gps_tile_num = mainbar_add_setup_tile( 1, 1, "gps settings" );
-    gps_settings_tile = mainbar_get_tile_obj( gps_tile_num );
-
-    lv_obj_add_style( gps_settings_tile, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    #if RES_Y_MAX < 340
+        gps_tile_num = mainbar_add_setup_tile( 1, 2, "gps settings" );
+        gps_tile_num_2 = gps_tile_num + 1;
+        gps_settings_tile = mainbar_get_tile_obj( gps_tile_num );
+        gps_settings_tile_2 = mainbar_get_tile_obj( gps_tile_num_2 );
+        lv_obj_add_style( gps_settings_tile, LV_OBJ_PART_MAIN, SETUP_STYLE );
+        lv_obj_add_style( gps_settings_tile_2, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    #else
+        gps_tile_num = mainbar_add_setup_tile( 1, 1, "gps settings" );
+        gps_settings_tile = mainbar_get_tile_obj( gps_tile_num );
+        lv_obj_add_style( gps_settings_tile, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    #endif
 
     icon_t *gps_setup_icon = setup_register( "gps", &gps_64px, enter_gps_setup_event_cb );
     setup_hide_indicator( gps_setup_icon );
@@ -68,6 +85,19 @@ void gps_settings_tile_setup( void ) {
      */
     lv_obj_t *header = wf_add_settings_header( gps_settings_tile, "gps settings", exit_gps_setup_event_cb );
     lv_obj_align( header, gps_settings_tile, LV_ALIGN_IN_TOP_LEFT, THEME_PADDING, STATUSBAR_HEIGHT + THEME_PADDING );
+    /**
+     * add page 2 header and the up/down buttons if a tile 2 exist
+     */
+    if ( gps_settings_tile_2 ) {
+        header_2 = wf_add_settings_header( gps_settings_tile_2, "gps settings" );
+        lv_obj_align( header_2, gps_settings_tile_2, LV_ALIGN_IN_TOP_LEFT, THEME_PADDING, STATUSBAR_HEIGHT + THEME_PADDING );
+
+        lv_obj_t *up_btn_1 = wf_add_image_button( gps_settings_tile_2, up_32px, up_gps_setup_event_cb, SETUP_STYLE );
+        lv_obj_align( up_btn_1, gps_settings_tile_2, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING, STATUSBAR_HEIGHT + THEME_PADDING );
+
+        lv_obj_t *down_btn_1 = wf_add_image_button( gps_settings_tile, down_32px, down_gps_setup_event_cb, SETUP_STYLE );
+        lv_obj_align( down_btn_1, gps_settings_tile, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING, STATUSBAR_HEIGHT + THEME_PADDING );
+    }
     /**
      * add autoon switch
      */
@@ -88,14 +118,22 @@ void gps_settings_tile_setup( void ) {
      */
     lv_obj_t *fakegps_cont = wf_add_labeled_switch( gps_settings_tile, "fake gps via ip", &fakegps_onoff, gpsctl_get_gps_over_ip(), fakegps_onoff_event_handler, SETUP_STYLE );
     lv_obj_align( fakegps_cont, app_use_gps_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_PADDING );
+    /**
+     * add gps via bluetooth switch
+     */
+    lv_obj_t *blegps_cont = wf_add_labeled_switch( gps_settings_tile, "gps via bluetooth", &blegps_onoff, gpsctl_get_gps_over_ble(), blegps_onoff_event_handler, SETUP_STYLE );
+    lv_obj_align( blegps_cont, fakegps_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_PADDING );
+    /**
+     * the gps port list and the position label go to page 2 if it exist
+     */
+    lv_obj_t *port_parent = gps_settings_tile_2 ? gps_settings_tile_2 : gps_settings_tile;
+    lv_obj_t *gps_port_cont = wf_add_labeled_list( port_parent, "gps port (need reboot)", &gps_port_list, "PORT.A\nPORT.B\nPORT.C\nNONE", gps_port_list_event_handler, SETUP_STYLE );
+    lv_obj_align( gps_port_cont, gps_settings_tile_2 ? header_2 : blegps_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_PADDING );
 
-    lv_obj_t *gps_port_cont = wf_add_labeled_list( gps_settings_tile, "gps port (need reboot)", &gps_port_list, "PORT.A\nPORT.B\nPORT.C\nNONE", gps_port_list_event_handler, SETUP_STYLE );
-    lv_obj_align( gps_port_cont, fakegps_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_PADDING );
-
-    gps_latlon_label = lv_label_create( gps_settings_tile, NULL);
+    gps_latlon_label = lv_label_create( port_parent, NULL);
     lv_obj_add_style( gps_latlon_label, LV_OBJ_PART_MAIN, ws_get_mainbar_style()  );
     lv_label_set_text( gps_latlon_label, "fix: - lat: - lon: -");
-    lv_obj_align( gps_latlon_label, gps_settings_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -5 );
+    lv_obj_align( gps_latlon_label, port_parent, LV_ALIGN_IN_BOTTOM_MID, 0, -5 );
 
     gpsctl_register_cb( GPSCTL_FIX | GPSCTL_NOFIX | GPSCTL_UPDATE_LOCATION, gps_settings_latlon_update_cb, "gps settings" );
     gpsctl_register_cb( GPSCTL_UPDATE_CONFIG, gps_settings_config_update_cb, "gps settings" );
@@ -127,6 +165,11 @@ bool gps_settings_config_update_cb( EventBits_t event, void *arg ) {
                 lv_switch_on( fakegps_onoff, LV_ANIM_OFF );
             else
                 lv_switch_off( fakegps_onoff, LV_ANIM_OFF );
+
+            if ( gpsctl_get_gps_over_ble() )
+                lv_switch_on( blegps_onoff, LV_ANIM_OFF );
+            else
+                lv_switch_off( blegps_onoff, LV_ANIM_OFF );
 
             #if defined( M5PAPER )
                 int8_t rx,tx;
@@ -170,7 +213,7 @@ bool gps_settings_latlon_update_cb( EventBits_t event, void *arg ) {
     snprintf( msg, sizeof( msg ), "%s @ lat: %.3f lon: %.3f", gpsfix?"fix":"nofix", lat, lon );
     gui_take();
     lv_label_set_text( gps_latlon_label, msg );
-    lv_obj_align( gps_latlon_label, gps_settings_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -5 );
+    lv_obj_align( gps_latlon_label, gps_settings_tile_2 ? gps_settings_tile_2 : gps_settings_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -5 );
     gui_give();
 
     return( true );
@@ -186,6 +229,21 @@ static void enter_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
 static void exit_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):       mainbar_jump_back();
+                                        break;
+    }
+}
+
+static void down_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    switch( event ) {
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( gps_tile_num_2, LV_ANIM_ON );
+                                        break;
+    }
+}
+
+static void up_gps_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    switch( event ) {
+        case( LV_EVENT_CLICKED ):       lv_dropdown_close( gps_port_list );
+                                        mainbar_jump_back();
                                         break;
     }
 }
@@ -229,6 +287,12 @@ static void app_use_gps_onoff_event_handler(lv_obj_t * obj, lv_event_t event) {
 static void fakegps_onoff_event_handler(lv_obj_t * obj, lv_event_t event) {
     switch( event ) {
         case( LV_EVENT_VALUE_CHANGED):  gpsctl_set_gps_over_ip( lv_switch_get_state( obj ) );
+    }
+}
+
+static void blegps_onoff_event_handler(lv_obj_t * obj, lv_event_t event) {
+    switch( event ) {
+        case( LV_EVENT_VALUE_CHANGED):  gpsctl_set_gps_over_ble( lv_switch_get_state( obj ) );
     }
 }
 
