@@ -16,6 +16,7 @@
 #include "config.h"
 
 #include "calendar.h"
+#include "calendar_ble.h"
 #include "calendar_db.h"
 #include "calendar_day.h"
 #include "calendar_overview.h"
@@ -73,7 +74,7 @@ lv_calendar_date_t *calendar_overview_highlighted_days = NULL;                  
 /**
  * internal variables
  */
-static bool calendar_overview_highlight_table[ CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ];/** @brief highlighted days table bool table for sql query */
+static bool calendar_overview_highlight_table[ CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS + 1 ];/** @brief highlighted days table bool table for sql query */
 static int calendar_year = 0;                                                       /** @brief current year in calendar overview */
 static int calendar_month = 0;                                                      /** @brief current month in calendar overview */
 static int calendar_day = 0;                                                        /** @brief current day in calendar overview */
@@ -197,16 +198,14 @@ static void calendar_overview_activate_cb( void ) {
     /**
      * open calendar date base
      */
-    if ( calendar_db_open() ) {
-        /**
-         * highlight day with dates
-         */
-        calendar_overview_refresh_today_ui();
-        lv_calendar_set_highlighted_dates( calendar_overview, calendar_overview_highlighted_days, calendar_overview_highlight_day( calendar_year, calendar_month ) );
-    }
-    else {
+    if ( !calendar_db_open() ) {
         log_e("open calendar date base failed");
     }
+    /**
+     * highlight day with dates, ble events are marked even without a database
+     */
+    calendar_overview_refresh_today_ui();
+    lv_calendar_set_highlighted_dates( calendar_overview, calendar_overview_highlighted_days, calendar_overview_highlight_day( calendar_year, calendar_month ) );
 }
 
 static void calendar_overview_hibernate_cb( void ) {
@@ -287,7 +286,7 @@ static int calendar_overview_highlight_day( int year, int month ) {
     /**
      * clear calendar_overview_highlight_table table
      */
-    for ( int i = 0 ; i < CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
+    for ( int i = 0 ; i <= CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
         calendar_overview_highlight_table[ i ] = false;
     }
     /**
@@ -298,18 +297,26 @@ static int calendar_overview_highlight_day( int year, int month ) {
     /**
      * exec sql query
      */
-    if ( calendar_db_exec( calendar_overview_highlight_day_callback, sql ) ) {
-        /**
-         * count day with day and marked days with dates
-         */
-        for ( int i = 0 ; i < CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
-            if ( calendar_overview_highlight_table[ i ] ) {
-                CALENDAR_OVREVIEW_DEBUG_LOG("add year %d and month %d to highlight", year, month );
-                calendar_overview_highlighted_days[ hitcounter ].day = i;
-                calendar_overview_highlighted_days[ hitcounter ].month = month;
-                calendar_overview_highlighted_days[ hitcounter ].year = year;
-                hitcounter++;
-            }
+    calendar_db_exec( calendar_overview_highlight_day_callback, sql );
+    /**
+     * mark the days with events from the phone, evaluated outside the query so they
+     * survive a missing or broken database
+     */
+    for ( int i = 1 ; i <= CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
+        if ( calendar_ble_has_day( year, month, i ) ) {
+            calendar_overview_highlight_table[ i ] = true;
+        }
+    }
+    /**
+     * count day with day and marked days with dates
+     */
+    for ( int i = 0 ; i <= CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
+        if ( calendar_overview_highlight_table[ i ] ) {
+            CALENDAR_OVREVIEW_DEBUG_LOG("add year %d and month %d to highlight", year, month );
+            calendar_overview_highlighted_days[ hitcounter ].day = i;
+            calendar_overview_highlighted_days[ hitcounter ].month = month;
+            calendar_overview_highlighted_days[ hitcounter ].year = year;
+            hitcounter++;
         }
     }
     return( hitcounter );
