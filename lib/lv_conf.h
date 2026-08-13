@@ -31,6 +31,12 @@
     #elif defined( LILYGO_WATCH_2021 )
         #define LV_HOR_RES_MAX          (240)
         #define LV_VER_RES_MAX          (240)
+    #elif defined( M5CORE2 )
+        #define LV_HOR_RES_MAX          (320)
+        #define LV_VER_RES_MAX          (240)
+    #elif defined( WT32_SC01 )
+        #define LV_HOR_RES_MAX          (480)
+        #define LV_VER_RES_MAX          (320)
     #endif
 #endif
 
@@ -49,9 +55,13 @@
     #ifdef M5PAPER
         #define LV_COLOR_16_SWAP   0
     #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-        #define LV_COLOR_16_SWAP   0
+        #define LV_COLOR_16_SWAP   1
     #elif defined( LILYGO_WATCH_2021 )
         #define LV_COLOR_16_SWAP   1
+    #elif defined( M5CORE2 )
+        #define LV_COLOR_16_SWAP   0
+    #elif defined( WT32_SC01 )
+        #define LV_COLOR_16_SWAP   0
     #endif
 #endif
 
@@ -619,7 +629,7 @@ typedef void *lv_obj_user_data_t;
 /*Calendar (dependencies: -)*/
 #define LV_USE_CALENDAR 1
 #if LV_USE_CALENDAR
-#  define LV_CALENDAR_WEEK_STARTS_MONDAY    0
+#  define LV_CALENDAR_WEEK_STARTS_MONDAY    1
 #endif
 
 /*Canvas (dependencies: lv_img)*/
