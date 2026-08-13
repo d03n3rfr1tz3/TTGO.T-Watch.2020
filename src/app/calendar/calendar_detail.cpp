@@ -16,7 +16,7 @@
 #include "config.h"
 
 #include "calendar.h"
-#include "calendar_ble.h"
+#include "utils/blecalendar.h"
 #include "calendar_detail.h"
 
 #include "gui/mainbar/mainbar.h"
@@ -132,7 +132,7 @@ static lv_obj_t *calendar_detail_set_label( lv_obj_t *label, lv_obj_t *prev, con
 }
 
 void calendar_detail_show( int slot ) {
-    const calendar_ble_event_t *event = calendar_ble_get_event( slot );
+    const blecalendar_event_t *event = blecalendar_get_event( slot );
     char time_str[ 64 ] = "";
     lv_obj_t *prev = NULL;
 

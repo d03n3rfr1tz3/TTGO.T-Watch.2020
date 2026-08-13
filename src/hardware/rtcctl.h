@@ -22,13 +22,29 @@
 #ifndef _RTCCTL_H
     #define _RTCCTL_H
 
+    #include <time.h>
+    #include <stddef.h>
+
     #include "callback.h"
     #include "hardware/config/rtcctlconfig.h"
 
     #define RTCCTL_ALARM_OCCURRED    _BV(0)     /** @brief event mask for alarm occurred */
-    #define RTCCTL_ALARM_TERM_SET    _BV(1)     /** @brief event mask for alarm set */     
+    #define RTCCTL_ALARM_TERM_SET    _BV(1)     /** @brief event mask for alarm set */
     #define RTCCTL_ALARM_DISABLED    _BV(2)     /** @brief event mask for alarm disabled */
     #define RTCCTL_ALARM_ENABLED     _BV(3)     /** @brief event mask for alarm enabled */
+
+    #define RTCCTL_MAX_EXT_ALARMS    10         /** @brief number of external alarm terms */
+
+    /**
+     * @brief an alarm term from an external source, the rtc alarm register holds
+     *        the next term over all sources
+     */
+    typedef struct {
+        bool enabled;                           /** @brief term is active */
+        uint8_t hour;                           /** @brief term hour */
+        uint8_t minute;                         /** @brief term minute */
+        bool week_days[ DAYS_IN_WEEK ];         /** @brief starting from sunday, no day set means every day */
+    } rtcctl_alarm_term_t;
 
     /**
      * @brief setup rtc controller routine
@@ -60,11 +76,31 @@
      */
     rtcctl_alarm_t *rtcctl_get_alarm_data( void );
     /**
-     * @brief find and set term for next alarm 
+     * @brief replace the external alarm terms and rearm
+     *
+     * @param   terms           pointer to the terms, NULL clears the list
+     * @param   count           number of terms, truncated to RTCCTL_MAX_EXT_ALARMS
+     *
+     * @note    the caller owns the persistence of these terms
+     */
+    void rtcctl_set_ext_alarms( const rtcctl_alarm_term_t *terms, size_t count );
+    /**
+     * @brief find and set term for next alarm
      */
     void rtcctl_set_next_alarm( void );
     /**
-     * @brief if alarm is set, returns day of week number where sunday=0, othervise is returned DAY_NOT_SET 
+     * @brief   returns the next alarm term over all sources or 0 if no alarm is armed
+     */
+    time_t rtcctl_get_next_alarm_time( void );
+    /**
+     * @brief   returns the term that raised RTCCTL_ALARM_OCCURRED or 0 if no alarm occurred yet
+     *
+     * @note    the system clock is only resynced from the rtc with the wakeup after the event,
+     *          so subscribers must not read time() but this term
+     */
+    time_t rtcctl_get_last_alarm_time( void );
+    /**
+     * @brief if alarm is set, returns day of week number where sunday=0, othervise is returned DAY_NOT_SET
      */
     int rtcctl_get_next_alarm_week_day( void );
     /**

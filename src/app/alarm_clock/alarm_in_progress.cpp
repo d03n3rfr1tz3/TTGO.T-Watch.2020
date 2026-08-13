@@ -54,6 +54,9 @@ static lv_style_t label_style;
 static int brightness = 0;
 static int vibe_delay_coutdown = 0;
 static int beep_often_countown = 0;
+static int alarm_hour = -1;
+static int alarm_minute = -1;
+static time_t alarm_end = 0;
 
 bool alarm_in_progress_style_change_event_cb( EventBits_t event, void *arg );
 
@@ -76,10 +79,8 @@ static void exit_event_callback( lv_obj_t * obj, lv_event_t event ){
 
 static bool is_alarm_time(){
     time_t now;
-    struct tm time_tm;
     time( &now );
-    localtime_r( &now, &time_tm );
-    return time_tm.tm_hour == rtcctl_get_alarm_data()->hour && time_tm.tm_min == rtcctl_get_alarm_data()->minute;
+    return now < alarm_end;
 }
 
 static void alarm_task_function(lv_task_t * task){
@@ -132,9 +133,26 @@ static void alarm_task_function(lv_task_t * task){
 }
 
 void alarm_in_progress_start_alarm(){
+    char text[16] = "";
+    struct tm term_tm;
+    time_t term = rtcctl_get_last_alarm_time();
+    if ( !term ){
+        time( &term );
+    }
+
+    localtime_r( &term, &term_tm );
+    alarm_hour = term_tm.tm_hour;
+    alarm_minute = term_tm.tm_min;
+    alarm_end = term + 60;
+
     mainbar_jump_to_tilenumber( tile_num, LV_ANIM_OFF, true );
 
-    lv_label_set_text(label, alarm_clock_get_clock_label(false));
+    snprintf( text, sizeof( text ), "%d:%.2d%s",
+        timesync_get_24hr() ? alarm_hour : alarm_clock_get_am_pm_hour( alarm_hour ),
+        alarm_minute,
+        timesync_get_24hr() ? "" : alarm_clock_get_am_pm_value( alarm_hour, true ) );
+
+    lv_label_set_text(label, text);
     lv_obj_align( label, tile, LV_ALIGN_CENTER, 0, 0 );
 
     highlighted = true;

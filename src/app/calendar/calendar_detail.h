@@ -29,7 +29,7 @@
     /**
      * @brief show an event from the ble store
      *
-     * @param   slot    slot number from calendar_ble_get_day_events()
+     * @param   slot    slot number from blecalendar_get_day_events()
      */
     void calendar_detail_show( int slot );
 

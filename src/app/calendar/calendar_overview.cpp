@@ -16,7 +16,7 @@
 #include "config.h"
 
 #include "calendar.h"
-#include "calendar_ble.h"
+#include "utils/blecalendar.h"
 #include "calendar_db.h"
 #include "calendar_day.h"
 #include "calendar_overview.h"
@@ -303,7 +303,7 @@ static int calendar_overview_highlight_day( int year, int month ) {
      * survive a missing or broken database
      */
     for ( int i = 1 ; i <= CALENDAR_OVREVIEW_HIGHLIGHTED_DAYS ; i++ ) {
-        if ( calendar_ble_has_day( year, month, i ) ) {
+        if ( blecalendar_has_day( year, month, i ) ) {
             calendar_overview_highlight_table[ i ] = true;
         }
     }

@@ -316,7 +316,7 @@ void statusbar_setup( void )
     statusbar_hide_icon( STATUSBAR_VOLUME );
     statusbar_hide_icon( STATUSBAR_GPS );
 
-    if ( rtcctl_get_alarm_data()->enabled ) {
+    if ( rtcctl_get_next_alarm_time() ) {
         statusbar_show_icon( STATUSBAR_ALARM );
     }
     else {

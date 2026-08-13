@@ -17,7 +17,6 @@
 #
 
 #include "calendar.h"
-#include "calendar_ble.h"
 #include "calendar_db.h"
 #include "calendar_day.h"
 #include "calendar_detail.h"
@@ -77,7 +76,6 @@ void calendar_app_setup( void ) {
     calendar_day_setup();
     calendar_create_setup();
     calendar_detail_setup();
-    calendar_ble_setup();
 }
 /**
  * @brief call back function when enter the app

@@ -164,7 +164,6 @@ bool alarm_occurred_event_event_callback ( EventBits_t event, void *arg  ){
         case ( RTCCTL_ALARM_OCCURRED ):
             powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
             alarm_in_progress_start_alarm();
-            rtcctl_set_next_alarm();
             break;
     }
     return( true );
@@ -262,19 +261,21 @@ char const * alarm_clock_get_week_day(int index, bool short_format){
 char * alarm_clock_get_clock_label(bool show_day)
 {
     static char text[LABEL_MAX_SIZE]; //DoW + '\n' + HH:MMA  + '\0'
-    int next_alarm_week_day =  rtcctl_get_next_alarm_week_day();
-    rtcctl_alarm_t *alarm_data = rtcctl_get_alarm_data();
-    if (alarm_data->enabled && next_alarm_week_day != RTCCTL_ALARM_NOT_SET)
+    time_t next_alarm_time = rtcctl_get_next_alarm_time();
+    if (next_alarm_time){
+        struct tm alarm_tm;
+        localtime_r(&next_alarm_time, &alarm_tm);
         snprintf(
             text,
             LABEL_MAX_SIZE,
             "%s%s%d:%.2d%s",
-            show_day ? alarm_clock_get_week_day(next_alarm_week_day, false) : "",
+            show_day ? alarm_clock_get_week_day(alarm_tm.tm_wday, false) : "",
             show_day ? "\n" : "",
-            timesync_get_24hr() ? alarm_data->hour : alarm_clock_get_am_pm_hour(alarm_data->hour),
-            alarm_data->minute,
-            timesync_get_24hr() ? "" : alarm_clock_get_am_pm_value(alarm_data->hour, true)
+            timesync_get_24hr() ? alarm_tm.tm_hour : alarm_clock_get_am_pm_hour(alarm_tm.tm_hour),
+            alarm_tm.tm_min,
+            timesync_get_24hr() ? "" : alarm_clock_get_am_pm_value(alarm_tm.tm_hour, true)
         );
+    }
     else
         snprintf(text, LABEL_MAX_SIZE, "---\n--:--");
     return text;

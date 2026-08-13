@@ -65,8 +65,11 @@
     }
 #endif
 
-static rtcctl_alarm_t alarm_data; 
+static rtcctl_alarm_t alarm_data;
 static time_t alarm_time = 0;
+static time_t last_alarm_time = 0;
+static rtcctl_alarm_term_t ext_alarms[ RTCCTL_MAX_EXT_ALARMS ];
+static size_t ext_alarm_count = 0;
 
 bool rtcctl_powermgm_event_cb( EventBits_t event, void *arg );
 bool rtcctl_powermgm_loop_cb( EventBits_t event, void *arg );
@@ -131,45 +134,7 @@ bool rtcctl_send_event_cb( EventBits_t event ) {
     return( callback_send( rtcctl_callback, event, (void*)NULL ) );
 }
 
-static bool is_enabled( void ) {
-    return alarm_data.enabled;
-}
-
-bool is_any_day_enabled( void ) {
-    for (int index = 0; index < DAYS_IN_WEEK; ++index){
-        if (alarm_data.week_days[index])
-            return true; 
-    }
-    return false;
-}
-
-static bool is_day_checked( int wday ) {
-    // No day checked mean ALL days
-    return alarm_data.week_days[wday] || !is_any_day_enabled();
-}
-
-time_t find_next_alarm_day( int day_of_week, time_t now ) {
-    //it is expected that test if any day is enabled has been performed
-    
-    time_t ret_val = now;
-    int wday_index = day_of_week;
-    do {
-        ret_val += 60 * 60 * 24; //number of seconds in day
-        if (++wday_index == DAYS_IN_WEEK){
-            wday_index = 0;
-        } 
-        if (is_day_checked( wday_index )){
-            return ret_val;
-        }        
-    } while (wday_index != day_of_week);
-    
-    return ret_val; //the same day of next week
-}
-
-void set_next_alarm( void ) {
-
-
-    if ( !is_enabled() ) {
+static void alarm_hw_clear( void ) {
 #ifdef NATIVE_64BIT
 
 #else
@@ -179,43 +144,18 @@ void set_next_alarm( void ) {
 
     #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
         TTGOClass *ttgo = TTGOClass::getWatch();
-        ttgo->rtc->setAlarm( PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM );    
+        ttgo->rtc->setAlarm( PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM );
     #elif defined( LILYGO_WATCH_2021 )
-        rtc.setAlarm( PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM );        
+        rtc.setAlarm( PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM, PCF8563_NO_ALARM );
     #elif defined( WT32_SC01 )
 
     #else
         #warning "no alarm rtcctl function"
     #endif
 #endif
-        rtcctl_send_event_cb( RTCCTL_ALARM_TERM_SET );
-        return;
-    } 
+}
 
-    time_t now;
-    time( &now );
-    alarm_time = now;
-    struct tm alarm_tm;
-
-    // get local time and set alarm time
-    localtime_r(&alarm_time, &alarm_tm);
-    log_d("local time: %02d:%02d day: %d", alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday );
-    alarm_tm.tm_hour = alarm_data.hour;
-    alarm_tm.tm_min = alarm_data.minute;
-    alarm_time = mktime( &alarm_tm );
-
-    if ( alarm_time <= now  || !is_day_checked( alarm_tm.tm_wday ) ) {
-        alarm_time = find_next_alarm_day( alarm_tm.tm_wday, alarm_time );
-        localtime_r( &alarm_time, &alarm_tm );
-    }
-
-    /*
-     * convert local alarm time into GMT0 alarm time, it is necessary sine rtc store time in GMT0
-     */
-    log_d("next local alarm time: %02d:%02d day: %d", alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday );
-    gmtime_r( &alarm_time, &alarm_tm );
-    log_d("next GMT0 alarm time: %02d:%02d day %d", alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday );
-
+static void alarm_hw_set( int hour, int minute, int mday ) {
 #ifdef NATIVE_64BIT
 
 #else
@@ -226,25 +166,22 @@ void set_next_alarm( void ) {
     #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
         /*
          * it is better define alarm by day in month rather than weekday.
-         * This way will be work-around an error in pcf8563 source and 
+         * This way will be work-around an error in pcf8563 source and
          * will avoid eaising alarm when there is only one alarm in the week (today) and alarm time is set to now
          */
         TTGOClass *ttgo = TTGOClass::getWatch();
-        ttgo->rtc->setAlarm( alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday, PCF8563_NO_ALARM );
+        ttgo->rtc->setAlarm( hour, minute, mday, PCF8563_NO_ALARM );
     #elif defined( LILYGO_WATCH_2021 )
-        rtc.setAlarm( alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday, PCF8563_NO_ALARM );
+        rtc.setAlarm( hour, minute, mday, PCF8563_NO_ALARM );
     #elif defined( WT32_SC01 )
 
     #else
         #warning "no alarm rtcctl function"
     #endif
 #endif
-    rtcctl_send_event_cb( RTCCTL_ALARM_TERM_SET );
 }
 
-void rtcctl_set_next_alarm( void ) {
-
-    if (alarm_data.enabled){
+static void alarm_hw_disable( void ) {
 #ifdef NATIVE_64BIT
 
 #else
@@ -263,11 +200,9 @@ void rtcctl_set_next_alarm( void ) {
         #warning "no alarm rtcctl function"
     #endif
 #endif
-    }
+}
 
-    set_next_alarm();
-    
-    if (alarm_data.enabled){
+static void alarm_hw_enable( void ) {
 #ifdef NATIVE_64BIT
 
 #else
@@ -286,7 +221,149 @@ void rtcctl_set_next_alarm( void ) {
         #warning "no alarm rtcctl function"
     #endif
 #endif
+}
+
+static bool is_any_day_enabled( const bool week_days[] ) {
+    for (int index = 0; index < DAYS_IN_WEEK; ++index){
+        if (week_days[index])
+            return true;
     }
+    return false;
+}
+
+static bool is_day_checked( const bool week_days[], int wday ) {
+    // No day checked mean ALL days
+    return week_days[wday] || !is_any_day_enabled( week_days );
+}
+
+static time_t find_next_alarm_day( const bool week_days[], int day_of_week, time_t now ) {
+    time_t ret_val = now;
+    int wday_index = day_of_week;
+    do {
+        ret_val += 60 * 60 * 24;
+        if (++wday_index == DAYS_IN_WEEK){
+            wday_index = 0;
+        }
+        if (is_day_checked( week_days, wday_index )){
+            return ret_val;
+        }
+    } while (wday_index != day_of_week);
+
+    return ret_val;
+}
+
+/**
+ * @brief get the next occurrence of a term
+ *
+ * @return  alarm time or 0 if the term is not enabled
+ */
+static time_t calc_next_term( const rtcctl_alarm_term_t *term, time_t now ) {
+    if ( !term->enabled )
+        return( 0 );
+
+    struct tm alarm_tm;
+    time_t term_time = now;
+
+    localtime_r( &term_time, &alarm_tm );
+    alarm_tm.tm_hour = term->hour;
+    alarm_tm.tm_min = term->minute;
+    alarm_tm.tm_sec = 0;
+    term_time = mktime( &alarm_tm );
+
+    if ( term_time <= now || !is_day_checked( term->week_days, alarm_tm.tm_wday ) )
+        term_time = find_next_alarm_day( term->week_days, alarm_tm.tm_wday, term_time );
+
+    return( term_time );
+}
+
+/**
+ * @brief write the earliest term over all sources into the alarm register
+ */
+static void set_next_alarm( void ) {
+    rtcctl_alarm_term_t local_term;
+    struct tm alarm_tm;
+    time_t now;
+    time_t term;
+
+    time( &now );
+    alarm_time = 0;
+    
+    if ( last_alarm_time > now )
+        now = last_alarm_time;
+
+    local_term.enabled = alarm_data.enabled;
+    local_term.hour = alarm_data.hour;
+    local_term.minute = alarm_data.minute;
+    for ( int index = 0 ; index < DAYS_IN_WEEK ; index++ )
+        local_term.week_days[ index ] = alarm_data.week_days[ index ];
+
+    term = calc_next_term( &local_term, now );
+    if ( term && ( !alarm_time || term < alarm_time ) )
+        alarm_time = term;
+
+    for ( size_t index = 0 ; index < ext_alarm_count ; index++ ) {
+        term = calc_next_term( &ext_alarms[ index ], now );
+        if ( term && ( !alarm_time || term < alarm_time ) )
+            alarm_time = term;
+    }
+
+    if ( !alarm_time ) {
+        alarm_hw_clear();
+        rtcctl_send_event_cb( RTCCTL_ALARM_TERM_SET );
+        return;
+    }
+
+    /*
+     * convert local alarm time into GMT0 alarm time, it is necessary sine rtc store time in GMT0
+     */
+    localtime_r( &alarm_time, &alarm_tm );
+    log_d("next local alarm time: %02d:%02d day: %d", alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday );
+    gmtime_r( &alarm_time, &alarm_tm );
+    log_d("next GMT0 alarm time: %02d:%02d day %d", alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday );
+
+    alarm_hw_set( alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_mday );
+    rtcctl_send_event_cb( RTCCTL_ALARM_TERM_SET );
+}
+
+/**
+ * @brief recalculate the alarm register and report the armed state if it changed
+ *
+ * @param   was_armed       armed state before the sources have been changed
+ */
+static void rtcctl_rearm( bool was_armed ) {
+    if ( was_armed )
+        alarm_hw_disable();
+
+    set_next_alarm();
+
+    if ( alarm_time )
+        alarm_hw_enable();
+
+    if ( was_armed && !alarm_time )
+        rtcctl_send_event_cb( RTCCTL_ALARM_DISABLED );
+    else if ( !was_armed && alarm_time )
+        rtcctl_send_event_cb( RTCCTL_ALARM_ENABLED );
+}
+
+void rtcctl_set_next_alarm( void ) {
+    rtcctl_rearm( alarm_time != 0 );
+}
+
+void rtcctl_set_ext_alarms( const rtcctl_alarm_term_t *terms, size_t count ) {
+    bool was_armed = ( alarm_time != 0 );
+
+    if ( !terms )
+        count = 0;
+
+    if ( count > RTCCTL_MAX_EXT_ALARMS )
+        count = RTCCTL_MAX_EXT_ALARMS;
+
+    for ( size_t index = 0 ; index < count ; index++ )
+        ext_alarms[ index ] = terms[ index ];
+
+    ext_alarm_count = count;
+
+    rtcctl_rearm( was_armed );
 }
 
 bool rtcctl_powermgm_event_cb( EventBits_t event, void *arg ) {
@@ -358,10 +435,15 @@ bool rtcctl_powermgm_loop_cb( EventBits_t event, void *arg ) {
 #endif
     if ( temp_rtc_irq_flag ) {
         #if defined( LILYGO_WATCH_2021 ) && defined( VERSION_2 )
-            if( rtc.status2() & PCF8563_ALARM_AF )
+            if( rtc.status2() & PCF8563_ALARM_AF ) {
+                last_alarm_time = alarm_time;
                 rtcctl_send_event_cb( RTCCTL_ALARM_OCCURRED );
+                rtcctl_set_next_alarm();
+            }
         #else
+                last_alarm_time = alarm_time;
                 rtcctl_send_event_cb( RTCCTL_ALARM_OCCURRED );
+                rtcctl_set_next_alarm();
         #endif
     }
     return( true );
@@ -398,89 +480,28 @@ void rtcctl_store_data( void ) {
 }
 
 void rtcctl_set_alarm( rtcctl_alarm_t *data ) {
-    bool was_enabled = alarm_data.enabled;
-    if (was_enabled){
-        #ifdef NATIVE_64BIT
+    bool was_armed = ( alarm_time != 0 );
 
-        #else
-            #if defined( M5PAPER )
-
-            #elif defined( M5CORE2 )
-
-            #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-                TTGOClass *ttgo = TTGOClass::getWatch();
-                ttgo->rtc->disableAlarm();
-            #elif defined( LILYGO_WATCH_2021 )
-                rtc.disableAlarm();
-            #elif defined( WT32_SC01 )
-            #else
-                #warning "no rtcctl alarm function"
-            #endif
-        #endif
-    }
     alarm_data = *data;
     rtcctl_store_data();
 
-    set_next_alarm();
-
-    if (was_enabled && !alarm_data.enabled){
-        /*
-         * already disabled
-         */
-        rtcctl_send_event_cb( RTCCTL_ALARM_DISABLED );
-    }
-    else if (was_enabled && alarm_data.enabled){
-        /*
-         * nothing actually changed;
-         */
-        #ifdef NATIVE_64BIT
-
-        #else
-            #if defined( M5PAPER )
-
-            #elif defined( M5CORE2 )
-
-            #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-                TTGOClass *ttgo = TTGOClass::getWatch();
-                ttgo->rtc->enableAlarm();
-            #elif defined( LILYGO_WATCH_2021 )
-                rtc.enableAlarm();
-            #elif defined( WT32_SC01 )
-
-            #else
-                #warning "no rtcctl alarm function"
-            #endif
-        #endif
-    }
-    else if (!was_enabled && alarm_data.enabled){
-        #ifdef NATIVE_64BIT
-
-        #else
-            #if defined( M5PAPER )
-
-            #elif defined( M5CORE2 )
-
-            #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-                TTGOClass *ttgo = TTGOClass::getWatch();
-                ttgo->rtc->enableAlarm();
-            #elif defined( LILYGO_WATCH_2021 )
-                rtc.enableAlarm();
-            #elif defined( WT32_SC01 )
-
-            #else
-                #warning "no rtcctl alarm function"
-            #endif
-        #endif
-        rtcctl_send_event_cb( RTCCTL_ALARM_ENABLED );   
-    }    
+    rtcctl_rearm( was_armed );
 }
 
 rtcctl_alarm_t *rtcctl_get_alarm_data( void ) {
     return &alarm_data;
 }
 
+time_t rtcctl_get_next_alarm_time( void ) {
+    return alarm_time;
+}
+
+time_t rtcctl_get_last_alarm_time( void ) {
+    return last_alarm_time;
+}
+
 int rtcctl_get_next_alarm_week_day( void ) {
-    if (!is_enabled()){
+    if (!alarm_time){
         return RTCCTL_ALARM_NOT_SET;
     }
     tm alarm_tm;

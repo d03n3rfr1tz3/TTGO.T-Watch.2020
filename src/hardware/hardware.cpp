@@ -22,6 +22,8 @@
 #include "compass.h"
 
 #include "utils/fakegps.h"
+#include "utils/blealarm.h"
+#include "utils/blecalendar.h"
 #include "utils/blegps.h"
 #include "gui/splashscreen.h"
 #include "gui/screenshot.h"
@@ -272,6 +274,8 @@ void hardware_setup( void ) {
     sound_read_config();
     fakegps_setup();
     blegps_setup();
+    blealarm_setup();
+    blecalendar_setup();
     blectl_read_config();
 
     splash_screen_stage_update( "init gui", 80 );

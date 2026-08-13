@@ -16,7 +16,7 @@
 #include "config.h"
 
 #include "calendar.h"
-#include "calendar_ble.h"
+#include "utils/blecalendar.h"
 #include "calendar_db.h"
 #include "calendar_day.h"
 #include "calendar_detail.h"
@@ -285,11 +285,11 @@ static void calendar_day_add_entry( int hour, int min, int ble_slot, const char 
  * @brief add the gadgetbridge events of the shown day
  */
 static void calendar_day_add_ble_entrys( void ) {
-    int slots[ CALENDAR_BLE_MAX_EVENTS ];
-    int count = calendar_ble_get_day_events( calendar_day_year, calendar_day_month, calendar_day_day, slots, CALENDAR_BLE_MAX_EVENTS );
+    int slots[ BLECALENDAR_MAX_EVENTS ];
+    int count = blecalendar_get_day_events( calendar_day_year, calendar_day_month, calendar_day_day, slots, BLECALENDAR_MAX_EVENTS );
 
     for ( int i = 0 ; i < count ; i++ ) {
-        const calendar_ble_event_t *event = calendar_ble_get_event( slots[ i ] );
+        const blecalendar_event_t *event = blecalendar_get_event( slots[ i ] );
         char text[ 80 ] = "";
         struct tm start_tm;
 

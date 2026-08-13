@@ -17,17 +17,24 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef _CALENDAR_BLE_H
-    #define _CALENDAR_BLE_H
+#ifndef _BLECALENDAR_H
+    #define _BLECALENDAR_H
 
     #include <stdint.h>
     #include <stdbool.h>
     #include <time.h>
 
+    #include "utils/basejsonconfig.h"
+
+    #define BLECALENDAR_CONFIG_FILE     "/blecalendar.json"
     /**
      * @brief number of events we keep, the phone sends its whole lookahead window without a limit
      */
-    #define CALENDAR_BLE_MAX_EVENTS     64
+    #define BLECALENDAR_MAX_EVENTS      64
+    /**
+     * @brief json buffer for the whole table, it lives in psram
+     */
+    #define BLECALENDAR_JSON_SIZE       48000
     /**
      * @brief a calendar event received from gadgetbridge, read only, never stored in calendar.db
      */
@@ -42,11 +49,25 @@
         char        location[ 64 ];
         char        calname[ 32 ];
         char        description[ 160 ];
-    } calendar_ble_event_t;
+    } blecalendar_event_t;
+
+    class blecalendar_config_t : public BaseJsonConfig {
+        public:
+        blecalendar_config_t();
+        blecalendar_event_t *events = NULL;     /** @brief points to the event table, it is to big to hold it twice */
+
+        protected:
+        ////////////// Available for overloading: //////////////
+        virtual bool onLoad(JsonDocument& document);
+        virtual bool onSave(JsonDocument& document);
+        virtual bool onDefault( void );
+        virtual size_t getJsonBufferSize() { return BLECALENDAR_JSON_SIZE; }
+    };
+
     /**
      * @brief setup the gadgetbridge calendar receiver
      */
-    void calendar_ble_setup( void );
+    void blecalendar_setup( void );
     /**
      * @brief collect all events of a day, sorted by start time
      *
@@ -58,18 +79,18 @@
      *
      * @return  number of events written into slots
      */
-    int calendar_ble_get_day_events( int year, int month, int day, int *slots, int max );
+    int blecalendar_get_day_events( int year, int month, int day, int *slots, int max );
     /**
      * @brief check if a day has at least one event
      *
      * @return  true if the day has an event
      */
-    bool calendar_ble_has_day( int year, int month, int day );
+    bool blecalendar_has_day( int year, int month, int day );
     /**
      * @brief get an event by its slot number
      *
      * @return  pointer to the event or NULL if the slot is out of range or free
      */
-    const calendar_ble_event_t *calendar_ble_get_event( int slot );
+    const blecalendar_event_t *blecalendar_get_event( int slot );
 
-#endif // _CALENDAR_BLE_H
+#endif // _BLECALENDAR_H
