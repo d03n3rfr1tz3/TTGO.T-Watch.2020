@@ -1996,6 +1996,6 @@ const lv_img_dsc_t bg3_240px = {
   .header.w = 240,
   .header.h = 240,
   .data_size = 31594,
-  .header.cf = LV_IMG_CF_RAW_ALPHA,
+  .header.cf = LV_IMG_CF_RAW,
   .data = bg3_240px_map,
 };

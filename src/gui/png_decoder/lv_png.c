@@ -32,6 +32,7 @@ static lv_res_t decoder_info(struct _lv_img_decoder * decoder, const void * src,
 static lv_res_t decoder_open(lv_img_decoder_t * dec, lv_img_decoder_dsc_t * dsc);
 static void decoder_close(lv_img_decoder_t * dec, lv_img_decoder_dsc_t * dsc);
 static void convert_color_depth(uint8_t * img, uint32_t px_cnt);
+static void set_real_color_format(lv_img_decoder_dsc_t * dsc, uint8_t * img, uint32_t px_cnt);
 
 /**********************
  *  STATIC VARIABLES
@@ -187,6 +188,7 @@ static lv_res_t decoder_open(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * 
 
             /*Convert the image to the system's color depth*/
             convert_color_depth(img_data,  png_width * png_height);
+            set_real_color_format(dsc, img_data, png_width * png_height);
             dsc->img_data = img_data;
             return LV_RES_OK;     /*The image is fully decoded. Return with its pointer*/
         }
@@ -206,6 +208,7 @@ static lv_res_t decoder_open(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * 
 
         /*Convert the image to the system's color depth*/
         convert_color_depth(img_data,  png_width * png_height);
+        set_real_color_format(dsc, img_data, png_width * png_height);
 
         dsc->img_data = img_data;
         return LV_RES_OK;     /*Return with its pointer*/
@@ -259,6 +262,36 @@ static void convert_color_depth(uint8_t * img, uint32_t px_cnt)
            img[i*3 + 1] = img_argb[i].alpha;
            img[i*3 + 0] = c.full
        }
+#endif
+}
+
+/**
+ * Check the alpha once per decode and drop it when it carries no information.
+ * @param dsc decoder descriptor
+ * @param img the already converted image
+ * @param px_cnt number of pixels in img
+ */
+static void set_real_color_format(lv_img_decoder_dsc_t * dsc, uint8_t * img, uint32_t px_cnt)
+{
+#if LV_COLOR_DEPTH == 16
+    uint32_t i;
+
+    for(i = 0; i < px_cnt; i++) {
+        if(img[i*3 + 2] != 0xFF) {
+            dsc->header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+            return;
+        }
+    }
+
+    for(i = 1; i < px_cnt; i++) {
+        img[i*2 + 0] = img[i*3 + 0];
+        img[i*2 + 1] = img[i*3 + 1];
+    }
+    dsc->header.cf = LV_IMG_CF_TRUE_COLOR;
+#else
+    (void) img;
+    (void) px_cnt;
+    dsc->header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
 #endif
 }
 
