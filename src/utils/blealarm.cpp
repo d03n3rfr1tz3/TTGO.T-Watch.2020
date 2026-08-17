@@ -21,6 +21,7 @@
 #include "blealarm.h"
 
 #include "hardware/ble/gadgetbridge.h"
+#include "hardware/powermgm.h"
 #include "hardware/rtcctl.h"
 #include "utils/bluejsonrequest.h"
 
@@ -28,18 +29,26 @@
     #include <string.h>
     #include <time.h>
     #include "utils/logging.h"
+    #include "utils/millis.h"
 #else
     #include <Arduino.h>
 #endif
 
+#define BLEALARM_SAVE_DELAY             5000
+
 static blealarm_config_t blealarm_config;
+static bool blealarm_save_pending = false;
+static uint32_t blealarm_save_since = 0;
 
 static bool blealarm_gadgetbridge_event_cb( EventBits_t event, void *arg );
 static bool blealarm_rtcctl_event_cb( EventBits_t event, void *arg );
+static bool blealarm_powermgm_loop_cb( EventBits_t event, void *arg );
 static void blealarm_receive( BluetoothJsonRequest &request );
 static void blealarm_apply( void );
+static void blealarm_save_later( void );
 
 void blealarm_setup( void ) {
+    blealarm_save_pending = false;
     blealarm_config.load();
     blealarm_apply();
     /**
@@ -48,6 +57,7 @@ void blealarm_setup( void ) {
      */
     gadgetbridge_register_cb( GADGETBRIDGE_JSON_MSG, blealarm_gadgetbridge_event_cb, "ble alarm" );
     rtcctl_register_cb( RTCCTL_ALARM_OCCURRED, blealarm_rtcctl_event_cb, "ble alarm" );
+    powermgm_register_loop_cb( POWERMGM_WAKEUP | POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY, blealarm_powermgm_loop_cb, "ble alarm loop" );
 }
 
 /**
@@ -107,7 +117,7 @@ static void blealarm_receive( BluetoothJsonRequest &request ) {
     }
 
     blealarm_config.count = count;
-    blealarm_config.save();
+    blealarm_save_later();
     blealarm_apply();
 }
 
@@ -156,10 +166,23 @@ static bool blealarm_rtcctl_event_cb( EventBits_t event, void *arg ) {
                                             break;
 
                                         blealarm_config.count = count;
-                                        blealarm_config.save();
+                                        blealarm_save_later();
                                         blealarm_apply();
                                         break;
                                     }
+    }
+    return( true );
+}
+
+static void blealarm_save_later( void ) {
+    blealarm_save_pending = true;
+    blealarm_save_since = millis();
+}
+
+static bool blealarm_powermgm_loop_cb( EventBits_t event, void *arg ) {
+    if ( blealarm_save_pending && millis() - blealarm_save_since >= BLEALARM_SAVE_DELAY ) {
+        blealarm_save_pending = false;
+        blealarm_config.save();
     }
     return( true );
 }

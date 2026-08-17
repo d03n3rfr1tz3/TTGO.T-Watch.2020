@@ -60,12 +60,15 @@
 
 static blecalendar_event_t *blecalendar_events = NULL;
 static blecalendar_config_t blecalendar_config;
-static uint64_t blecalendar_next_sync = 0;
-static uint64_t blecalendar_next_tick = 0;
-static uint64_t blecalendar_save_at = 0;
+static uint32_t blecalendar_sync_since = 0;
+static uint32_t blecalendar_sync_delay = 0;
+static uint32_t blecalendar_tick_since = 0;
+static bool blecalendar_save_pending = false;
+static uint32_t blecalendar_save_since = 0;
 
 static bool blecalendar_gadgetbridge_event_cb( EventBits_t event, void *arg );
 static bool blecalendar_powermgm_loop_cb( EventBits_t event, void *arg );
+static void blecalendar_save_later( void );
 static void blecalendar_send_sync( void );
 static void blecalendar_add( BluetoothJsonRequest &request );
 static void blecalendar_remove( int64_t id );
@@ -76,9 +79,9 @@ static void blecalendar_remind( blecalendar_event_t *event );
 
 void blecalendar_setup( void ) {
     blecalendar_events = ( blecalendar_event_t* )CALLOC_ASSERT( BLECALENDAR_MAX_EVENTS, sizeof( blecalendar_event_t ), "calendar ble event table calloc failed" );
-    blecalendar_next_sync = 0;
-    blecalendar_next_tick = 0;
-    blecalendar_save_at = 0;
+    blecalendar_sync_delay = 0;
+    blecalendar_save_pending = false;
+    blecalendar_tick_since = ( uint32_t )millis() - BLECALENDAR_TICK;
     /**
      * gadgetbridge only sends what it thinks we do not have yet, so we have to keep it
      */
@@ -199,7 +202,7 @@ static void blecalendar_add( BluetoothJsonRequest &request ) {
      */
     event->reminded = time( NULL ) >= start;
 
-    blecalendar_save_at = millis() + BLECALENDAR_SAVE_DELAY;
+    blecalendar_save_later();
     log_i("calendar event: %s, %d", event->title, (int)start );
 }
 
@@ -210,7 +213,7 @@ static void blecalendar_remove( int64_t id ) {
         return;
 
     blecalendar_events[ slot ].used = false;
-    blecalendar_save_at = millis() + BLECALENDAR_SAVE_DELAY;
+    blecalendar_save_later();
     log_i("calendar event removed: %lld", (long long)id );
 }
 
@@ -269,7 +272,8 @@ static void blecalendar_remind( blecalendar_event_t *event ) {
 
 static bool blecalendar_gadgetbridge_event_cb( EventBits_t event, void *arg ) {
     switch( event ) {
-        case GADGETBRIDGE_CONNECT:      blecalendar_next_sync = millis() + BLECALENDAR_SYNC_DELAY;
+        case GADGETBRIDGE_CONNECT:      blecalendar_sync_since = millis();
+                                        blecalendar_sync_delay = BLECALENDAR_SYNC_DELAY;
                                         break;
         case GADGETBRIDGE_JSON_MSG: {
                                         BluetoothJsonRequest &request = *(BluetoothJsonRequest*)arg;
@@ -292,24 +296,30 @@ static bool blecalendar_gadgetbridge_event_cb( EventBits_t event, void *arg ) {
     return( true );
 }
 
+static void blecalendar_save_later( void ) {
+    blecalendar_save_pending = true;
+    blecalendar_save_since = millis();
+}
+
 static bool blecalendar_powermgm_loop_cb( EventBits_t event, void *arg ) {
     if ( !blecalendar_events )
         return( true );
 
-    if ( blecalendar_next_sync && blecalendar_next_sync < millis() ) {
-        blecalendar_next_sync = millis() + BLECALENDAR_SYNC_INTERVAL;
+    if ( blecalendar_sync_delay && millis() - blecalendar_sync_since >= blecalendar_sync_delay ) {
+        blecalendar_sync_since = millis();
+        blecalendar_sync_delay = BLECALENDAR_SYNC_INTERVAL;
         blecalendar_send_sync();
     }
 
-    if ( blecalendar_save_at && blecalendar_save_at < millis() ) {
-        blecalendar_save_at = 0;
+    if ( blecalendar_save_pending && millis() - blecalendar_save_since >= BLECALENDAR_SAVE_DELAY ) {
+        blecalendar_save_pending = false;
         blecalendar_config.save( BLECALENDAR_JSON_SIZE );
     }
 
-    if ( blecalendar_next_tick > millis() )
+    if ( millis() - blecalendar_tick_since < BLECALENDAR_TICK )
         return( true );
 
-    blecalendar_next_tick = millis() + BLECALENDAR_TICK;
+    blecalendar_tick_since = millis();
 
     time_t now = time( NULL );
     for ( int slot = 0 ; slot < BLECALENDAR_MAX_EVENTS ; slot++ ) {
@@ -320,13 +330,13 @@ static bool blecalendar_powermgm_loop_cb( EventBits_t event, void *arg ) {
 
         if ( now > entry->start + ( time_t )entry->duration ) {
             entry->used = false;
-            blecalendar_save_at = millis() + BLECALENDAR_SAVE_DELAY;
+            blecalendar_save_later();
             continue;
         }
 
         if ( !entry->allday && !entry->reminded && now >= entry->start - BLECALENDAR_REMINDER_LEAD ) {
             entry->reminded = true;
-            blecalendar_save_at = millis() + BLECALENDAR_SAVE_DELAY;
+            blecalendar_save_later();
             blecalendar_remind( entry );
         }
     }
