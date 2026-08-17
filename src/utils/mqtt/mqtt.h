@@ -26,12 +26,45 @@
     #include "hardware/callback.h"
     #include "stdint.h"
 
+    #define MQTT_MSG_QUEUE_LEN          8       /** @brief mqtt message queue depth */
+    #define MQTT_TOPIC_LEN              64      /** @brief mqtt topic buffer size */
+    #define MQTT_PAYLOAD_LEN            64      /** @brief mqtt payload buffer size */
+    #define MQTT_DELAY                  100     /** @brief mqtt task delay while connected and awake */
+    #define MQTT_STANDBY_DELAY          1000    /** @brief mqtt task delay while in standby or not connected */
+    #define MQTT_IDLE_DELAY             5000    /** @brief mqtt task delay while wifi is off */
+
     typedef std::function<void(char* topic, byte* payload, size_t len)> MqttMessageCallback;
+    /**
+     * @brief mqtt event enum
+     */
     enum mqtt_event_t {
-        MQTTCTL_OFF                    = _BV(0),
-        MQTTCTL_CONNECT                = _BV(1),
-        MQTTCTL_DISCONNECT             = _BV(2)
+        MQTTCTL_OFF                    = _BV(0),            /** @brief mqtt off event */
+        MQTTCTL_CONNECT                = _BV(1),            /** @brief mqtt connect event */
+        MQTTCTL_DISCONNECT             = _BV(2),            /** @brief mqtt disconnect event */
+        MQTTCTL_ON                     = _BV(3),            /** @brief mqtt switch on event */
+        MQTTCTL_CONFIGURED             = _BV(4),            /** @brief mqtt server credentials known */
+        MQTTCTL_CONNECT_REQUEST        = _BV(5),            /** @brief mqtt connect request event */
+        MQTTCTL_DISCONNECT_REQUEST     = _BV(6),            /** @brief mqtt disconnect request event */
+        MQTTCTL_PUBLISH_REQUEST        = _BV(7)             /** @brief mqtt publish device state request event */
     };
+    /**
+     * @brief mqtt message type enum, a message carries data and can not be an event
+     */
+    typedef enum {
+        MQTT_MSG_SUBSCRIBE,
+        MQTT_MSG_UNSUBSCRIBE,
+        MQTT_MSG_PUBLISH
+    } mqtt_msg_type_t;
+    /**
+     * @brief mqtt message structure
+     */
+    typedef struct {
+        mqtt_msg_type_t type;                               /** @brief message type */
+        bool retain;                                        /** @brief retain flag, publish only */
+        bool has_payload;                                   /** @brief false means publish a NULL payload */
+        char topic[ MQTT_TOPIC_LEN ];                       /** @brief topic to work on */
+        char payload[ MQTT_PAYLOAD_LEN ];                   /** @brief payload to publish */
+    } mqtt_msg_t;
 
     /**
      *  @brief init builtin mqtt.

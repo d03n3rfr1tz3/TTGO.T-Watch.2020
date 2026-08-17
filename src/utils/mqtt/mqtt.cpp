@@ -28,18 +28,27 @@
 #include "hardware/pmu.h"
 #include "hardware/powermgm.h"
 
-bool mqtt_setup = false;
-bool mqtt_run = false;
-bool mqtt_connected = false;
-bool mqtt_needs_publish = false;
+bool mqtt_init_done = false;
 EventGroupHandle_t mqtt_status = NULL;
 portMUX_TYPE DRAM_ATTR mqttMux = portMUX_INITIALIZER_UNLOCKED;
 callback_t *mqtt_callback = NULL;
-lv_task_t * mqtt_main_task;
 
 WiFiClient espClient;
 PubSubClient mqtt_client( espClient );
-char clientId[24];
+char clientId[32];
+
+static QueueHandle_t mqtt_msg_queue = NULL;
+static TaskHandle_t _mqtt_Task = NULL;
+
+static char mqtt_server[ 64 ] = "";
+static int32_t mqtt_port = 0;
+static char mqtt_user[ 32 ] = "";
+static char mqtt_pass[ 32 ] = "";
+
+void mqtt_Task( void * pvParameters );
+static void mqtt_msg_send( mqtt_msg_type_t type, const char *topic, const char *payload, bool retain );
+static void mqtt_msg_work( void );
+static void mqtt_loop( void );
 
 bool mqtt_send_event_cb( EventBits_t event, void *arg );
 void mqtt_set_event( EventBits_t bits );
@@ -48,39 +57,36 @@ void mqtt_clear_event( EventBits_t bits );
 std::vector<MqttMessageCallback> _mqtt_message_callbacks;
 
 void mqtt_message_event_cb(char* topic, byte* payload, unsigned int length) {
-  log_d("mqtt message: %s -> %s", topic, payload);
+  log_d("mqtt message: %s -> %.*s", topic, (int)length, (const char*)payload);
   for (auto callback : _mqtt_message_callbacks) callback(topic, payload, length);
 }
 
 bool mqtt_pmuctl_event_cb( EventBits_t event, void *arg ) {
-  if ( !mqtt_client.connected() ) {
+  if ( !mqtt_get_event( MQTTCTL_CONNECT ) ) {
     log_e("mqtt not connected");
     return( true );
   }
 
   switch( event ) {
     case PMUCTL_STATUS:
-      mqtt_needs_publish = true;
+      mqtt_set_event( MQTTCTL_PUBLISH_REQUEST );
       break;
   }
   return( true );
 }
 
-void mqtt_loop( lv_task_t * task ) {
-  if (!mqtt_setup) return;
+static void mqtt_loop( void ) {
+  if ( !mqtt_get_event( MQTTCTL_CONFIGURED ) ) return;
 
-  if (!mqtt_connected && mqtt_client.connected()) {
-    mqtt_connected = true;
-    mqtt_needs_publish = true;
+  if ( !mqtt_get_event( MQTTCTL_CONNECT ) && mqtt_client.connected() ) {
+    mqtt_set_event( MQTTCTL_CONNECT | MQTTCTL_PUBLISH_REQUEST );
+    mqtt_clear_event( MQTTCTL_DISCONNECT );
     mqtt_publish_state();
 
-    mqtt_set_event( MQTTCTL_CONNECT );
-    mqtt_clear_event( MQTTCTL_DISCONNECT );
     mqtt_send_event_cb( MQTTCTL_CONNECT, (void *)NULL );
   }
-  
-  if (mqtt_connected && !mqtt_client.connected()) {
-    mqtt_connected = false;
+
+  if ( mqtt_get_event( MQTTCTL_CONNECT ) && !mqtt_client.connected() ) {
     mqtt_set_event( MQTTCTL_DISCONNECT );
     mqtt_clear_event( MQTTCTL_CONNECT );
     mqtt_send_event_cb( MQTTCTL_DISCONNECT, (void *)NULL );
@@ -88,8 +94,8 @@ void mqtt_loop( lv_task_t * task ) {
 
   mqtt_client.loop();
 
-  if (mqtt_run && mqtt_connected && mqtt_needs_publish) {
-    mqtt_needs_publish = false;
+  if ( mqtt_get_event( MQTTCTL_ON ) && mqtt_get_event( MQTTCTL_CONNECT ) && mqtt_get_event( MQTTCTL_PUBLISH_REQUEST ) ) {
+    mqtt_clear_event( MQTTCTL_PUBLISH_REQUEST );
 
     mqtt_publish_battery();
     mqtt_publish_ambient_temperature();
@@ -104,70 +110,167 @@ void mqtt_loop( lv_task_t * task ) {
   }
 }
 
+/**
+ * @brief poll interval of the mqtt task, driven by the wifi state
+ */
+static TickType_t mqtt_task_delay( void ) {
+  if ( WiFi.status() != WL_CONNECTED ) return( pdMS_TO_TICKS( MQTT_IDLE_DELAY ) );
+  if ( !mqtt_get_event( MQTTCTL_CONNECT ) ) return( pdMS_TO_TICKS( MQTT_STANDBY_DELAY ) );
+  if ( powermgm_get_event( POWERMGM_STANDBY ) ) return( pdMS_TO_TICKS( MQTT_STANDBY_DELAY ) );
+  return( pdMS_TO_TICKS( MQTT_DELAY ) );
+}
+
+static void mqtt_msg_send( mqtt_msg_type_t type, const char *topic, const char *payload, bool retain ) {
+  mqtt_msg_t msg;
+
+  if ( mqtt_msg_queue == NULL ) {
+    log_e("mqtt message queue not ready");
+    return;
+  }
+
+  memset( &msg, 0, sizeof( msg ) );
+  msg.type = type;
+  msg.retain = retain;
+  msg.has_payload = ( payload != NULL );
+  if ( topic ) strlcpy( msg.topic, topic, sizeof( msg.topic ) );
+  if ( payload ) strlcpy( msg.payload, payload, sizeof( msg.payload ) );
+
+  if ( xQueueSend( mqtt_msg_queue, &msg, 0 ) != pdTRUE ) {
+    log_w("mqtt message queue full, message dropped");
+  }
+}
+
+static void mqtt_msg_work( void ) {
+  mqtt_msg_t msg;
+
+  while( xQueueReceive( mqtt_msg_queue, &msg, 0 ) == pdTRUE ) {
+    switch( msg.type ) {
+      case MQTT_MSG_SUBSCRIBE:
+        mqtt_client.subscribe( msg.topic, 0 );
+        break;
+      case MQTT_MSG_UNSUBSCRIBE:
+        mqtt_client.unsubscribe( msg.topic );
+        break;
+      case MQTT_MSG_PUBLISH:
+        mqtt_client.publish( msg.topic, msg.has_payload ? msg.payload : NULL, msg.retain );
+        break;
+    }
+  }
+}
+
+void mqtt_Task( void * pvParameters ) {
+  uint64_t next_stack_log = 0;
+  /*
+  * check if init
+  */
+  if ( mqtt_init_done == false ) {
+    log_e("mqtt not initialise, start task failed");
+    while( true );
+  }
+  log_d("start mqtt task, heap: %d", ESP.getFreeHeap() );
+
+  while( true ) {
+    xEventGroupWaitBits( mqtt_status, MQTTCTL_CONNECT_REQUEST | MQTTCTL_DISCONNECT_REQUEST, pdFALSE, pdFALSE, mqtt_task_delay() );
+
+    if ( mqtt_get_event( MQTTCTL_DISCONNECT_REQUEST ) ) {
+      mqtt_clear_event( MQTTCTL_DISCONNECT_REQUEST );
+
+      if ( mqtt_client.connected() ) {
+        log_i("stopping mqtt");
+        mqtt_client.disconnect();
+      }
+    }
+    else if ( mqtt_get_event( MQTTCTL_CONNECT_REQUEST ) ) {
+      mqtt_clear_event( MQTTCTL_CONNECT_REQUEST );
+
+      if ( mqtt_get_event( MQTTCTL_CONFIGURED ) && !mqtt_client.connected() ) {
+        char topic[ MQTT_TOPIC_LEN ];
+        snprintf( topic, sizeof( topic ), "%s/state", clientId );
+
+        log_i("use mqtt server:port as %s: %s:%d", clientId, mqtt_server, mqtt_port );
+        mqtt_client.setServer( mqtt_server, mqtt_port );
+        mqtt_client.connect( clientId, mqtt_user, mqtt_pass, topic, 1, true, "offline" );
+      }
+    }
+
+    mqtt_msg_work();
+    mqtt_loop();
+
+    if ( millis() > next_stack_log ) {
+      next_stack_log = millis() + 60000;
+      log_d("mqtt task stack high water mark: %d", uxTaskGetStackHighWaterMark( NULL ) );
+    }
+  }
+}
+
 void mqtt_init( void ) {
+  if ( mqtt_init_done == true )
+    return;
+
   mqtt_status = xEventGroupCreate();
+  mqtt_msg_queue = xQueueCreate( MQTT_MSG_QUEUE_LEN, sizeof( mqtt_msg_t ) );
+  if ( mqtt_status == NULL || mqtt_msg_queue == NULL ) {
+    log_e("mqtt event group or message queue alloc failed");
+    return;
+  }
+  mqtt_init_done = true;
+
+  mqtt_client.setCallback( mqtt_message_event_cb );
+  pmu_register_cb( PMUCTL_STATUS, mqtt_pmuctl_event_cb, "mqtt pmu" );
+
+  /*
+  * set default state after init
+  */
   mqtt_set_event( MQTTCTL_OFF );
-  mqtt_main_task = lv_task_create( mqtt_loop, 100, LV_TASK_PRIO_MID, NULL );
+
+  xTaskCreatePinnedToCore(  mqtt_Task,        /* Function to implement the task */
+                            "mqtt Task",      /* Name of the task */
+                            4096,             /* Stack size in words */
+                            NULL,             /* Task input parameter */
+                            1,                /* Priority of the task */
+                            &_mqtt_Task,      /* Task handle. */
+                            1 );
 }
 
 void mqtt_start() {
-  if (!mqtt_setup) return;
-  mqtt_run = true;
+  if ( !mqtt_get_event( MQTTCTL_CONFIGURED ) ) return;
 
-  if ( !mqtt_client.connected() ) {
-    mqtt_client.connect( clientId );
-  }
+  mqtt_set_event( MQTTCTL_ON | MQTTCTL_CONNECT_REQUEST );
+  mqtt_clear_event( MQTTCTL_OFF );
 }
 
 void mqtt_start( const char *id, bool ssl, const char *server, int32_t port, const char *user, const char *pass ) {
-  if (mqtt_run) return;
-  mqtt_run = true;
+  if ( mqtt_get_event( MQTTCTL_ON ) ) return;
 
-  if ( !mqtt_client.connected() ) {
-    log_i("use mqtt server:port as %s: %s:%d", id, server, port );
+  strlcpy( clientId, id, sizeof( clientId ) );
+  strlcpy( mqtt_server, server, sizeof( mqtt_server ) );
+  strlcpy( mqtt_user, user, sizeof( mqtt_user ) );
+  strlcpy( mqtt_pass, pass, sizeof( mqtt_pass ) );
+  mqtt_port = port;
 
-    if (!mqtt_setup) mqtt_client.setCallback(mqtt_message_event_cb);
-
-    char topic[64];
-    strlcpy( clientId, id, strlen( id ) + 1 );
-    snprintf(topic, sizeof(topic), "%s/state", clientId);
-    
-    mqtt_client.setServer( server, port );
-    mqtt_client.connect( clientId, user, pass, topic, 1, true, "offline" );
-
-    if (!mqtt_setup) pmu_register_cb( PMUCTL_STATUS, mqtt_pmuctl_event_cb, "mqtt pmu");
-  }
-
-  mqtt_setup = true;
+  mqtt_set_event( MQTTCTL_ON | MQTTCTL_CONFIGURED | MQTTCTL_CONNECT_REQUEST );
+  mqtt_clear_event( MQTTCTL_OFF );
 }
 
 void mqtt_stop( void ) {
-  if (!mqtt_run) return;
-  mqtt_run = false;
+  if ( !mqtt_get_event( MQTTCTL_ON ) ) return;
 
-  if ( mqtt_setup && mqtt_client.connected() ) {
-    log_i("stopping mqtt");
-
-    mqtt_set_event( MQTTCTL_DISCONNECT );
-    mqtt_clear_event( MQTTCTL_CONNECT | MQTTCTL_OFF );
-    mqtt_send_event_cb( MQTTCTL_DISCONNECT, (void *)0 );
-    
-    mqtt_client.disconnect();
-  }
+  mqtt_set_event( MQTTCTL_OFF | MQTTCTL_DISCONNECT_REQUEST );
+  mqtt_clear_event( MQTTCTL_ON );
 }
 
 void mqtt_subscribe(const char* topic) {
   log_d("subscribing to topic '%s'", topic);
-  mqtt_client.subscribe(topic, 0);
+  mqtt_msg_send( MQTT_MSG_SUBSCRIBE, topic, NULL, false );
 }
 
 void mqtt_unsubscribe(const char* topic) {
-  log_d("subscribing to topic '%s'", topic);
-  mqtt_client.unsubscribe(topic);
+  log_d("unsubscribing from topic '%s'", topic);
+  mqtt_msg_send( MQTT_MSG_UNSUBSCRIBE, topic, NULL, false );
 }
 
 void mqtt_publish(const char* topic, bool retain, const char* payload) {
-  mqtt_client.publish(topic, payload, retain);
+  mqtt_msg_send( MQTT_MSG_PUBLISH, topic, payload, retain );
 }
 
 void mqtt_publish_state() {
@@ -258,14 +361,14 @@ void mqtt_publish_sketch() {
 }
 
 bool mqtt_get_connected() {
-  return mqtt_client.connected();
+  return( mqtt_get_event( MQTTCTL_CONNECT ) );
 }
 
 void mqtt_set_event( EventBits_t bits ) {
   /*
    * check if init
    */
-  if ( mqtt_setup == false ) {
+  if ( mqtt_init_done == false ) {
     log_e("mqtt not set up");
     return;
   }
@@ -279,7 +382,7 @@ void mqtt_clear_event( EventBits_t bits ) {
   /*
    * check if init
    */
-  if ( mqtt_setup == false ) {
+  if ( mqtt_init_done == false ) {
     log_e("mqtt not set up");
     return;
   }
@@ -291,11 +394,11 @@ void mqtt_clear_event( EventBits_t bits ) {
 
 bool mqtt_get_event( EventBits_t bits ) {
   bool retval = false;
-  
+
   /*
    * check if init
    */
-  if ( mqtt_setup == false ) {
+  if ( mqtt_init_done == false ) {
     log_e("mqtt not set up");
     return( retval );
   }

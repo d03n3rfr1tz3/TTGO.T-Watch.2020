@@ -24,6 +24,7 @@
 #include "mqtt_player_app.h"
 #include "mqtt_player_app_main.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
@@ -160,8 +161,10 @@ static bool mqtt_player_mqtt_event_cb( EventBits_t event, void *arg ) {
                                  break;
         case MQTTCTL_DISCONNECT: mqtt_player_state = false;
                                  mqtt_player_app_set_indicator( ICON_INDICATOR_FAIL );
+                                 gui_take();
                                  lv_label_set_text( mqtt_player_artist, "" );
                                  lv_label_set_text( mqtt_player_title, "" );
+                                 gui_give();
                                  break;
     }
     return( true );
@@ -189,6 +192,8 @@ static void mqtt_player_message_cb(char *topic, byte *payload, size_t length) {
     }
     memcpy( payload_msg, payload, length );
 
+    gui_take();
+
     snprintf( topic_compare, topic_size, "%s/%s", mqtt_player_config->topic_base, mqtt_player_config->topic_state );
     if (strncmp(topic, topic_compare, strlen(topic_compare)) == 0) {
         if( !strcmp( payload_msg, "pause" ) || !strcmp( payload_msg, "stop" ) ) {
@@ -214,6 +219,8 @@ static void mqtt_player_message_cb(char *topic, byte *payload, size_t length) {
         lv_label_set_text( mqtt_player_title, payload_msg );
         lv_obj_align( mqtt_player_title, mqtt_player_play, LV_ALIGN_OUT_TOP_MID, 0, -16 );
     }
+
+    gui_give();
 
     free( payload_msg );
     free( topic_compare );

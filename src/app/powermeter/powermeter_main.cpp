@@ -25,6 +25,7 @@
 #include "powermeter_main.h"
 #include "config/powermeter_config.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
@@ -112,6 +113,7 @@ void powermeter_main_task( lv_task_t * task );
         log_e("powermeter message deserializeJson() failed: %s", error.c_str() );
     }
     else  {
+        gui_take();
         if ( doc.containsKey("id") ) {
             lv_label_set_text( id_label, doc["id"] );
         }
@@ -144,6 +146,7 @@ void powermeter_main_task( lv_task_t * task );
         lv_obj_align( power_label, power_cont, LV_ALIGN_IN_RIGHT_MID, -THEME_PADDING, 0 );
         lv_obj_align( voltage_label, voltage_cont, LV_ALIGN_IN_RIGHT_MID, -THEME_PADDING, 0 );
         lv_obj_align( current_label, current_cont, LV_ALIGN_IN_RIGHT_MID, -THEME_PADDING, 0 );
+        gui_give();
     }
 
     doc.clear();

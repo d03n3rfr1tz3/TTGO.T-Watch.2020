@@ -24,6 +24,7 @@
 #include "mqtt_control_app.h"
 #include "mqtt_control_app_main.h"
 
+#include "gui/gui.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/mainbar/main_tile/main_tile.h"
 #include "gui/mainbar/mainbar.h"
@@ -257,6 +258,7 @@ static void mqtt_control_message_cb(char *topic, byte *payload, size_t length) {
         }
         memcpy( payload_msg, payload, length );
 
+        gui_take();
         switch (mqtt_control_config->items[ i ].type) {
             case MQTT_CONTROL_TYPE_LABEL:
                 char val[32];
@@ -272,6 +274,7 @@ static void mqtt_control_message_cb(char *topic, byte *payload, size_t length) {
                 }
                 break;
         }
+        gui_give();
 
         free( payload_msg );
     }
