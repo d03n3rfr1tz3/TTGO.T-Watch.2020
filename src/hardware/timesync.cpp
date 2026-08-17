@@ -150,12 +150,13 @@ bool timesync_wifictl_event_cb( EventBits_t event, void *arg ) {
                      * start timesync task
                      */
                     xEventGroupSetBits( time_event_handle, TIME_SYNC_REQUEST );
-                    xTaskCreate(    timesync_Task,      /* Function to implement the task */
-                                    "timesync Task",    /* Name of the task */
-                                    2000,              /* Stack size in words */
-                                    NULL,               /* Task input parameter */
-                                    1,                  /* Priority of the task */
-                                    &_timesync_Task );  /* Task handle. */
+                    xTaskCreatePinnedToCore(    timesync_Task,      /* Function to implement the task */
+                                                "timesync Task",    /* Name of the task */
+                                                2000,               /* Stack size in words */
+                                                NULL,               /* Task input parameter */
+                                                1,                  /* Priority of the task */
+                                                &_timesync_Task,    /* Task handle. */
+                                                0 );
                 }
             }
             break;

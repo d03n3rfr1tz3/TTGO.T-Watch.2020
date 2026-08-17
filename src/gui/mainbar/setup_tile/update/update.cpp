@@ -263,12 +263,13 @@ static void update_event_handler(lv_obj_t * obj, lv_event_t event) {
             }
             else {
                 xEventGroupSetBits( update_event, UPDATE_REQUEST );
-                xTaskCreate(    update_Task,
-                                "update Task",
-                                5000,
-                                NULL,
-                                1,
-                                &_update_Task );
+                xTaskCreatePinnedToCore(    update_Task,
+                                            "update Task",
+                                            5000,
+                                            NULL,
+                                            1,
+                                            &_update_Task,
+                                            0 );
             }
     #endif
 
@@ -291,12 +292,13 @@ void update_check_version( void ) {
     }
     else {
         xEventGroupSetBits( update_event, UPDATE_GET_VERSION_REQUEST );
-        xTaskCreate(    update_Task,
-                        "update Task",
-                        5000,
-                        NULL,
-                        1,
-                        &_update_Task );
+        xTaskCreatePinnedToCore(    update_Task,
+                                    "update Task",
+                                    5000,
+                                    NULL,
+                                    1,
+                                    &_update_Task,
+                                    0 );
     }
 #endif
 }
@@ -357,7 +359,6 @@ void update_Task( void * pvParameters ) {
             wf_label_printf( update_status_label, update_btn, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_PADDING, "get update info failed" );
             setup_hide_indicator( update_setup_icon );
         }
-        lv_obj_invalidate( lv_scr_act() );
 
         gui_give();
     }
@@ -410,7 +411,6 @@ void update_Task( void * pvParameters ) {
     xEventGroupClearBits( update_event, UPDATE_REQUEST | UPDATE_GET_VERSION_REQUEST );
     gui_take();
     lv_disp_trig_activity(NULL);
-    lv_obj_invalidate( lv_scr_act() );
     gui_give();
     log_i("finish update task, heap: %d", ESP.getFreeHeap() );
     vTaskDelete( NULL );

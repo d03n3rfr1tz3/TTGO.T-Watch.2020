@@ -111,12 +111,13 @@ void fakegps_start_task( void ) {
         else {
             if ( gpsctl_get_gps_over_ip() && gpsctl_get_autoon() ) {
                 xEventGroupSetBits( fakegps_event, FAKEGPS_SYNC_REQUEST );
-                xTaskCreate(    fakegps_get_location_Task,
-                                "fakegps update Task",
-                                5000,
-                                NULL,
-                                1,
-                                &_fakegps_get_location_Task );
+                xTaskCreatePinnedToCore(    fakegps_get_location_Task,
+                                            "fakegps update Task",
+                                            5000,
+                                            NULL,
+                                            1,
+                                            &_fakegps_get_location_Task,
+                                            0 );
             }
         }
     #endif

@@ -31,8 +31,6 @@
         #include <Arduino.h>
     #endif
 
-    #define WEATHER_SYNC_REQUEST    _BV(0)
-
     typedef struct {
         bool valide = false;
         time_t timestamp = 0;

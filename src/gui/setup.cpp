@@ -100,7 +100,7 @@ void setup_set_indicator( icon_t *setup, icon_indicator_t indicator ) {
     }
     lv_obj_align( setup->icon_indicator, setup->icon_cont, LV_ALIGN_IN_TOP_RIGHT, 0, 0 );
     lv_obj_set_hidden( setup->icon_indicator, false );
-    lv_obj_invalidate( lv_scr_act() );
+    lv_obj_invalidate( setup->icon_indicator );
     gui_give();
 }
 
@@ -115,7 +115,7 @@ void setup_hide_indicator( icon_t *setup ) {
 
     gui_take();
     lv_obj_set_hidden( setup->icon_indicator, true );
-    lv_obj_invalidate( lv_scr_act() );
+    lv_obj_invalidate( setup->icon_cont );
     gui_give();
 }
 

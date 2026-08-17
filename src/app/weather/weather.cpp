@@ -49,7 +49,7 @@
 #else
     #include <Arduino.h>
 
-    EventGroupHandle_t weather_sync_event_handle = NULL;
+    SemaphoreHandle_t weather_sync_lock = NULL;
     TaskHandle_t _weather_sync_Task;
 #endif
 /*
@@ -118,7 +118,8 @@ void weather_app_setup( void ) {
 #ifdef NATIVE_64BIT
 
 #else
-    weather_sync_event_handle = xEventGroupCreate();
+    weather_sync_lock = xSemaphoreCreateBinary();
+    xSemaphoreGive( weather_sync_lock );
 #endif
 
     wifictl_register_cb( WIFICTL_OFF | WIFICTL_CONNECT | WIFICTL_DISCONNECT, weather_wifictl_event_cb, "weather" );
@@ -180,18 +181,20 @@ void weather_sync_request( void ) {
 #ifdef NATIVE_64BIT
     weather_sync_Task( NULL );
 #else
-    if ( xEventGroupGetBits( weather_sync_event_handle ) & WEATHER_SYNC_REQUEST ) {
+    if ( xSemaphoreTake( weather_sync_lock, 0 ) != pdTRUE ) {
         return;
     }
     else {
-        xEventGroupSetBits( weather_sync_event_handle, WEATHER_SYNC_REQUEST );
         widget_hide_indicator( weather_widget );
-        xTaskCreate(    weather_sync_Task,              /* Function to implement the task */
-                        "weather sync Task",            /* Name of the task */
-                        5000,                           /* Stack size in words */
-                        NULL,                           /* Task input parameter */
-                        1,                              /* Priority of the task */
-                        &_weather_sync_Task );          /* Task handle. */
+        if ( xTaskCreatePinnedToCore(   weather_sync_Task,              /* Function to implement the task */
+                                        "weather sync Task",            /* Name of the task */
+                                        5000,                           /* Stack size in words */
+                                        NULL,                           /* Task input parameter */
+                                        1,                              /* Priority of the task */
+                                        &_weather_sync_Task,            /* Task handle. */
+                                        0 ) != pdPASS ) {
+            xSemaphoreGive( weather_sync_lock );
+        }
     }
 #endif
 }
@@ -208,15 +211,13 @@ void weather_sync_Task( void * pvParameters ) {
 #ifndef NATIVE_64BIT
     log_i("start weather widget task, heap: %d", ESP.getFreeHeap() );
     vTaskDelay( 250 );
-    if ( xEventGroupGetBits( weather_sync_event_handle ) & WEATHER_SYNC_REQUEST ) {       
 #endif
 
     weather_widget_sync();
     weather_forecast_sync();
 
 #ifndef NATIVE_64BIT
-    }
-    xEventGroupClearBits( weather_sync_event_handle, WEATHER_SYNC_REQUEST );
+    xSemaphoreGive( weather_sync_lock );
     log_i("finish weather widget task, heap: %d", ESP.getFreeHeap() );
     vTaskDelete( NULL );
 #endif
@@ -245,7 +246,6 @@ void weather_widget_update( void ) {
     else {
         widget_set_indicator( weather_widget, ICON_INDICATOR_FAIL );
     }
-    lv_obj_invalidate( lv_scr_act() );
 
     gui_give();
 }

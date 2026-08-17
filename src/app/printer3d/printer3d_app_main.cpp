@@ -384,7 +384,7 @@ void printer3d_app_task( lv_task_t * task ) {
             // only start a refresh if the previous one already finished
             if ( !printer3d_refresh_running ) {
                 printer3d_refresh_running = true;
-                if ( xTaskCreatePinnedToCore(printer3d_refresh, "printer3d_refresh", 2560, NULL, 1, &printer3d_refresh_handle, 1) != pdPASS )
+                if ( xTaskCreatePinnedToCore(printer3d_refresh, "printer3d_refresh", 2560, NULL, 1, &printer3d_refresh_handle, 0) != pdPASS )
                     printer3d_refresh_running = false;
             }
         #endif

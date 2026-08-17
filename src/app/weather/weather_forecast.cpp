@@ -60,7 +60,7 @@ lv_obj_t *weather_forecast_temperature_label[ WEATHER_MAX_FORECAST ];
 lv_obj_t *weather_forecast_wind_label[ WEATHER_MAX_FORECAST ];
 
 static weather_forcast_t *weather_forecast = NULL;
-static uint64_t weather_last_update = 0;
+static uint32_t weather_last_update = 0;
 
 LV_IMG_DECLARE(refresh_32px);
 LV_IMG_DECLARE(owm01d_64px);
@@ -140,7 +140,7 @@ static void weather_forecast_activate_cb( void ) {
     wf_image_button_fade_in( setup_btn, 500, 100 );
     wf_image_button_fade_in( reload_btn, 500, 200 );
     if( weather_last_update != 0 ) {
-        if( weather_last_update <= millis() - ( 15 * 60 * 1000 ) ) {
+        if( millis() - weather_last_update >= ( 15 * 60 * 1000 ) ) {
             weather_sync_request();
             weather_last_update = millis();
         }
@@ -250,7 +250,6 @@ void weather_forecast_update( void ) {
     #else
         lv_obj_align( weather_forecast_update_label, weather_forecast_location_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0 );
     #endif
-    lv_obj_invalidate( lv_scr_act() );
 
     gui_give();
 }
