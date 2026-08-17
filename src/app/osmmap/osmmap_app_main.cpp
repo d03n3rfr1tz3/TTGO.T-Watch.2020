@@ -536,7 +536,11 @@ void osmmap_load_ahead_Task( void * pvParameters ) {
              */
             OSMMAP_APP_LOG("start load ahead update handler");
             xEventGroupClearBits( osmmap_event_handle, OSM_APP_LOAD_AHEAD_REQUEST );
-            while ( osm_map_load_tiles_ahead( osmmap_location ) ) {
+            bool more = true;
+            while ( more ) {
+                powermgm_cpu_boost_take();
+                more = osm_map_load_tiles_ahead( osmmap_location );
+                powermgm_cpu_boost_give();
                 /**
                  * block this task for 125ms
                  */
@@ -620,7 +624,10 @@ void osmmap_update_Task( void * pvParameters ) {
              * check if a tile image update is required and update them
              */
             OSMMAP_APP_LOG("start osm map update");
-            if( osm_map_update( osmmap_location ) ) {
+            powermgm_cpu_boost_take();
+            bool updated = osm_map_update( osmmap_location );
+            powermgm_cpu_boost_give();
+            if( updated ) {
                 osmmap_update_tile_image();
                 xEventGroupSetBits( osmmap_event_handle, OSM_APP_LOAD_AHEAD_REQUEST );
             }
@@ -912,7 +919,6 @@ void osmmap_activate_cb( void ) {
 #endif
     osmmap_update_request();
     lv_img_cache_invalidate_src( osmmap_app_tile_img );
-    powermgm_set_perf_mode();
 
     wf_image_button_fade_in( osmmap_exit_btn, 300, 0 );
     wf_image_button_fade_in( osmmap_zoom_in_btl, 300, 100 );
@@ -950,7 +956,6 @@ void osmmap_hibernate_cb( void ) {
 #else
     xEventGroupSetBits( osmmap_event_handle, OSM_APP_TASK_EXIT_REQUEST );
 #endif
-    powermgm_set_normal_mode();
     /**
      * save config
      */

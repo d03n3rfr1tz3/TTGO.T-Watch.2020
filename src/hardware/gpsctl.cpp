@@ -66,11 +66,13 @@
 
 static bool gpsctl_init = false;
 static bool gpsctl_enable = false;
+static bool gpsctl_cpu_boost = false;
 
 gpsctl_config_t gpsctl_config;
 callback_t *gpsctl_callback = NULL;
 gps_data_t gps_data;
 
+static void gpsctl_cpu_boost_set( bool enable );
 bool gpsctl_powermgm_loop_cb( EventBits_t event, void *arg );
 bool gpsctl_powermgm_event_cb( EventBits_t event, void *arg );
 bool gpsctl_send_cb( EventBits_t event, void *arg );
@@ -158,6 +160,28 @@ bool gpsctl_get_available( void ) {
     #endif
 }
 
+/**
+ * @brief keep the uart from overflowing while the module runs, paired to avoid an unbalanced lock
+ */
+static void gpsctl_cpu_boost_set( bool enable ) {
+    if ( enable == gpsctl_cpu_boost )
+        return;
+
+    #ifdef NATIVE_64BIT
+
+    #else
+        if ( !gps_serial )
+            return;
+    #endif
+
+    gpsctl_cpu_boost = enable;
+
+    if ( enable )
+        powermgm_cpu_boost_take();
+    else
+        powermgm_cpu_boost_give();
+}
+
 bool gpsctl_powermgm_loop_cb( EventBits_t event, void *arg ) {
     static uint64_t nextmillis = millis();
     /*
@@ -172,7 +196,6 @@ bool gpsctl_powermgm_loop_cb( EventBits_t event, void *arg ) {
     #ifdef NATIVE_64BIT
 
     #else
-        powermgm_set_perf_mode();
         /**
          * abort if we have no serial init
          */
@@ -389,6 +412,7 @@ void gpsctl_on( void ) {
         gpsctl_config.autoon = true;
         gpsctl_config.save();
         gpsctl_enable = true;
+        gpsctl_cpu_boost_set( true );
         gpsctl_send_cb( GPSCTL_UPDATE_CONFIG, NULL );
         gpsctl_send_cb( GPSCTL_ENABLE, NULL );
         gpsctl_send_cb( GPSCTL_NOFIX, NULL );
@@ -428,6 +452,7 @@ void gpsctl_off( void ) {
         gpsctl_config.autoon = false;
         gpsctl_config.save();
         gpsctl_enable = false;
+        gpsctl_cpu_boost_set( false );
         gpsctl_send_cb( GPSCTL_UPDATE_CONFIG, NULL );
         gpsctl_send_cb( GPSCTL_NOFIX, NULL );
         gpsctl_send_cb( GPSCTL_DISABLE, NULL );
@@ -460,6 +485,7 @@ void gpsctl_autoon_on( void ) {
                 #endif
             #endif
             gpsctl_enable = true;
+            gpsctl_cpu_boost_set( true );
             gpsctl_send_cb( GPSCTL_ENABLE, NULL );
             gpsctl_send_cb( GPSCTL_NOFIX, NULL );
             powermgm_set_lightsleep( true );
@@ -467,6 +493,7 @@ void gpsctl_autoon_on( void ) {
     }
     else {
         gpsctl_enable = false;
+        gpsctl_cpu_boost_set( false );
         gpsctl_send_cb( GPSCTL_NOFIX, NULL );
         gpsctl_send_cb( GPSCTL_DISABLE, NULL );
         powermgm_set_lightsleep( true );
@@ -488,6 +515,7 @@ void gpsctl_autoon_off( void ) {
         #endif
     #endif
     gpsctl_enable = false;
+    gpsctl_cpu_boost_set( false );
     gps_data.gpsfix = false;
     gps_data.valid_location = false;
     gps_data.valid_speed = false;

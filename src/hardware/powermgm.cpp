@@ -44,6 +44,9 @@
     TaskHandle_t _powermgmTask;
     portMUX_TYPE DRAM_ATTR powermgmMux = portMUX_INITIALIZER_UNLOCKED;
     esp_pm_config_esp32_t pm_config;
+    #if CONFIG_PM_ENABLE
+        static esp_pm_lock_handle_t powermgm_cpu_lock = NULL;
+    #endif
 #endif
 
 callback_t *powermgm_callback = NULL;
@@ -61,6 +64,13 @@ void powermgm_setup( void ) {
 #else
     _powermgmTask = xTaskGetCurrentTaskHandle();
     powermgm_status = xEventGroupCreate();
+
+    #if CONFIG_PM_ENABLE
+        if ( esp_pm_lock_create( ESP_PM_CPU_FREQ_MAX, 0, "cpu boost", &powermgm_cpu_lock ) != ESP_OK ) {
+            powermgm_cpu_lock = NULL;
+            log_e("cpu boost lock alloc failed");
+        }
+    #endif
 
     powermgm_tickTicker = new Ticker();
     #if defined( LILYGO_WATCH_2021 ) || defined( WT32_SC01 )
@@ -375,11 +385,29 @@ void powermgm_set_perf_mode( void ) {
     #endif
 }
 
+void powermgm_cpu_boost_take( void ) {
+    #ifndef NATIVE_64BIT
+        #if CONFIG_PM_ENABLE
+            if ( powermgm_cpu_lock )
+                esp_pm_lock_acquire( powermgm_cpu_lock );
+        #endif
+    #endif
+}
+
+void powermgm_cpu_boost_give( void ) {
+    #ifndef NATIVE_64BIT
+        #if CONFIG_PM_ENABLE
+            if ( powermgm_cpu_lock )
+                esp_pm_lock_release( powermgm_cpu_lock );
+        #endif
+    #endif
+}
+
 void powermgm_set_normal_mode( void ) {
     #if CONFIG_PM_ENABLE
         pm_config.max_freq_mhz = 240;
         pm_config.min_freq_mhz = 80;
-        pm_config.light_sleep_enable = true;
+        pm_config.light_sleep_enable = lighsleep ? false : true;
         ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
     #else
         #ifndef NATIVE_64BIT

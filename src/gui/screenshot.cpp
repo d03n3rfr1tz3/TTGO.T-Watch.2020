@@ -26,6 +26,7 @@
 #include "utils/filepath_convert.h"
 #include "gui/png_decoder/lv_png.h"
 #include "hardware/motor.h"
+#include "hardware/powermgm.h"
 
 #ifdef NATIVE_64BIT
     #include <iostream>
@@ -115,7 +116,9 @@ void screenshot_save( void ) {
         /**
          * save img buffer as png
          */
+        powermgm_cpu_boost_take();
         lv_8grey_as_png( filename, (const uint8_t*)raw_grey, RES_X_MAX, RES_Y_MAX );
+        powermgm_cpu_boost_give();
         /**
          * free screenshot memory
          */
@@ -127,7 +130,9 @@ void screenshot_save( void ) {
         /**
          * save img buffer as png
          */
+        powermgm_cpu_boost_take();
         lv_rgb_as_png( filename, (const uint8_t*)raw_rgb, RES_X_MAX, RES_Y_MAX );
+        powermgm_cpu_boost_give();
         /**
          * free screenshot memory
          */

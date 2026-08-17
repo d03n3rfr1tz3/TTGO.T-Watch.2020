@@ -173,6 +173,8 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
+            bool boost = mp3->isRunning() || wav->isRunning();
+            if ( boost ) powermgm_cpu_boost_take();
             // we call sound_set_enabled(false) to ensure the PMU stops all power
             if ( mp3->isRunning() && !mp3->loop() ) {
                 log_d("stop playing mp3 sound");
@@ -180,8 +182,9 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
             }
             if ( wav->isRunning() && !wav->loop() ) {
                 log_d("stop playing wav sound");
-                wav->stop(); 
+                wav->stop();
             }
+            if ( boost ) powermgm_cpu_boost_give();
         }
     #endif
 #endif

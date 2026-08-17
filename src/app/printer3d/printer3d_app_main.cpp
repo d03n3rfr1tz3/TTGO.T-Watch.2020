@@ -90,6 +90,7 @@ lv_obj_t* printer3d_printbed_temp;
     #define PRINTER3D_MJPEG_STALL_TIMEOUT 10000    /** @brief ms without a decoded frame before the stream is dropped */
     #define PRINTER3D_MJPEG_RETRY          5000    /** @brief ms before a dropped stream is picked up again */
     #define PRINTER3D_MJPEG_SNAPSHOT       1000    /** @brief ms between two single image requests */
+    #define PRINTER3D_MJPEG_LINGER        10000    /** @brief ms the connection is held after the video tile went away */
 
     typedef enum {
         MJPEG_MODE_MULTIPART,                       /** @brief part header per frame */
@@ -1042,6 +1043,19 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         return true;
     }
 
+    /** @brief idle while the video tile is off screen. false if the app is going away */
+    static bool printer3d_mjpeg_idle( void ) {
+        while ( printer3d_state && printer3d_open_state ) {
+            printer3d_mjpeg_update_visible();
+            if ( mjpeg_visible )
+                return true;
+
+            delay( 100 );
+        }
+
+        return false;
+    }
+
     /** @brief one connection: connect, decode until it ends, close. returns the number of frames decoded */
     static uint32_t printer3d_mjpeg_session( HTTPClient& mjpeg_client, mjpeg_stream_src_t* src, JDEC* decoder, bool* connectfailed ) {
         uint32_t framecount = 0;
@@ -1108,6 +1122,7 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
             JRESULT result;
             uint8_t failcount = 0;
             uint64_t stallmillis = millis();
+            uint32_t offscreen_since = millis();
             bool laststream = false;
             while (!laststream) {
                 if (!printer3d_state || !printer3d_open_state) {
@@ -1125,6 +1140,14 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                 }
 
                 printer3d_mjpeg_update_visible();
+
+                // hold the connection for a while, the tile may come back
+                if (mjpeg_visible) {
+                    offscreen_since = millis();
+                } else if (millis() - offscreen_since >= PRINTER3D_MJPEG_LINGER) {
+                    log_i("3dprinter drops the video stream at %s, the video tile has been off screen for %d ms", mjpeg_url, PRINTER3D_MJPEG_LINGER);
+                    break;
+                }
 
                 // wait for more frames
                 if (!stream.available() && src->pending_pos >= src->pending_len) {
@@ -1153,6 +1176,18 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
 
                 // without a length the end of the frame can only be found by looking for it
                 src->remaining = framesize ? framesize : SIZE_MAX;
+
+                // nothing would be shown, drop the frame instead of decoding it
+                if (!mjpeg_visible) {
+                    if (mode == MJPEG_MODE_SINGLE) break;
+                    if (framesize) printer3d_mjpeg_skip( src, framesize );
+                    else if (!printer3d_mjpeg_seek_eoi( src )) {
+                        if (failcount++ >= 3) break;
+                    }
+                    stallmillis = millis();
+                    delay(10);
+                    continue;
+                }
 
                 // decode frames and notify lvgl image
                 result = jd_prepare( decoder, printer3d_mjpeg_input, mjpeg_buffer, PRINTER3D_MJPEG_BUFFER_SIZE, src );
@@ -1193,8 +1228,10 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
 
                     log_d("3dprinter shows a %dx%d video frame as %dx%d with scale 1/%d, step %d/65536 and crop %d/%d", decoder->width, decoder->height, mjpeg_final_w, mjpeg_final_h, 1 << mjpeg_scale, mjpeg_step, mjpeg_crop_x, mjpeg_crop_y);
 
+                    powermgm_cpu_boost_take();
                     result = jd_decomp( decoder, printer3d_mjpeg_output, mjpeg_scale );
                     printer3d_mjpeg_strip_flush();
+                    powermgm_cpu_boost_give();
 
                     if (result == JDR_OK) {
                         log_d("3dprinter successfully decoded a %dx%d video frame", decoder->width, decoder->height);
@@ -1264,6 +1301,13 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
         uint64_t framemillis = millis();
         bool connectfailed = false;
         while (src != nullptr && printer3d_state && printer3d_open_state) {
+            // nothing is fetched before the video tile has been on screen
+            if (!mjpeg_visible) {
+                framecount = 0;
+                framemillis = millis();
+                if (!printer3d_mjpeg_idle()) break;
+            }
+
             // a source that closes after every image is picked up again below
             uint32_t frames = printer3d_mjpeg_session( mjpeg_client, src, decoder, &connectfailed );
             mjpeg_client.end();
@@ -1275,7 +1319,8 @@ void printer3d_send(WiFiClient &client, char* buffer, size_t buffer_size, const 
                 framemillis = millis();
             }
 
-            if (frames) failcount = 0;
+            // leaving the tile is not a stream failure
+            if (frames || !mjpeg_visible) failcount = 0;
             else if (++failcount >= 3) {
                 log_w("3dprinter gives up on the video stream at %s", mjpeg_url);
                 break;

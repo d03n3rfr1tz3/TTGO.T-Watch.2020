@@ -818,16 +818,11 @@ void watchface_avtivate_cb( void ) {
      */
     watchface_tile_block_show_messages = blectl_get_show_notification();
     blectl_set_show_notification( blectl_get_show_notification() ? watchface_setup_get_allow_notifications() : false );
-    /**
-     * set full cpu clock
-     */
-    powermgm_set_perf_mode();
 }
 
 void watchface_hibernate_cb( void ) {
     watchface_active = false;
     blectl_set_show_notification( watchface_tile_block_show_messages );
-    powermgm_set_normal_mode();
 }
 
 void watchface_app_tile_update( void ) {

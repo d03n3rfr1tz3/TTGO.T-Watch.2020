@@ -372,7 +372,9 @@ bool gui_powermgm_loop_event_cb( EventBits_t event, void *arg ) {
         }
     #endif
 
+    powermgm_cpu_boost_take();
     lv_task_handler();
+    powermgm_cpu_boost_give();
 
     if ( force_redraw ) {
         force_redraw = !force_redraw;

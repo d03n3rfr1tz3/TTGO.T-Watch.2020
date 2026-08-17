@@ -136,6 +136,14 @@
      */
     void powermgm_set_normal_mode( void );
     /**
+     * @brief hold the cpu at max_freq_mhz, reference counted, always paired with powermgm_cpu_boost_give
+     */
+    void powermgm_cpu_boost_take( void );
+    /**
+     * @brief release the cpu boost, the cpu drops back to min_freq_mhz when no holder is left
+     */
+    void powermgm_cpu_boost_give( void );
+    /**
      * @brief enable CPU lightsleep mode
      * 
      * @param enable 
