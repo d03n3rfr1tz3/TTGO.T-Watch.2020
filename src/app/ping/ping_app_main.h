@@ -16,6 +16,26 @@
 #ifndef _PING_APP_MAIN_H
     #define _PING_APP_MAIN_H
 
+    #define PING_TARGET_LEN         64
+    #define PING_RESULT_LEN         512
+    #define PING_LINE_LEN           64
+
+    #define PING_COUNT              4
+    #define PING_SIZE               32
+    #define PING_TIMEOUT            1
+    #define PING_INTERVAL           1
+
+    #define PING_TRACE_MAX_HOP      20
+    #define PING_TRACE_TIMEOUT      1
+    #define PING_TRACE_ID           0x5754
+
+    #define PING_PORT_TIMEOUT       1000
+
+    typedef enum {
+        PING_TOOL_PING = 0,
+        PING_TOOL_TRACE,
+        PING_TOOL_PORT
+    } ping_tool_t;
 
     void ping_app_main_setup( uint32_t tile_num );
 

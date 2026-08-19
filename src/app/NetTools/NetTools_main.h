@@ -3,12 +3,12 @@
  *  Copyright  2020  David Stewart / NorthernDIY
  *  Email: genericsoftwaredeveloper@gmail.com
  *
- *  Requires Libraries: 
+ *  Requires Libraries:
  *      WakeOnLan by a7md0      https://github.com/a7md0/WakeOnLan
  *
  *  Based on the work of Dirk Brosswick,  sharandac / My-TTGO-Watch  Example_App"
  ****************************************************************************/
- 
+
 /*
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -27,13 +27,6 @@
 #ifndef _NETTOOLS_MAIN_H
     #define _NETTOOLS_MAIN_H
 
-
     void NetTools_main_setup( uint32_t tile_num );
 
 #endif // _NETTOOLS_MAIN_H
-
-//These are button labels, replace as needed to suit your setup   
-#define WOL_NAME "WakePC"
-#define TOGGLE1_NAME "Tasmota 1"
-#define TOGGLE2_NAME "Tasmota 2"
-

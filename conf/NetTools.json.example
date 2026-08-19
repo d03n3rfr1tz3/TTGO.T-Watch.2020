@@ -1,6 +1,7 @@
 {
-  "mac_address": "00:00:00:00:00:00",
-  "ping_status": true,
-  "tasmota1": "000.000.000.000",
-  "tasmota2": "000.000.000.000"
+  "targets": [
+    { "name": "WakePC", "mac": "00:11:22:33:44:55" },
+    { "name": "", "mac": "" },
+    { "name": "", "mac": "" }
+  ]
 }
