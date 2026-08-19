@@ -43,7 +43,7 @@
         #include "AudioFileSourceID3.h"
         #include "AudioGeneratorMP3.h"
         #include "AudioGeneratorWAV.h"
-        #include <AudioGeneratorMIDI.h>
+        #include "AudioGeneratorRTTTL.h"
         #include "AudioOutputI2S.h"
         #include <ESP8266SAM.h>
 
@@ -55,6 +55,9 @@
         AudioGeneratorWAV *wav;
         ESP8266SAM *sam;
         AudioFileSourcePROGMEM *progmem_file;
+        AudioGeneratorRTTTL *rtttl = NULL;
+        AudioFileSourcePROGMEM *rtttl_file = NULL;
+        char rtttl_song[ 96 ] = "";
     #elif defined( LILYGO_WATCH_2020_V2 )
     #elif defined( LILYGO_WATCH_2021 )    
     #elif defined( WT32_SC01 )
@@ -74,6 +77,19 @@ bool sound_powermgm_event_cb( EventBits_t event, void *arg );
 bool sound_powermgm_loop_cb( EventBits_t event, void *arg );
 bool sound_send_event_cb( EventBits_t event, void*arg );
 bool sound_is_silenced( void );
+
+#ifdef NATIVE_64BIT
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        /**
+         * @brief apply the configured volume to the audio output
+         */
+        static void sound_apply_gain( void ) {
+            // limiting max gain to 3.5 (max gain is 4.0)
+            out->SetGain( 3.5f * ( sound_config.volume / 100.0f ) );
+        }
+    #endif
+#endif
 
 void sound_setup( void ) {
     if ( sound_init )
@@ -103,7 +119,7 @@ void sound_setup( void ) {
              */
             out = new AudioOutputI2S();
             out->SetPinout( TWATCH_DAC_IIS_BCK, TWATCH_DAC_IIS_WS, TWATCH_DAC_IIS_DOUT );
-            sound_set_volume_config( sound_config.volume );
+            sound_apply_gain();
             mp3 = new AudioGeneratorMP3();
             wav = new AudioGeneratorWAV();
             sam = new ESP8266SAM;
@@ -173,7 +189,7 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            bool boost = mp3->isRunning() || wav->isRunning();
+            bool boost = mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() );
             if ( boost ) powermgm_cpu_boost_take();
             // we call sound_set_enabled(false) to ensure the PMU stops all power
             if ( mp3->isRunning() && !mp3->loop() ) {
@@ -183,6 +199,10 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
             if ( wav->isRunning() && !wav->loop() ) {
                 log_d("stop playing wav sound");
                 wav->stop();
+            }
+            if ( rtttl && rtttl->isRunning() && !rtttl->loop() ) {
+                log_d("stop playing rtttl sound");
+                rtttl->stop();
             }
             if ( boost ) powermgm_cpu_boost_give();
         }
@@ -260,6 +280,7 @@ void sound_set_enabled( bool enabled ) {
             if ( sound_init ) {
                 if ( mp3->isRunning() ) mp3->stop();
                 if ( wav->isRunning() ) wav->stop();
+                if ( rtttl && rtttl->isRunning() ) rtttl->stop();
             }
             /**
              * ttgo->disableAudio() is not working
@@ -290,6 +311,7 @@ void sound_play_spiffs_mp3( const char *filename ) {
         if ( sound_config.enable && sound_init ) {
             if (!sound_is_silenced()) {
                 sound_set_enabled( sound_config.enable );
+                sound_apply_gain();
                 log_d("playing file %s from SPIFFS", filename);
                 spliffs_file = new AudioFileSourceSPIFFS(filename);
                 id3 = new AudioFileSourceID3(spliffs_file);
@@ -319,6 +341,7 @@ void sound_play_progmem_wav( const void *data, uint32_t len ) {
         if ( sound_config.enable && sound_init ) {
             if (!sound_is_silenced()) {
                 sound_set_enabled( sound_config.enable );
+                sound_apply_gain();
                 log_d("playing audio (size %d) from PROGMEM ", len );
                 progmem_file = new AudioFileSourcePROGMEM( data, len );
                 wav->begin(progmem_file, out);
@@ -328,6 +351,51 @@ void sound_play_progmem_wav( const void *data, uint32_t len ) {
             }
         } else {
             log_d("Cannot play wav, sound is disabled");
+        }
+    #endif
+#endif
+}
+
+void sound_play_rtttl( const char *song ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        if ( sound_config.enable && sound_init ) {
+            if (!sound_is_silenced()) {
+                sound_set_enabled( sound_config.enable );
+                sound_apply_gain();
+                log_d("playing rtttl \"%s\"", song );
+                /*
+                * recreate the generator, only its destructor frees the song buffer
+                */
+                if ( rtttl ) {
+                    if ( rtttl->isRunning() ) rtttl->stop();
+                    delete rtttl;
+                }
+                if ( rtttl_file ) {
+                    delete rtttl_file;
+                }
+                /*
+                * the I2S DMA repeats its last buffer on underrun, so every song
+                * ends with a rest longer than the ring to leave silence behind
+                */
+                snprintf( rtttl_song, sizeof( rtttl_song ), "%s,16p", song );
+                rtttl = new AudioGeneratorRTTTL();
+                rtttl_file = new AudioFileSourcePROGMEM( rtttl_song, strlen( rtttl_song ) );
+                rtttl->begin( rtttl_file, out );
+            }
+            else {
+                log_d("Cannot play rtttl, sound is silenced");
+            }
+        } else {
+            log_d("Cannot play rtttl, sound is disabled");
         }
     #endif
 #endif
@@ -441,8 +509,7 @@ void sound_set_volume_config( uint8_t volume ) {
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
             log_d("Setting sound volume to: %d", volume);
-            // limiting max gain to 3.5 (max gain is 4.0)
-            out->SetGain(3.5f * ( sound_config.volume / 100.0f ));
+            sound_apply_gain();
         }
     #endif
 #endif

@@ -45,6 +45,12 @@
      */
     void sound_play_progmem_wav( const void *data, uint32_t len );
     /**
+     * @brief play a RTTTL ringtone/jingle, no audio file needed
+     *
+     * @param   song    RTTTL string, e.g. "win:d=16,o=6,b=200:c,e,g,8c7"
+     */
+    void sound_play_rtttl( const char *song );
+    /**
      * @brief setup sound
      */
     void sound_setup( void );

@@ -28,10 +28,9 @@
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/statusbar.h"
-#include "gui/sound/piep_high.h"
-#include "gui/sound/piep_low.h"
 #include "hardware/display.h"
 #include "hardware/motor.h"
+#include "hardware/powermgm.h"
 #include "hardware/sound.h"
 
 #include "ttt_app.h"
@@ -64,6 +63,17 @@
     static const lv_img_dsc_t * gameplay_bg = &bg2_240px;
 #endif
 
+LV_FONT_DECLARE(Ubuntu_32px);
+
+/* Board geometry, three 64px squares at a 72px pitch */
+static constexpr int SQUARE_SIZE = 64;
+static constexpr int SQUARE_POS[3] = {16, 88, 160};
+
+static const uint8_t WIN_LINES[8][3] = {
+    {0, 1, 2}, {3, 4, 5}, {6, 7, 8}, // rows
+    {0, 3, 6}, {1, 4, 7}, {2, 5, 8}, // columns
+    {0, 4, 8}, {2, 4, 6}};           // diagonals
+
 /* These would be unnecessary if LVGL supported a data param... */
 
 static TicTacToeApp *gameInstance = 0;
@@ -71,102 +81,160 @@ static void OnSquareUL(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(0);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(0);
+            break;
     }
 }
 static void OnSquareUC(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(1);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(1);
+            break;
     }
 }
 static void OnSquareUR(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(2);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(2);
+            break;
     }
 }
 static void OnSquareCL(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(3);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(3);
+            break;
     }
 }
 static void OnSquareCC(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(4);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(4);
+            break;
     }
 }
 static void OnSquareCR(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(5);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(5);
+            break;
     }
 }
 static void OnSquareBL(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(6);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(6);
+            break;
     }
 }
 static void OnSquareBC(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(7);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(7);
+            break;
     }
 }
 static void OnSquareBR(struct _lv_obj_t *obj, lv_event_t event)
 {
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnTileClicked(8);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnTileClicked(8);
+            break;
     }
+}
+
+static void OnOverlay(struct _lv_obj_t *obj, lv_event_t event)
+{
+    switch (event)
+    {
+        case (LV_EVENT_CLICKED):
+            gameInstance->ClearBoard();
+            break;
+    }
+}
+
+static void FireworkTask(lv_task_t *task)
+{
+    gameInstance->OnFireworkTick();
+}
+
+static void SetSparkOpa(void *obj, lv_anim_value_t value)
+{
+    lv_obj_set_style_local_bg_opa((lv_obj_t *)obj, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, value);
+}
+
+static void HideSpark(lv_anim_t *anim)
+{
+    lv_obj_set_hidden((lv_obj_t *)anim->var, true);
 }
 
 static void OnExit(struct _lv_obj_t *obj, lv_event_t event)
 {
+    if (!gameInstance) return;
+
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnMenuClicked(TicTacToeApp::Exit);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnMenuClicked(TicTacToeApp::Exit);
+            break;
     }
 }
 
 static void OnReset(struct _lv_obj_t *obj, lv_event_t event)
 {
+    if (!gameInstance) return;
+
     switch (event)
     {
-    case (LV_EVENT_CLICKED):
-        gameInstance->OnMenuClicked(TicTacToeApp::Reset);
-        break;
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnMenuClicked(TicTacToeApp::Reset);
+            break;
     }
+}
+
+static void OnSwitch(struct _lv_obj_t *obj, lv_event_t event)
+{
+    if (!gameInstance) return;
+
+    switch (event)
+    {
+        case (LV_EVENT_VALUE_CHANGED):
+            gameInstance->OnTileChanged();
+            break;
+    }
+}
+
+static bool OnPower(EventBits_t event, void *arg)
+{
+    if (!gameInstance) return( true );
+
+    switch( event ) {
+        case( POWERMGM_STANDBY ):
+            gameInstance->OnStandby();
+            break;
+    }
+    return( true );
+}
+
+void tic_tac_toe_app_setup()
+{
+    powermgm_register_cb( POWERMGM_STANDBY, OnPower, "pong powermgm");
 }
 
 TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
@@ -197,6 +265,7 @@ TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
         lv_tileview_set_edge_flash(GetTileView(), false);
         lv_obj_add_style(GetTileView(), LV_OBJ_PART_MAIN, &mStyleApp);
         lv_page_set_scrlbar_mode(GetTileView(), LV_SCRLBAR_MODE_DRAG);
+        lv_obj_set_event_cb(GetTileView(), OnSwitch);
 
         // Initialize screen backgrounds
         log_d("Creating background for menu tile");
@@ -293,10 +362,6 @@ TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
     log_d("Initializing game board");
     {
         // Display a TTT grid on the gameplay page
-        constexpr int tops[3] = {16, 88, 160};
-        constexpr int lefts[3] = {16, 88, 160};
-        constexpr int width = 64;
-        constexpr int height = 64;
         const lv_event_cb_t funcs[NUM_SQUARES] = {
             OnSquareUL, OnSquareUC, OnSquareUR,
             OnSquareCL, OnSquareCC, OnSquareCR,
@@ -307,21 +372,62 @@ TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
             mButtons[i] = lv_btn_create(gameplayTile, NULL);
             if (!mButtons[i])
                 log_e("Error creating button %d. Crash is immenent.", i);
-            lv_obj_set_pos(mButtons[i], tops[i % 3], lefts[i / 3]);
-            lv_obj_set_size(mButtons[i], width, height);
+            lv_obj_set_pos(mButtons[i], SQUARE_POS[i % 3], SQUARE_POS[i / 3]);
+            lv_obj_set_size(mButtons[i], SQUARE_SIZE, SQUARE_SIZE);
             lv_obj_reset_style_list(mButtons[i], LV_BTN_PART_MAIN);
             lv_obj_add_style(mButtons[i], LV_BTN_PART_MAIN, &mStyleBlank);
             lv_obj_set_event_cb(mButtons[i], funcs[i]);
         }
-
-        ClearBoard();
     }
 
+    log_d("Initializing game over overlay");
+    {
+        mOverlay = lv_obj_create(gameplayTile, NULL);
+        lv_obj_set_size(mOverlay, LV_HOR_RES, LV_VER_RES);
+        lv_obj_set_pos(mOverlay, 0, 0);
+        lv_obj_reset_style_list(mOverlay, LV_OBJ_PART_MAIN);
+        lv_obj_set_style_local_bg_opa(mOverlay, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_TRANSP);
+        lv_obj_set_click(mOverlay, true);
+        lv_obj_set_event_cb(mOverlay, OnOverlay);
+        lv_tileview_add_element(GetTileView(), mOverlay);
+
+        lv_style_init(&mStyleResult);
+        lv_style_set_text_font(&mStyleResult, LV_STATE_DEFAULT, &Ubuntu_32px);
+        lv_style_set_text_color(&mStyleResult, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+        lv_style_set_bg_opa(&mStyleResult, LV_STATE_DEFAULT, LV_OPA_70);
+        lv_style_set_bg_color(&mStyleResult, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+        lv_style_set_radius(&mStyleResult, LV_STATE_DEFAULT, 6);
+        lv_style_set_pad_left(&mStyleResult, LV_STATE_DEFAULT, 10);
+        lv_style_set_pad_right(&mStyleResult, LV_STATE_DEFAULT, 10);
+        lv_style_set_pad_top(&mStyleResult, LV_STATE_DEFAULT, 6);
+        lv_style_set_pad_bottom(&mStyleResult, LV_STATE_DEFAULT, 6);
+
+        mResultLabel = lv_label_create(mOverlay, NULL);
+        lv_obj_add_style(mResultLabel, LV_LABEL_PART_MAIN, &mStyleResult);
+        lv_label_set_align(mResultLabel, LV_LABEL_ALIGN_CENTER);
+        lv_label_set_text_static(mResultLabel, "");
+        lv_obj_set_click(mResultLabel, false);
+
+        for (int i = 0; i < NUM_SPARKS; i++)
+        {
+            mSparks[i] = lv_obj_create(gameplayTile, NULL);
+            lv_obj_set_size(mSparks[i], 8, 8);
+            lv_obj_set_click(mSparks[i], false);
+            lv_obj_reset_style_list(mSparks[i], LV_OBJ_PART_MAIN);
+            lv_obj_set_style_local_radius(mSparks[i], LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
+            lv_obj_set_style_local_border_width(mSparks[i], LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, 0);
+        }
+    }
+
+    ClearBoard();
+
+    ttt_inited = true;
     log_d("Construction complete");
 }
 
 TicTacToeApp::~TicTacToeApp()
 {
+    StopFirework();
     // LVGL Objects parented to the tiles should be deleted when the tiles are destroyed.
     FreeAppTiles();
     gameInstance = nullptr;
@@ -336,6 +442,7 @@ void TicTacToeApp::OnLaunch()
 void TicTacToeApp::OnExitClicked()
 {
     log_d("Exiting...");
+    StopFirework();
     // Pass along the message for differed deletion and return to main menu
     mParentIcon->OnExitClicked();
     FreeAppTiles();
@@ -343,6 +450,12 @@ void TicTacToeApp::OnExitClicked()
 
 void TicTacToeApp::OnTileClicked(int index)
 {
+    if (mState != Playing)
+    {
+        ClearBoard();
+        return;
+    }
+
     if (index < 0 || index >= NUM_SQUARES)
     {
         log_e("Invalid tile number, expected 0-%d, received %d", NUM_SQUARES, index);
@@ -354,14 +467,27 @@ void TicTacToeApp::OnTileClicked(int index)
         lv_style_t *style = (mCurrentPlayer == Owner::Red) ? &mStyleRed : &mStyleBlue;
 
         mBoard[index] = mCurrentPlayer;
+        mMoveCount++;
 
         lv_obj_add_style(mButtons[index], LV_BTN_PART_MAIN, style);
         lv_btn_set_state(mButtons[index], LV_BTN_STATE_DISABLED);
 
-        sound_play_progmem_wav( (mCurrentPlayer == Owner::Red) ? piep_high_wav : piep_low_wav, (mCurrentPlayer == Owner::Red) ? piep_high_wav_len : piep_low_wav_len );
+        sound_play_rtttl( (mCurrentPlayer == Owner::Red) ? SND_TTT_MOVE_RED : SND_TTT_MOVE_BLUE );
         motor_vibe(2);
 
-        NextPlayer();
+        mWinLine = CheckWinner();
+        if (mWinLine >= 0)
+        {
+            EndGame(Won);
+        }
+        else if (mMoveCount == NUM_SQUARES)
+        {
+            EndGame(Draw);
+        }
+        else
+        {
+            NextPlayer();
+        }
     }
     else
     {
@@ -369,8 +495,144 @@ void TicTacToeApp::OnTileClicked(int index)
     }
 }
 
+int TicTacToeApp::CheckWinner()
+{
+    for (int line = 0; line < 8; line++)
+    {
+        const Owner owner = mBoard[WIN_LINES[line][0]];
+        if (owner == Owner::None)
+            continue;
+        if (owner == mBoard[WIN_LINES[line][1]] && owner == mBoard[WIN_LINES[line][2]])
+            return line;
+    }
+    return -1;
+}
+
+void TicTacToeApp::EndGame(GameState state)
+{
+    mState = state;
+    lv_disp_trig_activity(NULL);
+
+    if (state == Won)
+    {
+        const bool red = (mCurrentPlayer == Owner::Red);
+        log_d("%s won on line %d", red ? "Red" : "Blue", mWinLine);
+
+        lv_label_set_text(mResultLabel, red ? "Red won!" : "Blue won!");
+        lv_obj_set_style_local_text_color(mResultLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, red ? LV_COLOR_RED : LV_COLOR_BLUE);
+
+        sound_play_rtttl(SND_TTT_WIN);
+        motor_vibe(10);
+        StartFirework();
+    }
+    else
+    {
+        log_d("Draw");
+
+        lv_label_set_text(mResultLabel, "Draw!");
+        lv_obj_set_style_local_text_color(mResultLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+
+        sound_play_rtttl(SND_TTT_DRAW);
+        motor_vibe(5);
+    }
+
+    lv_obj_align(mResultLabel, mOverlay, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_hidden(mOverlay, false);
+}
+
+void TicTacToeApp::StartFirework()
+{
+    mBurstsLeft = NUM_BURSTS;
+
+    if (!mFireworkTask)
+        mFireworkTask = lv_task_create(FireworkTask, 400, LV_TASK_PRIO_MID, NULL);
+
+    OnFireworkTick();
+}
+
+void TicTacToeApp::OnFireworkTick()
+{
+    if (mBurstsLeft <= 0 || mWinLine < 0)
+    {
+        StopFirework();
+        return;
+    }
+    mBurstsLeft--;
+
+    // burst from the middle of the winning line
+    lv_coord_t cx = 0;
+    lv_coord_t cy = 0;
+    for (int i = 0; i < 3; i++)
+    {
+        const uint8_t square = WIN_LINES[mWinLine][i];
+        cx += SQUARE_POS[square % 3] + (SQUARE_SIZE / 2);
+        cy += SQUARE_POS[square / 3] + (SQUARE_SIZE / 2);
+    }
+    cx /= 3;
+    cy /= 3;
+
+    const lv_color_t player = (mCurrentPlayer == Owner::Red) ? LV_COLOR_RED : LV_COLOR_BLUE;
+
+    lv_anim_path_t path = {0};
+    lv_anim_path_set_cb(&path, lv_anim_path_ease_out);
+
+    for (int i = 0; i < NUM_SPARKS; i++)
+    {
+        lv_obj_t *spark = mSparks[i];
+        const float angle = (float)i * 2 * PI / NUM_SPARKS;
+        const int radius = 50 + (rand() % 30);
+
+        lv_obj_set_style_local_bg_color(spark, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, (i % 3 == 0) ? LV_COLOR_WHITE : ((i % 3 == 1) ? LV_COLOR_YELLOW : player));
+        lv_obj_set_style_local_bg_opa(spark, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_COVER);
+        lv_obj_set_pos(spark, cx - 4, cy - 4);
+        lv_obj_set_hidden(spark, false);
+
+        lv_anim_t anim;
+        lv_anim_init(&anim);
+        lv_anim_set_var(&anim, spark);
+        lv_anim_set_time(&anim, 500);
+        lv_anim_set_path(&anim, &path);
+
+        lv_anim_set_exec_cb(&anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
+        lv_anim_set_values(&anim, cx - 4, cx - 4 + (lv_coord_t)(radius * cos(angle)));
+        lv_anim_start(&anim);
+
+        lv_anim_set_exec_cb(&anim, (lv_anim_exec_xcb_t)lv_obj_set_y);
+        lv_anim_set_values(&anim, cy - 4, cy - 4 + (lv_coord_t)(radius * sin(angle)));
+        lv_anim_start(&anim);
+
+        lv_anim_set_exec_cb(&anim, SetSparkOpa);
+        lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
+        lv_anim_set_ready_cb(&anim, HideSpark);
+        lv_anim_start(&anim);
+    }
+
+    motor_vibe(2);
+}
+
+void TicTacToeApp::StopFirework()
+{
+    if (mFireworkTask)
+    {
+        lv_task_del(mFireworkTask);
+        mFireworkTask = 0;
+    }
+    mBurstsLeft = 0;
+
+    // the animations must not outlive the objects they drive
+    for (lv_obj_t *spark : mSparks)
+    {
+        if (!spark)
+            continue;
+        lv_anim_del(spark, NULL);
+        lv_obj_set_hidden(spark, true);
+    }
+}
+
 void TicTacToeApp::ClearBoard()
 {
+    StopFirework();
+
     for (Owner &c : mBoard)
     {
         c = Owner::None;
@@ -382,6 +644,12 @@ void TicTacToeApp::ClearBoard()
         lv_btn_set_state(button, LV_BTN_STATE_RELEASED);
     }
     mCurrentPlayer = Red;
+    mState = Playing;
+    mMoveCount = 0;
+    mWinLine = -1;
+
+    if (mOverlay)
+        lv_obj_set_hidden(mOverlay, true);
 }
 
 void TicTacToeApp::OnMenuClicked(MenuItem item)
@@ -391,11 +659,29 @@ void TicTacToeApp::OnMenuClicked(MenuItem item)
     case Reset:
         ClearBoard();
         lv_tileview_set_tile_act(GetTileView(), 1, 0, LV_ANIM_ON);
+        ttt_active = true;
         break;
     case Exit:
         OnExitClicked();
+        ttt_active = false;
         break;
     default:
         log_e("Unknown menu command %d", item);
     }
+}
+
+void TicTacToeApp::OnTileChanged()
+{
+    lv_coord_t x;
+    lv_coord_t y;
+    lv_tileview_get_tile_act(GetTileView(), &x, &y);
+    log_d("Tile changed to %d, %d", x, y);
+
+    if (x == 1) ttt_active = true;
+    else ttt_active = false;
+}
+
+void TicTacToeApp::OnStandby()
+{
+    ttt_active = false;
 }

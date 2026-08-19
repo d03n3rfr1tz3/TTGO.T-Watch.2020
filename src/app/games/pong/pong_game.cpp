@@ -62,6 +62,7 @@ void pong_game_setup()
         return;
     }
     
+    pong_app_setup();
     iconInstance.RegisterAppIcon();
     _pong_app_task = lv_task_create( pong_app_task, 50, LV_TASK_PRIO_HIGH, NULL );
 }
@@ -119,10 +120,12 @@ void PongIcon::OnExitClicked()
 void PongIcon::DoDelayedRelease()
 {
     log_d("Triggering async release");
-    mGameInstance.release();
+    mGameInstance.reset();
 }
 
 void PongIcon::Loop()
 {
+    if (!mGameInstance) return;
+
     mGameInstance->Loop();
 }

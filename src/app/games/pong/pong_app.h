@@ -38,6 +38,17 @@
 #define BALL_SPEED_MIN 3
 #define BALL_SPEED_MAX 15
 
+/*
+ * Pong: the original 1972 sound circuit divided the 15720Hz line frequency by
+ * 32/64/128, giving 491Hz paddle, 246Hz wall and 123Hz point. All three are
+ * below the RTTTL range, so the triple is shifted up two octaves, keeping the
+ * octave relations. b6 (1976Hz) also matches the old piep_high sample (1960Hz).
+ */
+#define SND_PONG_BOUNCE_P1      "p1:d=16,o=6,b=180:b"
+#define SND_PONG_BOUNCE_P2      "p2:d=16,o=6,b=180:a"
+#define SND_PONG_SCORE_P1       "s1:d=16,o=5,b=180:b,b6"
+#define SND_PONG_SCORE_P2       "s2:d=16,o=6,b=180:b,b5"
+
 void pong_app_setup();
 
 class PongIcon;

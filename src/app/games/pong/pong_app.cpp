@@ -28,10 +28,6 @@
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/app_tile/app_tile.h"
 #include "gui/statusbar.h"
-#include "gui/sound/piep_higher.h"
-#include "gui/sound/piep_high.h"
-#include "gui/sound/piep_lower.h"
-#include "gui/sound/piep_low.h"
 #include "hardware/display.h"
 #include "hardware/motion.h"
 #include "hardware/motor.h"
@@ -74,6 +70,8 @@ LV_FONT_DECLARE(Ubuntu_48px);
 static PongApp *gameInstance = 0;
 static void OnExit(struct _lv_obj_t *obj, lv_event_t event)
 {
+    if (!gameInstance) return;
+
     switch (event)
     {
         case (LV_EVENT_CLICKED):
@@ -84,6 +82,8 @@ static void OnExit(struct _lv_obj_t *obj, lv_event_t event)
 
 static void OnReset(struct _lv_obj_t *obj, lv_event_t event)
 {
+    if (!gameInstance) return;
+
     switch (event)
     {
         case (LV_EVENT_CLICKED):
@@ -94,6 +94,8 @@ static void OnReset(struct _lv_obj_t *obj, lv_event_t event)
 
 static void OnSwitch(struct _lv_obj_t *obj, lv_event_t event)
 {
+    if (!gameInstance) return;
+
     switch (event)
     {
         case (LV_EVENT_VALUE_CHANGED):
@@ -104,12 +106,19 @@ static void OnSwitch(struct _lv_obj_t *obj, lv_event_t event)
 
 static bool OnPower(EventBits_t event, void *arg)
 {
+    if (!gameInstance) return( true );
+
     switch( event ) {
         case( POWERMGM_STANDBY ):
             gameInstance->OnStandby();
             break;
     }
     return( true );
+}
+
+void pong_app_setup()
+{
+    powermgm_register_cb( POWERMGM_STANDBY, OnPower, "pong powermgm");
 }
 
 PongApp::PongApp(PongIcon *icon)
@@ -272,8 +281,6 @@ PongApp::PongApp(PongIcon *icon)
         ResetGame();
     }
     
-    powermgm_register_cb( POWERMGM_STANDBY, OnPower, "pong powermgm");
-
     pong_inited = true;
     log_d("Construction complete");
 }
@@ -394,7 +401,7 @@ bool PongApp::BouncePlayer1()
     if (ball_bounce > 0) ball_speed++;
     ball_bounce++;
 
-    sound_play_progmem_wav( piep_high_wav, piep_high_wav_len );
+    sound_play_rtttl( SND_PONG_BOUNCE_P1 );
     motor_vibe(3);
 
     return true;
@@ -413,7 +420,7 @@ bool PongApp::BouncePlayer2()
     if (ball_bounce > 0) ball_speed++;
     ball_bounce++;
 
-    sound_play_progmem_wav( piep_low_wav, piep_low_wav_len );
+    sound_play_rtttl( SND_PONG_BOUNCE_P2 );
     motor_vibe(3);
 
     return true;
@@ -427,7 +434,7 @@ bool PongApp::ScorePlayer1()
     UpdateBoard();
     ResetBall();
 
-    sound_play_progmem_wav( piep_higher_wav, piep_higher_wav_len );
+    sound_play_rtttl( SND_PONG_SCORE_P1 );
     motor_vibe(10);
 
     return true;
@@ -441,7 +448,7 @@ bool PongApp::ScorePlayer2()
     UpdateBoard();
     ResetBall();
 
-    sound_play_progmem_wav( piep_lower_wav, piep_lower_wav_len );
+    sound_play_rtttl( SND_PONG_SCORE_P2 );
     motor_vibe(10);
 
     return true;

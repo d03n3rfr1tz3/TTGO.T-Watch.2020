@@ -54,6 +54,7 @@ void tic_tac_toe_game_setup()
         return;
     }
     
+    tic_tac_toe_app_setup();
     iconInstance.RegisterAppIcon();
 }
 
@@ -108,5 +109,5 @@ void TicTacToeIcon::OnExitClicked()
 void TicTacToeIcon::DoDelayedRelease()
 {
     log_d("Triggering async release");
-    mGameInstance.release();
+    mGameInstance.reset();
 }
