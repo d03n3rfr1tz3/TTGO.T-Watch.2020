@@ -127,7 +127,17 @@ void bluetooth_media_tile_setup( void ) {
 
     gadgetbridge_register_cb( GADGETBRIDGE_JSON_MSG, bluetooth_media_event_cb, "bluetooth media" );
     mainbar_add_tile_activate_cb( bluetooth_media_tile_num, bluetooth_media_activate_cb );
-    bluetooth_media_app = app_register( "media\nplayer", &play_64px, enter_bluetooth_media_cb );
+}
+
+static void bluetooth_media_app_icon_setup( void );
+static int registed = app_autocall_function( &bluetooth_media_app_icon_setup, APP_PRIO( APP_GROUP_MEDIA, 0 ) );
+
+static void bluetooth_media_app_icon_setup( void ) {
+    if( !registed )
+        return;
+    #ifndef NO_BLUETOOTH
+        bluetooth_media_app = app_register( "media\nplayer", &play_64px, enter_bluetooth_media_cb );
+    #endif
 }
 
 static void bluetooth_media_activate_cb( void ) {

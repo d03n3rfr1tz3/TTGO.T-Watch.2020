@@ -43,7 +43,7 @@ LV_IMG_DECLARE(calc_app_64px);
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &calc_app_setup, 15 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &calc_app_setup, APP_PRIO( APP_GROUP_GENERAL, 2 ) );           /** @brief app autocall function */
 /*
  * setup routine for example app
  */

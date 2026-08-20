@@ -85,7 +85,7 @@ LV_FONT_DECLARE(Ubuntu_16px);
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &weather_app_setup, 0 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &weather_app_setup, APP_PRIO( APP_GROUP_GENERAL, 3 ) );           /** @brief app autocall function */
 
 
 void weather_app_setup( void ) {

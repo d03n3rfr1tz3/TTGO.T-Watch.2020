@@ -19,3 +19,17 @@ static int registed = app_autocall_function( &app_setup_function, 0 );
 ```
 Later in the program we can simply process the list with functions pointers at a suitable place.
 That was it already. Simple if you think about it.
+
+## the prio
+
+The prio is not just an order any more, it encodes the app group and the position inside
+that group. Each group starts on its own app tile, so apps of the same group stay together
+and apps that are not built simply close the gap inside their own group.
+
+```c
+static int registed = app_autocall_function( &app_setup_function, APP_PRIO( APP_GROUP_NETWORK, 3 ) );
+```
+
+The groups are declared as ```app_group_t``` in ```src/gui/mainbar/app_tile/app_tile.h```.
+The position only sets the order inside the group, not the icon slot, so a group may declare
+more members than fit on a tile as long as they are never all built at the same time.

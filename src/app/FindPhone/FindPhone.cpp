@@ -53,7 +53,7 @@ static void enter_FindPhone_event_cb( lv_obj_t * obj, lv_event_t event );
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &FindPhone_setup, 13 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &FindPhone_setup, APP_PRIO( APP_GROUP_LOCATION, 3 ) );           /** @brief app autocall function */
 /*
  * setup routine for example app
  */

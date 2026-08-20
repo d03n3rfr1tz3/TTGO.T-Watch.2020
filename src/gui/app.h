@@ -23,6 +23,14 @@
     #define _APP_H
     
     #include "gui/icon.h"
+    #include "gui/mainbar/app_tile/app_tile.h"
+    /**
+     * @brief app priority, encodes the app group and the position inside the group
+     */
+    #define APP_PRIO_GROUP_STEP     10
+    #define APP_PRIO( group, pos )  ( ( group ) * APP_PRIO_GROUP_STEP + ( pos ) )
+    #define APP_PRIO_GROUP( prio )  ( ( prio ) / APP_PRIO_GROUP_STEP )
+    #define APP_AUTOCALL_MAX_PRIO   ( APP_GROUP_MAX * APP_PRIO_GROUP_STEP )
     /**
      * @brief core autocall type definition
      */

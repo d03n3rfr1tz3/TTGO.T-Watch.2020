@@ -291,7 +291,17 @@ void bluetooth_message_tile_setup( void ) {
     mainbar_add_tile_button_cb( bluetooth_message_tile_num, bluetooth_message_button_event_cb );
     mainbar_add_tile_activate_cb( bluetooth_message_tile_num, bluetooth_message_activate_cb );
     mainbar_add_tile_hibernate_cb( bluetooth_message_tile_num, bluetooth_message_hibernate_cb );
-    messages_app = app_register( "messages", &message_64px, enter_bluetooth_messages_cb );
+}
+
+static void bluetooth_message_app_icon_setup( void );
+static int registed = app_autocall_function( &bluetooth_message_app_icon_setup, APP_PRIO( APP_GROUP_GENERAL, 0 ) );
+
+static void bluetooth_message_app_icon_setup( void ) {
+    if( !registed )
+        return;
+    #ifndef NO_BLUETOOTH
+        messages_app = app_register( "messages", &message_64px, enter_bluetooth_messages_cb );
+    #endif
 }
 
 static bool bluetooth_message_button_event_cb( EventBits_t event, void *arg ) {

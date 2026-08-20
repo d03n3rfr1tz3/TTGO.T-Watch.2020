@@ -63,7 +63,6 @@ void watchface_manager_setup( void ) {
      * register 1 app tile
      */
     watchface_manager_app_main_tile_num = mainbar_add_app_tile( 1, 1, "Watchface manager" );
-    watchface_manager_app = app_register( "watchface\nmanager", &watchface_manager_64px, enter_watchface_manager_app_event_cb );
     /*
      * register 1 tiles for setup
      */
@@ -76,6 +75,17 @@ void watchface_manager_setup( void ) {
     watchface_tile_setup();
     watchface_setup_tile_setup( watchface_setup_tile_num );
     watchface_expr_setup();
+}
+
+static void watchface_manager_app_icon_setup( void );
+static int registed = app_autocall_function( &watchface_manager_app_icon_setup, APP_PRIO( APP_GROUP_GENERAL, 4 ) );
+
+static void watchface_manager_app_icon_setup( void ) {
+    if( !registed )
+        return;
+    #if !defined( NO_WATCHFACE )
+        watchface_manager_app = app_register( "watchface\nmanager", &watchface_manager_64px, enter_watchface_manager_app_event_cb );
+    #endif
 }
 
 uint32_t watchface_manager_get_app_tile_num( void ) {

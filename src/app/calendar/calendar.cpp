@@ -42,7 +42,7 @@ LV_IMG_DECLARE(calendar_64px);                                      /** @brief c
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &calendar_app_setup, 15 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &calendar_app_setup, APP_PRIO( APP_GROUP_GENERAL, 1 ) );           /** @brief app autocall function */
 /**
  * internal function declaration
  */

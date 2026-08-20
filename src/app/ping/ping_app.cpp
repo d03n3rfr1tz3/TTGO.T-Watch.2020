@@ -41,7 +41,7 @@ static void enter_ping_app_event_cb( lv_obj_t * obj, lv_event_t event );
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &ping_app_setup, 18 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &ping_app_setup, APP_PRIO( APP_GROUP_NETWORK, 3 ) );           /** @brief app autocall function */
 
 /*
  * setup routine for ping app

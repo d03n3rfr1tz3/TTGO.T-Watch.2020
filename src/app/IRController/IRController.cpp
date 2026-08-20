@@ -31,7 +31,7 @@
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &IRController_setup, 8 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &IRController_setup, APP_PRIO( APP_GROUP_NETWORK, 2 ) );           /** @brief app autocall function */
 
 #ifdef NATIVE_64BIT
     void IRController_setup( void ) {

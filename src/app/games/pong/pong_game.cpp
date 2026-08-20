@@ -45,7 +45,7 @@ lv_task_t * _pong_app_task;
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &pong_game_setup, 20 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &pong_game_setup, APP_PRIO( APP_GROUP_GAMES, 1 ) );           /** @brief app autocall function */
 
 void pong_app_task( lv_task_t * task )
 {

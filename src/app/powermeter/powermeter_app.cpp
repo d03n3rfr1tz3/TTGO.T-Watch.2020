@@ -56,7 +56,7 @@ static void enter_powermeter_app_event_cb( lv_obj_t * obj, lv_event_t event );
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &powermeter_app_setup, 12 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &powermeter_app_setup, APP_PRIO( APP_GROUP_NETWORK, 6 ) );           /** @brief app autocall function */
 /**
  * @brief setup routine for powermeter app
  */

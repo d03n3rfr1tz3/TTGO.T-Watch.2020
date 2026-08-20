@@ -44,7 +44,7 @@ static void enter_wireless_app_event_cb( lv_obj_t * obj, lv_event_t event );
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &wireless_app_setup, 18 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &wireless_app_setup, APP_PRIO( APP_GROUP_NETWORK, 1 ) );           /** @brief app autocall function */
 
 /*
  * setup routine for wireless app

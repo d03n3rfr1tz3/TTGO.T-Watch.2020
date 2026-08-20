@@ -72,7 +72,8 @@ void app_autocall_all_setup_functions( void ) {
         /**
          * call all registered setup functions
          */
-        for( size_t prio = 0 ; prio < 32 ; prio++ ) {
+        for( size_t prio = 0 ; prio < APP_AUTOCALL_MAX_PRIO ; prio++ ) {
+            app_tile_set_group( (app_group_t)APP_PRIO_GROUP( prio ) );
             for( size_t i = 0 ; i < app_autocall_counter ; i++ ) {
                 if( app_autocall_table[ i ].prio == prio )
                     app_autocall_table[ i ].function();

@@ -40,7 +40,7 @@ LV_IMG_DECLARE(tiltmouse_app_64px);
 /*
  * automatic register the app setup function with explicit call in main.cpp
  */
-static int registed = app_autocall_function( &tiltmouse_app_setup, 16 );           /** @brief app autocall function */
+static int registed = app_autocall_function( &tiltmouse_app_setup, APP_PRIO( APP_GROUP_NETWORK, 5 ) );           /** @brief app autocall function */
 
 /*
  * setup routine for tiltmouse app
