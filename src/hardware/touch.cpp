@@ -383,7 +383,7 @@ bool touch_getXY( int16_t &x, int16_t &y ) {
     #ifdef NATIVE_64BIT
     #else
         #if defined( M5PAPER )
-            if ( M5.TP.avaliable() ) {
+            if ( M5.TP.available() ) {
                 if( !M5.TP.isFingerUp() ) {
                     touched = true;
                     M5.TP.update();
@@ -475,7 +475,7 @@ static bool touch_read(lv_indev_drv_t * drv, lv_indev_data_t*data) {
         retval = mouse_read( drv, data );
     #else
         #if defined( M5PAPER )
-            if ( M5.TP.avaliable() ) {
+            if ( M5.TP.available() ) {
                 if( !M5.TP.isFingerUp() ) {
                     M5.TP.update();
                     tp_finger_t FingerItem = M5.TP.readFinger( 0 );
