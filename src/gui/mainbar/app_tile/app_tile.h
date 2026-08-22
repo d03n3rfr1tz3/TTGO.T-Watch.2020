@@ -32,6 +32,7 @@
         APP_GROUP_GENERAL = 0,
         APP_GROUP_TIME,
         APP_GROUP_LOCATION,
+        APP_GROUP_AUDIO,
         APP_GROUP_MEDIA,
         APP_GROUP_NETWORK,
         APP_GROUP_GAMES,

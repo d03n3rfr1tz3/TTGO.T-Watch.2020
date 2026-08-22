@@ -10,6 +10,7 @@
 #include "gpsctl.h"
 #include "timesync.h"
 #include "sound.h"
+#include "micctl.h"
 #include "motor.h"
 #include "pmu.h"
 #include "rtcctl.h"
@@ -289,6 +290,7 @@ void hardware_post_setup( void ) {
     }
 
     sound_setup();
+    micctl_setup();
     gpsctl_setup();
     powermgm_set_event( POWERMGM_WAKEUP );
 

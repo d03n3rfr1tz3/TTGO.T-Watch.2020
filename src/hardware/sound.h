@@ -30,26 +30,38 @@
     #define SOUNDCTL_VOLUME            _BV(1)         /** @brief event mask for sound volume change, callback arg is (uint8_t*)  */
 
     /**
-     * @brief play mp3 file from SPIFFS by path/filename
-     * 
-     * @param   filename    the SPIFFS path to the file to be played
+     * @brief pick a random mp3 file from SPIFFS
+     *
+     * @param   filename    takes the SPIFFS path of the picked file
+     * @param   len         size of the filename buffer
+     *
+     * @return  true if a file was found
      */
-    void sound_play_spiffs_mp3( const char *filename );
+    bool sound_get_random_spiffs_mp3( char *filename, size_t len );
+    /**
+     * @brief play mp3 file from SPIFFS by path/filename
+     *
+     * @param   filename        the SPIFFS path to the file to be played
+     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
+     */
+    void sound_play_spiffs_mp3( const char *filename, bool ignore_silence = false );
     /**
      * @brief play wave sound from PROGMEM
-     * 
+     *
      * To transform an file to *data use: `xxd -i inout.wav > output.c`
-     * 
-     * @param   data    data from PROGMEM as array
-     * @param   len     data array length
+     *
+     * @param   data            data from PROGMEM as array
+     * @param   len             data array length
+     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
      */
-    void sound_play_progmem_wav( const void *data, uint32_t len );
+    void sound_play_progmem_wav( const void *data, uint32_t len, bool ignore_silence = false );
     /**
      * @brief play a RTTTL ringtone/jingle, no audio file needed
      *
-     * @param   song    RTTTL string, e.g. "win:d=16,o=6,b=200:c,e,g,8c7"
+     * @param   song            RTTTL string, e.g. "win:d=16,o=6,b=200:c,e,g,8c7"
+     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
      */
-    void sound_play_rtttl( const char *song );
+    void sound_play_rtttl( const char *song, bool ignore_silence = false );
     /**
      * @brief setup sound
      */
@@ -115,6 +127,46 @@
      * @param volume from 0-100
      */
     void sound_set_volume_config( uint8_t volume );
+    /**
+     * @brief get the silence timeframe enabled value
+     *
+     * @return true if sound is silenced inside the timeframe, false if not
+     */
+    bool sound_get_silence_config( void );
+    /**
+     * @brief set the silence timeframe enabled value
+     *
+     * @param enable    true = silence inside the timeframe, false = never silence
+     */
+    void sound_set_silence_config( bool enable );
+    /**
+     * @brief get the silence timeframe start time
+     *
+     * @param hour      takes the start hour, 0-23
+     * @param minute    takes the start minute, 0-59
+     */
+    void sound_get_silence_start_config( int *hour, int *minute );
+    /**
+     * @brief set the silence timeframe start time
+     *
+     * @param hour      start hour, 0-23
+     * @param minute    start minute, 0-59
+     */
+    void sound_set_silence_start_config( int hour, int minute );
+    /**
+     * @brief get the silence timeframe end time
+     *
+     * @param hour      takes the end hour, 0-23
+     * @param minute    takes the end minute, 0-59
+     */
+    void sound_get_silence_end_config( int *hour, int *minute );
+    /**
+     * @brief set the silence timeframe end time
+     *
+     * @param hour      end hour, 0-23
+     * @param minute    end minute, 0-59
+     */
+    void sound_set_silence_end_config( int hour, int minute );
     /**
      * @brief registers a callback function which is called on a corresponding event
      * 

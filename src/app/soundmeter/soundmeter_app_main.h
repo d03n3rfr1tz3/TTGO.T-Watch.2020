@@ -1,9 +1,9 @@
 /****************************************************************************
- *   Tu May 22 21:23:51 2020
- *   Copyright  2020  Dirk Brosswick
- *   Email: dirk.brosswick@googlemail.com
+ *   Aug 20 22:14:00 2026
+ *   Copyright  2026  Dirk Sarodnick
+ *   Email: dirk.sarodnick@googlemail.com
  ****************************************************************************/
- 
+
 /*
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,21 +19,15 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef _SOUND_SETTINGS_H
-    #define _SOUND_SETTINGS_H
+#ifndef _SOUNDMETER_APP_MAIN_H
+    #define _SOUNDMETER_APP_MAIN_H
 
-    /** @brief speaker test jingle, must stay below 91 chars, see rtttl_song in sound.cpp */
-    #define SND_SPEAKER_TEST    "mario:d=4,o=5,b=100:16e6,16e6,32p,8e6,16c6,8e6,8g6,8p,8g,8p"
+    #define SOUNDMETER_SAMPLE_RATE      16000       /** @brief sample rate in hz */
+    #define SOUNDMETER_BLOCK_SAMPLES    512         /** @brief samples per read */
+    #define SOUNDMETER_MAX_BLOCKS       4           /** @brief blocks per task run, keeps the dma buffers drained */
+    #define SOUNDMETER_DB_FLOOR         -70.0f      /** @brief lowest displayed level in dBFS */
+    #define SOUNDMETER_PEAK_DECAY       1.0f        /** @brief peak hold decay in dB per task run */
 
-    /**
-     * @brief system sound config setup
-     */
-    void sound_settings_tile_setup( void );
-    /**
-     * @brief   get the sound setup tile number
-     * 
-     * @return  tile number
-     */
-    uint32_t sound_get_setup_tile_num( void );
+    void soundmeter_app_main_setup( uint32_t tile_num );
 
-#endif // _SOUND_SETTINGS_H
+#endif // _SOUNDMETER_APP_MAIN_H

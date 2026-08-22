@@ -137,6 +137,9 @@
     void powermgm_set_normal_mode( void );
     /**
      * @brief hold the cpu at max_freq_mhz, reference counted, always paired with powermgm_cpu_boost_give
+     *
+     * automatic light sleep only happens while no pm lock is taken at all, so hold the boost
+     * for the whole duration of a timing critical operation, not only around the heavy part
      */
     void powermgm_cpu_boost_take( void );
     /**

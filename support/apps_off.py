@@ -17,6 +17,9 @@ NEEDS_ACCEL = [
 NEEDS_IR = [
     "app/IRController",
 ]
+NEEDS_MIC = [
+    "app/soundmeter",
+]
 
 # Boards with certain available or missing hardware support.
 BOARDS_WITHOUT_ACCEL = [
@@ -27,6 +30,9 @@ BOARDS_WITHOUT_ACCEL = [
 BOARDS_WITH_IR = [
     "LILYGO_WATCH_2020_V1",
     "LILYGO_WATCH_2020_V2",
+    "LILYGO_WATCH_2020_V3",
+]
+BOARDS_WITH_MIC = [
     "LILYGO_WATCH_2020_V3",
 ]
 
@@ -42,6 +48,8 @@ if has_board(BOARDS_WITHOUT_ACCEL):
     apps_off += NEEDS_ACCEL
 if not has_board(BOARDS_WITH_IR):
     apps_off += NEEDS_IR
+if not has_board(BOARDS_WITH_MIC):
+    apps_off += NEEDS_MIC
 
 src_filter = env.get("SRC_FILTER") or []
 if isinstance(src_filter, str):

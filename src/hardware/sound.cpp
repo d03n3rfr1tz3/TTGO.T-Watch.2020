@@ -47,6 +47,10 @@
         #include "AudioOutputI2S.h"
         #include <ESP8266SAM.h>
 
+        #ifndef TWATCH_SOUND_I2S_PORT
+            #define TWATCH_SOUND_I2S_PORT   0
+        #endif
+
         AudioFileSourceSPIFFS *spliffs_file;
         AudioOutputI2S *out;
         AudioFileSourceID3 *id3;
@@ -88,6 +92,24 @@ bool sound_is_silenced( void );
             // limiting max gain to 3.5 (max gain is 4.0)
             out->SetGain( 3.5f * ( sound_config.volume / 100.0f ) );
         }
+
+        static bool sound_boost = false;
+        /**
+         * @brief hold the cpu boost, any pm lock also prevents automatic light sleep
+         */
+        static void sound_boost_take( void ) {
+            if ( sound_boost )
+                return;
+            powermgm_cpu_boost_take();
+            sound_boost = true;
+        }
+
+        static void sound_boost_give( void ) {
+            if ( !sound_boost )
+                return;
+            powermgm_cpu_boost_give();
+            sound_boost = false;
+        }
     #endif
 #endif
 
@@ -117,7 +139,7 @@ void sound_setup( void ) {
             /**
              * set sound driver
              */
-            out = new AudioOutputI2S();
+            out = new AudioOutputI2S( TWATCH_SOUND_I2S_PORT );
             out->SetPinout( TWATCH_DAC_IIS_BCK, TWATCH_DAC_IIS_WS, TWATCH_DAC_IIS_DOUT );
             sound_apply_gain();
             mp3 = new AudioGeneratorMP3();
@@ -189,9 +211,9 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            bool boost = mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() );
-            if ( boost ) powermgm_cpu_boost_take();
-            // we call sound_set_enabled(false) to ensure the PMU stops all power
+            if ( mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() ) )
+                sound_boost_take();
+
             if ( mp3->isRunning() && !mp3->loop() ) {
                 log_d("stop playing mp3 sound");
                 mp3->stop();
@@ -204,7 +226,9 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
                 log_d("stop playing rtttl sound");
                 rtttl->stop();
             }
-            if ( boost ) powermgm_cpu_boost_give();
+
+            if ( !mp3->isRunning() && !wav->isRunning() && !( rtttl && rtttl->isRunning() ) )
+                sound_boost_give();
         }
     #endif
 #endif
@@ -281,6 +305,7 @@ void sound_set_enabled( bool enabled ) {
                 if ( mp3->isRunning() ) mp3->stop();
                 if ( wav->isRunning() ) wav->stop();
                 if ( rtttl && rtttl->isRunning() ) rtttl->stop();
+                sound_boost_give();
             }
             /**
              * ttgo->disableAudio() is not working
@@ -297,7 +322,46 @@ void sound_set_enabled( bool enabled ) {
 #endif
 }
 
-void sound_play_spiffs_mp3( const char *filename ) {
+bool sound_get_random_spiffs_mp3( char *filename, size_t len ) {
+#ifdef NATIVE_64BIT
+    return( false );
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        fs::File root = SPIFFS.open( "/" );
+        if ( !root )
+            return( false );
+
+        uint32_t count = 0;
+        fs::File file = root.openNextFile();
+        while ( file ) {
+            if ( strstr( file.name(), ".mp3" ) )
+                count++;
+            file = root.openNextFile();
+        }
+
+        if ( !count )
+            return( false );
+
+        uint32_t pick = random( 0, count );
+        uint32_t index = 0;
+        root.rewindDirectory();
+        file = root.openNextFile();
+        while ( file ) {
+            if ( strstr( file.name(), ".mp3" ) ) {
+                if ( index == pick ) {
+                    snprintf( filename, len, "%s", file.name() );
+                    return( true );
+                }
+                index++;
+            }
+            file = root.openNextFile();
+        }
+    #endif
+    return( false );
+#endif
+}
+
+void sound_play_spiffs_mp3( const char *filename, bool ignore_silence ) {
     /**
      * check if sound available
      */
@@ -309,13 +373,14 @@ void sound_play_spiffs_mp3( const char *filename ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if (!sound_is_silenced()) {
+            if ( ignore_silence || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 sound_apply_gain();
                 log_d("playing file %s from SPIFFS", filename);
                 spliffs_file = new AudioFileSourceSPIFFS(filename);
                 id3 = new AudioFileSourceID3(spliffs_file);
                 mp3->begin(id3, out);
+                sound_boost_take();
             }
             else {
                 log_d("Cannot play mp3, sound is silenced");
@@ -327,7 +392,7 @@ void sound_play_spiffs_mp3( const char *filename ) {
 #endif
 }
 
-void sound_play_progmem_wav( const void *data, uint32_t len ) {
+void sound_play_progmem_wav( const void *data, uint32_t len, bool ignore_silence ) {
     /**
      * check if sound available
      */
@@ -339,12 +404,13 @@ void sound_play_progmem_wav( const void *data, uint32_t len ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if (!sound_is_silenced()) {
+            if ( ignore_silence || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 sound_apply_gain();
                 log_d("playing audio (size %d) from PROGMEM ", len );
                 progmem_file = new AudioFileSourcePROGMEM( data, len );
                 wav->begin(progmem_file, out);
+                sound_boost_take();
             }
             else {
                 log_d("Cannot play mp3, sound is silenced");
@@ -356,7 +422,7 @@ void sound_play_progmem_wav( const void *data, uint32_t len ) {
 #endif
 }
 
-void sound_play_rtttl( const char *song ) {
+void sound_play_rtttl( const char *song, bool ignore_silence ) {
     /**
      * check if sound available
      */
@@ -368,7 +434,7 @@ void sound_play_rtttl( const char *song ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if (!sound_is_silenced()) {
+            if ( ignore_silence || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 sound_apply_gain();
                 log_d("playing rtttl \"%s\"", song );
@@ -390,6 +456,7 @@ void sound_play_rtttl( const char *song ) {
                 rtttl = new AudioGeneratorRTTTL();
                 rtttl_file = new AudioFileSourcePROGMEM( rtttl_song, strlen( rtttl_song ) );
                 rtttl->begin( rtttl_file, out );
+                sound_boost_take();
             }
             else {
                 log_d("Cannot play rtttl, sound is silenced");
@@ -417,7 +484,9 @@ void sound_speak( const char *str ) {
                 sound_set_enabled( sound_config.enable );
                 log_d("Speaking text", str);
                 is_speaking = true;
+                sound_boost_take();
                 sam->Say(out, str);
+                sound_boost_give();
                 is_speaking = false;
             }
             else {
@@ -514,6 +583,76 @@ void sound_set_volume_config( uint8_t volume ) {
     #endif
 #endif
     sound_send_event_cb( SOUNDCTL_VOLUME, (void *)&sound_config.volume ); 
+}
+
+bool sound_get_silence_config( void ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return( false );
+    }
+
+    return( sound_config.silence_timeframe );
+}
+
+void sound_set_silence_config( bool enable ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+
+    sound_config.silence_timeframe = enable;
+}
+
+void sound_get_silence_start_config( int *hour, int *minute ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+
+    if ( hour ) *hour = sound_config.silence_start_hour;
+    if ( minute ) *minute = sound_config.silence_start_minute;
+}
+
+void sound_set_silence_start_config( int hour, int minute ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+
+    sound_config.silence_start_hour = hour;
+    sound_config.silence_start_minute = minute;
+}
+
+void sound_get_silence_end_config( int *hour, int *minute ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+
+    if ( hour ) *hour = sound_config.silence_end_hour;
+    if ( minute ) *minute = sound_config.silence_end_minute;
+}
+
+void sound_set_silence_end_config( int hour, int minute ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+
+    sound_config.silence_end_hour = hour;
+    sound_config.silence_end_minute = minute;
 }
 
 bool sound_is_silenced( void ) {

@@ -52,10 +52,14 @@
             #define HARDWARE_NAME   "T-Watch2020V3"
             #define RES_X_MAX       240
             #define RES_Y_MAX       240
-            #define USE_PSRAM_ALLOC_LVGL                    /** @brief enabled LVGL to use PSRAM */ 
+            #define USE_PSRAM_ALLOC_LVGL                    /** @brief enabled LVGL to use PSRAM */
             #define ENABLE_WEBSERVER                        /** @brief To disable built-in webserver, comment this line */
             #define ENABLE_FTPSERVER                        /** @brief To disable built-in ftpserver, comment this line */
             #define ENABLE_MQTT                             /** @brief To disable built-in mqtt, comment this line */
+            #define HARDWARE_HAS_MIC                        /** @brief SPM1423HM4H-B PDM microphone */
+            #define TWATCH_PDM_MIC_DATA     GPIO_NUM_2      /** @brief PDM microphone data pin */
+            #define TWATCH_PDM_MIC_CLK      GPIO_NUM_0      /** @brief PDM microphone clock pin */
+            #define TWATCH_SOUND_I2S_PORT   1               /** @brief sound output moves to I2S1, PDM RX needs I2S0 */
         #elif defined( LILYGO_WATCH_2021 )
             #define HARDWARE_NAME   "T-Watch2021"
             #define RES_X_MAX       240
