@@ -1,7 +1,7 @@
 /****************************************************************************
  *   Aug 20 22:14:00 2026
  *   Copyright  2026  Dirk Sarodnick
- *   Email: dirk.sarodnick@googlemail.com
+ *   Email: programmer@dirk-sarodnick.de
  ****************************************************************************/
 
 /*
@@ -22,10 +22,14 @@
 #ifndef _SOUNDMETER_APP_MAIN_H
     #define _SOUNDMETER_APP_MAIN_H
 
+    #include "hardware/micctl.h"
+
     #define SOUNDMETER_SAMPLE_RATE      16000       /** @brief sample rate in hz */
     #define SOUNDMETER_BLOCK_SAMPLES    512         /** @brief samples per read */
     #define SOUNDMETER_MAX_BLOCKS       4           /** @brief blocks per task run, keeps the dma buffers drained */
-    #define SOUNDMETER_DB_FLOOR         -70.0f      /** @brief lowest displayed level in dBFS */
+    #define SOUNDMETER_SPL_FLOOR        30.0f       /** @brief lowest displayed level in dB SPL, a quiet room */
+    #define SOUNDMETER_SPL_CEIL         110.0f      /** @brief upper end of the bar in dB SPL */
+    #define SOUNDMETER_DB_FLOOR         ( SOUNDMETER_SPL_FLOOR - MICCTL_SPL_OFFSET )     /** @brief the same floor in dBFS */
     #define SOUNDMETER_PEAK_DECAY       1.0f        /** @brief peak hold decay in dB per task run */
 
     void soundmeter_app_main_setup( uint32_t tile_num );

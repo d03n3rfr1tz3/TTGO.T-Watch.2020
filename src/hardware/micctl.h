@@ -1,7 +1,7 @@
 /****************************************************************************
  *   Aug 20 22:14:00 2026
  *   Copyright  2026  Dirk Sarodnick
- *   Email: dirk.sarodnick@googlemail.com
+ *   Email: programmer@dirk-sarodnick.de
  ****************************************************************************/
 
 /*
@@ -31,6 +31,7 @@
 
     #define MICCTL_DEFAULT_SAMPLE_RATE  16000       /** @brief default sample rate in hz */
     #define MICCTL_STOP_HOLD_TIME       500         /** @brief hold time in ms before a requested stop is served */
+    #define MICCTL_SPL_OFFSET           116.0f      /** @brief dBFS to dB SPL, the SPM1423HM4H-B is -22 dBFS +-3 dB at 94 dB SPL */
 
     /**
      * @brief setup the microphone
@@ -72,6 +73,14 @@
      * @return  number of samples read, not bytes
      */
     size_t micctl_read( int16_t *buffer, size_t max_samples, uint32_t timeout_ms );
+    /**
+     * @brief convert a level in dBFS to the sound pressure level users expect
+     * 
+     * @param   dbfs            level in dBFS, zero is full scale
+     *
+     * @return  level in dB SPL
+     */
+    float micctl_dbfs_to_spl( float dbfs );
     /**
      * @brief registers a callback function which is called on a corresponding event
      *

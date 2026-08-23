@@ -1,7 +1,7 @@
 /****************************************************************************
  *   Aug 20 22:14:00 2026
  *   Copyright  2026  Dirk Sarodnick
- *   Email: dirk.sarodnick@googlemail.com
+ *   Email: programmer@dirk-sarodnick.de
  ****************************************************************************/
 
 /*
@@ -189,11 +189,13 @@ static void soundmeter_app_task( lv_task_t * task ) {
     if ( soundmeter_peak_db < SOUNDMETER_DB_FLOOR )
         soundmeter_peak_db = SOUNDMETER_DB_FLOOR;
 
-    lv_label_set_text_fmt( soundmeter_level_label, "%d dB", ( int )soundmeter_level_db );
+    float level_spl = micctl_dbfs_to_spl( soundmeter_level_db );
+
+    lv_label_set_text_fmt( soundmeter_level_label, "%d dB", ( int )level_spl );
     lv_obj_align( soundmeter_level_label, soundmeter_app_main_tile, LV_ALIGN_IN_TOP_MID, 0, THEME_CONT_HEIGHT );
-    lv_label_set_text_fmt( soundmeter_peak_label, "peak %d dB", ( int )soundmeter_peak_db );
+    lv_label_set_text_fmt( soundmeter_peak_label, "peak %d dB", ( int )micctl_dbfs_to_spl( soundmeter_peak_db ) );
     lv_obj_align( soundmeter_peak_label, soundmeter_level_bar, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_PADDING );
-    lv_bar_set_value( soundmeter_level_bar, ( int16_t )( ( soundmeter_level_db - SOUNDMETER_DB_FLOOR ) * 100.0f / -SOUNDMETER_DB_FLOOR ), LV_ANIM_ON );
+    lv_bar_set_value( soundmeter_level_bar, ( int16_t )( ( level_spl - SOUNDMETER_SPL_FLOOR ) * 100.0f / ( SOUNDMETER_SPL_CEIL - SOUNDMETER_SPL_FLOOR ) ), LV_ANIM_ON );
 }
 
 static void exit_soundmeter_app_main_event_cb( lv_obj_t * obj, lv_event_t event ) {

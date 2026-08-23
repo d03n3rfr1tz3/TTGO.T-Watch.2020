@@ -1,7 +1,7 @@
 /****************************************************************************
  *   Aug 20 22:14:00 2026
  *   Copyright  2026  Dirk Sarodnick
- *   Email: dirk.sarodnick@googlemail.com
+ *   Email: programmer@dirk-sarodnick.de
  ****************************************************************************/
 
 /*
@@ -24,6 +24,10 @@
 #include "micctl.h"
 #include "powermgm.h"
 #include "callback.h"
+
+float micctl_dbfs_to_spl( float dbfs ) {
+    return( dbfs + MICCTL_SPL_OFFSET );
+}
 
 #ifdef HARDWARE_HAS_MIC
 
