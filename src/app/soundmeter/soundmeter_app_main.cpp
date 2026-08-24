@@ -84,13 +84,13 @@ void soundmeter_app_main_setup( uint32_t tile_num ) {
     lv_label_set_align( soundmeter_peak_label, LV_LABEL_ALIGN_CENTER );
     lv_obj_align( soundmeter_peak_label, soundmeter_level_bar, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_PADDING );
 
-    lv_obj_t *footer = wf_add_tile_footer_container( soundmeter_app_main_tile, LV_LAYOUT_PRETTY_MID );
-    wf_add_exit_button( footer, exit_soundmeter_app_main_event_cb );
-    lv_obj_align( footer, soundmeter_app_main_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -10 );
+    lv_obj_t *exit_btn = wf_add_exit_button( soundmeter_app_main_tile, exit_soundmeter_app_main_event_cb );
+    lv_obj_align( exit_btn, soundmeter_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
 
     lv_tileview_add_element( soundmeter_app_main_tile, soundmeter_level_label );
     lv_tileview_add_element( soundmeter_app_main_tile, soundmeter_level_bar );
     lv_tileview_add_element( soundmeter_app_main_tile, soundmeter_peak_label );
+    lv_tileview_add_element( soundmeter_app_main_tile, exit_btn );
 
     soundmeter_app_lv_task = lv_task_create( soundmeter_app_task, 100, LV_TASK_PRIO_OFF, NULL );
 }

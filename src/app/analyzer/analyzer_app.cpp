@@ -55,7 +55,7 @@ typedef struct {
 static analyzer_app_tile_t analyzer_app_tile_table[ ANALYZER_APP_TILES ] = {
     { NULL, NULL, analyzer_waterfall_enter, analyzer_waterfall_leave, analyzer_waterfall_update, true },
     { NULL, NULL, analyzer_spectrum_enter, analyzer_spectrum_leave, analyzer_spectrum_update, true },
-    { NULL, NULL, NULL, NULL, NULL, false },
+    { NULL, NULL, analyzer_scope_enter, analyzer_scope_leave, analyzer_scope_update, false },
     { NULL, NULL, NULL, NULL, NULL, false },
 };
 
@@ -64,6 +64,10 @@ static bool analyzer_app_running = false;
 
 static void enter_analyzer_app_event_cb( lv_obj_t * obj, lv_event_t event );
 static void exit_analyzer_app_event_cb( lv_obj_t * obj, lv_event_t event );
+static void analyzer_app_left_event_cb( lv_obj_t * obj, lv_event_t event );
+static void analyzer_app_right_event_cb( lv_obj_t * obj, lv_event_t event );
+static void analyzer_app_slide( lv_obj_t *tile, int step );
+static int analyzer_app_tile_index( lv_obj_t *tile );
 static void analyzer_app_activate_cb( void );
 static void analyzer_app_hibernate_cb( void );
 static void analyzer_app_lv_task( lv_task_t * task );
@@ -210,11 +214,24 @@ static void analyzer_app_hibernate_cb( void ) {
     lv_task_set_prio( analyzer_app_task, LV_TASK_PRIO_OFF );
 }
 
-lv_obj_t * analyzer_app_add_footer( lv_obj_t *tile ) {
-    lv_obj_t *footer = wf_add_tile_footer_container( tile, LV_LAYOUT_PRETTY_MID );
-    wf_add_exit_button( footer, exit_analyzer_app_event_cb );
-    lv_obj_align( footer, tile, LV_ALIGN_IN_BOTTOM_MID, 0, -10 );
-    return( footer );
+void analyzer_app_add_footer( lv_obj_t *tile ) {
+    int index = analyzer_app_tile_index( tile );
+
+    lv_obj_t *exit_btn = wf_add_exit_button( tile, exit_analyzer_app_event_cb );
+    lv_obj_align( exit_btn, tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
+    lv_tileview_add_element( tile, exit_btn );
+
+    if( index > 0 ) {
+        lv_obj_t *left_btn = wf_add_left_button( tile, analyzer_app_left_event_cb );
+        lv_obj_align( left_btn, tile, LV_ALIGN_IN_BOTTOM_MID, 0, -THEME_ICON_PADDING );
+        lv_tileview_add_element( tile, left_btn );
+    }
+
+    if( index >= 0 && index < ANALYZER_APP_TILES - 1 ) {
+        lv_obj_t *right_btn = wf_add_right_button( tile, analyzer_app_right_event_cb );
+        lv_obj_align( right_btn, tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_ICON_PADDING, -THEME_ICON_PADDING );
+        lv_tileview_add_element( tile, right_btn );
+    }
 }
 
 void analyzer_app_add_axis( lv_obj_t *tile, const char **text, const lv_coord_t *x, int count, lv_coord_t y ) {
@@ -246,4 +263,35 @@ static void exit_analyzer_app_event_cb( lv_obj_t * obj, lv_event_t event ) {
         case( LV_EVENT_CLICKED ):       mainbar_jump_back();
                                         break;
     }
+}
+
+static void analyzer_app_left_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    switch( event ) {
+        case( LV_EVENT_CLICKED ):       analyzer_app_slide( lv_obj_get_parent( obj ), -1 );
+                                        break;
+    }
+}
+
+static void analyzer_app_right_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    switch( event ) {
+        case( LV_EVENT_CLICKED ):       analyzer_app_slide( lv_obj_get_parent( obj ), 1 );
+                                        break;
+    }
+}
+
+static int analyzer_app_tile_index( lv_obj_t *tile ) {
+    for( int i = 0 ; i < ANALYZER_APP_TILES ; i++ )
+        if( analyzer_app_tile_table[ i ].tile == tile )
+            return( i );
+
+    return( -1 );
+}
+
+static void analyzer_app_slide( lv_obj_t *tile, int step ) {
+    int index = analyzer_app_tile_index( tile );
+
+    if( index < 0 || index + step < 0 || index + step >= ANALYZER_APP_TILES )
+        return;
+
+    mainbar_slide_to_tilenumber( analyzer_app_main_tile_num + index + step, LV_ANIM_ON );
 }

@@ -28,20 +28,18 @@
 
     #define ANALYZER_APP_HEADER_Y       30                                                          /** @brief header below the statusbar */
     #define ANALYZER_APP_CANVAS_Y       50                                                          /** @brief canvas between header and axis */
-    #define ANALYZER_APP_AXIS_Y         ( ANALYZER_APP_CANVAS_Y + ANALYZER_CANVAS_HEIGHT + THEME_PADDING )   /** @brief axis right below the canvas, the footer starts at 186 */
+    #define ANALYZER_APP_AXIS_Y         ( ANALYZER_APP_CANVAS_Y + ANALYZER_CANVAS_HEIGHT + THEME_PADDING )   /** @brief axis right below the canvas */
     #define ANALYZER_APP_TILES          4                                                           /** @brief waterfall, spectrum, scope and tone */
     #define ANALYZER_APP_IDLE_PERIOD    250                                                         /** @brief poll period in ms while the app is off screen */
 
     void analyzer_app_setup( void );
     uint32_t analyzer_app_get_app_main_tile_num( void );
     /**
-     * @brief add the shared footer with an exit button to a tile
+     * @brief add the shared button row
      *
      * @param   tile    tile object
-     *
-     * @return  the footer container
      */
-    lv_obj_t * analyzer_app_add_footer( lv_obj_t *tile );
+    void analyzer_app_add_footer( lv_obj_t *tile );
     /**
      * @brief add the frequency axis labels below a canvas
      *

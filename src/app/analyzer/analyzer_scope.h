@@ -22,6 +22,22 @@
 #ifndef _ANALYZER_SCOPE_H
     #define _ANALYZER_SCOPE_H
 
+    #include "analyzer_canvas.h"
+
+    #define ANALYZER_SCOPE_SAMPLES_PER_PX   2                                                               /** @brief time base, 240 px cover 30 ms at 16 khz */
+    #define ANALYZER_SCOPE_SPAN             ( ANALYZER_CANVAS_WIDTH * ANALYZER_SCOPE_SAMPLES_PER_PX )        /** @brief samples on screen */
+    #define ANALYZER_SCOPE_ZERO_Y           ( ANALYZER_CANVAS_HEIGHT / 2 )                                   /** @brief the zero line */
+    #define ANALYZER_SCOPE_GRID_PITCH       80                                                              /** @brief vertical grid every 10 ms */
+    #define ANALYZER_SCOPE_TRIGGER_DIV      4                                                               /** @brief trigger threshold as a fraction of the window peak */
+    #define ANALYZER_SCOPE_TRIGGER_FLOOR    64                                                              /** @brief lowest threshold, keeps noise from triggering */
+    #define ANALYZER_SCOPE_SCALE_DECAY      0.97f                                                           /** @brief scale falls back per frame, halves in about a second */
+    #define ANALYZER_SCOPE_SCALE_MIN        256.0f                                                          /** @brief smallest full scale amplitude */
+    #define ANALYZER_SCOPE_GRID_COLOR       LV_COLOR_MAKE( 0x18, 0x22, 0x44 )                                /** @brief the time grid */
+    #define ANALYZER_SCOPE_ZERO_COLOR       LV_COLOR_MAKE( 0x30, 0x3c, 0x60 )                                /** @brief the zero line */
+
     void analyzer_scope_setup( uint32_t tile_num );
+    void analyzer_scope_enter( void );
+    void analyzer_scope_leave( void );
+    void analyzer_scope_update( void );
 
 #endif // _ANALYZER_SCOPE_H
