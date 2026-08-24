@@ -39,11 +39,13 @@
 #include "gui/statusbar.h"
 #include "gui/gui.h"
 #include "gui/keyboard.h"
+#include "gui/widget_factory.h"
 #include "gui/widget_styles.h"
 
 lv_obj_t *wireless_app_main_tile = NULL;
 lv_style_t wireless_app_main_style;
 static lv_obj_t * throbber = NULL;
+static lv_obj_t * wireless_start_btn = NULL;
 static lv_task_t * _wireless_app_task = NULL;
 
 static bool wireless_wifi_owned = false;                /** @brief app has taken over the wifi driver */
@@ -55,8 +57,6 @@ static volatile bool wireless_spam_running = false;
 static volatile bool wireless_spam_abort = false;
 
 LV_IMG_DECLARE(wireless_app_32px);
-LV_IMG_DECLARE(exit_32px);
-LV_IMG_DECLARE(refresh_32px);
 LV_FONT_DECLARE(Ubuntu_72px);
 
 static void exit_wireless_app_main_event_cb( lv_obj_t * obj, lv_event_t event );
@@ -66,6 +66,7 @@ static void wireless_hibernate_cb( void );
 static bool wireless_wifictl_event_cb( EventBits_t event, void *arg );
 static bool wireless_ap_start( void );
 static void wireless_wifi_release( void );
+static void wireless_set_start_btn( bool stop );
 void spam_task( void *pvParameter );
 void wireless_app_task( lv_task_t * task );
 
@@ -110,27 +111,26 @@ void wireless_app_main_setup( uint32_t tile_num ) {
     wireless_app_main_tile = mainbar_get_tile_obj( tile_num );
     lv_style_copy( &wireless_app_main_style, ws_get_mainbar_style() );
 
-    lv_obj_t * exit_btn = lv_imgbtn_create( wireless_app_main_tile, NULL);
-    lv_imgbtn_set_src(exit_btn, LV_BTN_STATE_RELEASED, &exit_32px);
-    lv_imgbtn_set_src(exit_btn, LV_BTN_STATE_PRESSED, &exit_32px);
-    lv_imgbtn_set_src(exit_btn, LV_BTN_STATE_CHECKED_RELEASED, &exit_32px);
-    lv_imgbtn_set_src(exit_btn, LV_BTN_STATE_CHECKED_PRESSED, &exit_32px);
-    lv_obj_add_style(exit_btn, LV_IMGBTN_PART_MAIN, &wireless_app_main_style );
-    lv_obj_align(exit_btn, wireless_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, 10, -10 );
-    lv_obj_set_event_cb( exit_btn, exit_wireless_app_main_event_cb );
+    lv_obj_t * exit_btn = wf_add_exit_button( wireless_app_main_tile, exit_wireless_app_main_event_cb );
+    lv_obj_align(exit_btn, wireless_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
 
-    lv_obj_t * next_btn = lv_imgbtn_create( wireless_app_main_tile, NULL);
-    lv_imgbtn_set_src(next_btn, LV_BTN_STATE_RELEASED, &wireless_app_32px);
-    lv_imgbtn_set_src(next_btn, LV_BTN_STATE_PRESSED, &wireless_app_32px);
-    lv_imgbtn_set_src(next_btn, LV_BTN_STATE_CHECKED_RELEASED, &wireless_app_32px);
-    lv_imgbtn_set_src(next_btn, LV_BTN_STATE_CHECKED_PRESSED, &wireless_app_32px);
-    lv_obj_add_style(next_btn, LV_IMGBTN_PART_MAIN, &wireless_app_main_style );
-    lv_obj_align(next_btn, wireless_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, (LV_HOR_RES / 2) -5 , -10 );
-    lv_obj_set_event_cb( next_btn, enter_wireless_app_next_event_cb );
+    wireless_start_btn = wf_add_image_button( wireless_app_main_tile, wireless_app_32px, enter_wireless_app_next_event_cb );
+    lv_obj_align(wireless_start_btn, wireless_app_main_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -THEME_ICON_PADDING );
+
+    lv_tileview_add_element( wireless_app_main_tile, exit_btn );
+    lv_tileview_add_element( wireless_app_main_tile, wireless_start_btn );
 
     mainbar_add_tile_activate_cb( tile_num, wireless_activate_cb );
     mainbar_add_tile_hibernate_cb( tile_num, wireless_hibernate_cb );
     wifictl_register_cb( WIFICTL_ON | WIFICTL_OFF, wireless_wifictl_event_cb, "wireless main" );
+}
+
+/**
+ * @brief switch the start button between app icon and stop.
+ */
+static void wireless_set_start_btn( bool stop ) {
+    if ( wireless_start_btn )
+        lv_img_set_src( lv_obj_get_child( wireless_start_btn, NULL ), stop ? &wf_get_stop_img() : &wireless_app_32px );
 }
 
 /**
@@ -176,6 +176,7 @@ static void wireless_wifi_release( void ) {
         lv_obj_del( throbber );
         throbber = NULL;
     }
+    wireless_set_start_btn( false );
     if ( !wireless_wifi_owned )
         return;
     wireless_wifi_owned = false;
@@ -321,6 +322,7 @@ static void enter_wireless_app_next_event_cb( lv_obj_t * obj, lv_event_t event )
                     wireless_wifi_off = !wireless_wifi_state;
                     wireless_wifi_off_timeout = 3;
                     wifictl_off();
+                    wireless_set_start_btn( true );
 
                     throbber = lv_spinner_create(wireless_app_main_tile, NULL);
                     lv_obj_set_size(throbber, 100, 100);

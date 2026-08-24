@@ -212,7 +212,7 @@ static void exit_sound_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
 
 static void down_sound_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( sound_tile_num + 1, LV_ANIM_ON );
+        case( LV_EVENT_CLICKED ):       mainbar_slide_to_tilenumber( sound_tile_num + 1, LV_ANIM_ON );
                                         break;
     }
 }

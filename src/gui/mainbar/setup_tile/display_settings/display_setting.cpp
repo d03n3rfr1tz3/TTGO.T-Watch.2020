@@ -196,7 +196,7 @@ static void enter_display_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
 
 static void down_display_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( display_tile_num_2, LV_ANIM_ON );
+        case( LV_EVENT_CLICKED ):       mainbar_slide_to_tilenumber( display_tile_num_2, LV_ANIM_ON );
                                         break;
     }
 

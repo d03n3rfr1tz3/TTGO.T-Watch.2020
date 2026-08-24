@@ -41,6 +41,7 @@
 #include "gui/widget_styles.h"
 #include "hardware/motor.h"
 #include "hardware/powermgm.h"
+#include "hardware/wifictl.h"
 
 #define NETTOOLS_SNIFF_BUFFER_SIZE  600
 #define NETTOOLS_SNIFF_LINE_SIZE    48
@@ -73,6 +74,7 @@
 
 static nettools_sniff_entry_t nettools_sniff_table[ NETTOOLS_SNIFF_ENTRIES ];
 static volatile int nettools_sniff_entries = 0;
+static volatile bool nettools_sniff_wifi = false;
 static volatile bool nettools_sniff_changed = false;
 static volatile int nettools_sniff_bound = 0;
 static volatile uint32_t nettools_sniff_packets = 0;
@@ -99,6 +101,7 @@ static void scan_NetTools_sniff_event_cb( lv_obj_t * obj, lv_event_t event );
 static void clear_NetTools_sniff_event_cb( lv_obj_t * obj, lv_event_t event );
 static void row_NetTools_sniff_event_cb( lv_obj_t * obj, lv_event_t event );
 static bool NetTools_sniff_powermgm_event_cb( EventBits_t event, void *arg );
+static bool NetTools_sniff_wifictl_event_cb( EventBits_t event, void *arg );
 static void NetTools_sniff_activate_cb( void );
 static void NetTools_sniff_hibernate_cb( void );
 static void NetTools_sniff_update_task( lv_task_t *task );
@@ -112,6 +115,7 @@ void NetTools_sniff_setup( uint32_t tile_num ) {
     mainbar_add_tile_activate_cb( tile_num, NetTools_sniff_activate_cb );
     mainbar_add_tile_hibernate_cb( tile_num, NetTools_sniff_hibernate_cb );
     powermgm_register_cb( POWERMGM_STANDBY | POWERMGM_WAKEUP, NetTools_sniff_powermgm_event_cb, "NetTools sniff powermgm" );
+    wifictl_register_cb( WIFICTL_OFF | WIFICTL_CONNECT_IP | WIFICTL_DISCONNECT, NetTools_sniff_wifictl_event_cb, "NetTools sniff wifi" );
 
     NetTools_sniff_tile = mainbar_get_tile_obj( tile_num );
 
@@ -757,6 +761,8 @@ static void nettools_sniff_start( void ) {
     #ifndef NATIVE_64BIT
         if ( nettools_sniff_handle )
             return;
+        if ( !nettools_sniff_wifi )
+            return;
         nettools_sniff_stop = false;
         nettools_sweep_abort = false;
         nettools_sweep_request = false;
@@ -812,7 +818,9 @@ static void nettools_sniff_update_header( void ) {
 
     char line[ NETTOOLS_SNIFF_LINE_SIZE ];
 
-    if ( nettools_sweep_running )
+    if ( !nettools_sniff_wifi )
+        strncpy( line, "no wifi", sizeof( line ) );
+    else if ( nettools_sweep_running )
         snprintf( line, sizeof( line ), "scan %d/%d", nettools_sweep_done, nettools_sweep_total );
     else
         snprintf( line, sizeof( line ), "%d ports  %d pkt  %d dev", nettools_sniff_bound, ( int )nettools_sniff_packets, nettools_sniff_entries );
@@ -837,6 +845,19 @@ static bool NetTools_sniff_powermgm_event_cb( EventBits_t event, void *arg ) {
         case( POWERMGM_WAKEUP ):    if ( nettools_tile_visible( NetTools_sniff_tile ) )
                                         NetTools_sniff_arm();
                                     break;
+    }
+    return( true );
+}
+
+static bool NetTools_sniff_wifictl_event_cb( EventBits_t event, void *arg ) {
+    switch( event ) {
+        case( WIFICTL_CONNECT_IP ):     nettools_sniff_wifi = true;
+                                        break;
+        case( WIFICTL_DISCONNECT ):
+        case( WIFICTL_OFF ):            nettools_sniff_wifi = false;
+                                        nettools_sniff_stop_worker();
+                                        nettools_sniff_changed = true;
+                                        break;
     }
     return( true );
 }
@@ -945,6 +966,8 @@ static void scan_NetTools_sniff_event_cb( lv_obj_t * obj, lv_event_t event ) {
             #else
                 if ( nettools_sweep_running )
                     nettools_sweep_abort = true;
+                else if ( !nettools_sniff_wifi )
+                    nettools_sniff_set_status( "no wifi" );
                 else if ( !nettools_sniff_bound )
                     nettools_sniff_set_status( "no listener" );
                 else
@@ -973,7 +996,7 @@ static void clear_NetTools_sniff_event_cb( lv_obj_t * obj, lv_event_t event ) {
 
 static void back_NetTools_sniff_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_back();
+        case( LV_EVENT_CLICKED ):       mainbar_slide_to_tilenumber( NetTools_get_app_main_tile_num(), LV_ANIM_ON );
                                         break;
     }
 }

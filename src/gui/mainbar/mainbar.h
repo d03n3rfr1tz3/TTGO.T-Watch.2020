@@ -76,6 +76,13 @@
     void mainbar_jump_to_tilenumber( uint32_t tile_number, lv_anim_enable_t anim );
     void mainbar_jump_to_tilenumber( uint32_t tile_number, lv_anim_enable_t anim, bool statusbar );
     /**
+     * @brief slide to the given tile without touching history
+     *
+     * @param   tile_number tile number
+     * @param   anim        LV_ANIM_ON or LV_ANIM_OFF for animated switch
+     */
+    void mainbar_slide_to_tilenumber( uint32_t tile_number, lv_anim_enable_t anim );
+    /**
      * @brief jump direct to main tile
      * @param   anim    LV_ANIM_ON or LV_ANIM_OFF for animated switch
      */

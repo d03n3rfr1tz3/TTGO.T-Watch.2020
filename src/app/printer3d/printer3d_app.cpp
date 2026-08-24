@@ -91,8 +91,7 @@ void printer3d_app_setup( void ) {
     #ifdef NATIVE_64BIT
         printer3d_app_main_tile_num = mainbar_add_app_tile( 1, 1, "3d printer app" );
     #else
-        uint8_t tiles = strlen(printer3d_config.camera) > 0 ? 2 : 1;
-        printer3d_app_main_tile_num = mainbar_add_app_tile( tiles, 1, "3d printer app" );
+        printer3d_app_main_tile_num = mainbar_add_app_tile( 2, 1, "3d printer app" );
     #endif
     printer3d_app_setup_tile_num = mainbar_add_setup_tile( 1, 1, "3d printer app setup" );
 

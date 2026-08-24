@@ -137,7 +137,7 @@ static void calendar_overview_build_ui( void ) {
      */
     calendar_overview = lv_calendar_create( calendar_overview_tile, NULL);
     lv_obj_set_size( calendar_overview, lv_disp_get_hor_res( NULL ) - THEME_ICON_SIZE, lv_disp_get_ver_res( NULL ) );
-    lv_obj_align( calendar_overview, calendar_overview_tile, LV_ALIGN_IN_TOP_LEFT, 0, 0);
+    lv_obj_align( calendar_overview, calendar_overview_tile, LV_ALIGN_IN_TOP_RIGHT, 0, 0);
     lv_obj_set_event_cb( calendar_overview, calendar_overview_date_event_cb );
     lv_obj_add_style( calendar_overview, LV_OBJ_PART_MAIN, &calendar_overview_style );
     /**
@@ -153,7 +153,7 @@ static void calendar_overview_build_ui( void ) {
      * add exit button
      */
     lv_obj_t *exit_button = wf_add_exit_button( calendar_overview_tile, calendar_overview_exit_event_cb );
-    lv_obj_align( exit_button, calendar_overview_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_ICON_PADDING, -THEME_ICON_PADDING );
+    lv_obj_align( exit_button, calendar_overview_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
 }
 
 void calendar_overview_refresh_showed_ui( void ) {
