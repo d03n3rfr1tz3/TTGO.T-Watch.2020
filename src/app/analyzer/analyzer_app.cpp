@@ -56,7 +56,7 @@ static analyzer_app_tile_t analyzer_app_tile_table[ ANALYZER_APP_TILES ] = {
     { NULL, NULL, analyzer_waterfall_enter, analyzer_waterfall_leave, analyzer_waterfall_update, true },
     { NULL, NULL, analyzer_spectrum_enter, analyzer_spectrum_leave, analyzer_spectrum_update, true },
     { NULL, NULL, analyzer_scope_enter, analyzer_scope_leave, analyzer_scope_update, false },
-    { NULL, NULL, NULL, NULL, NULL, false },
+    { NULL, NULL, NULL, analyzer_tone_leave, analyzer_tone_update, true },
 };
 
 static lv_task_t *analyzer_app_task = NULL;

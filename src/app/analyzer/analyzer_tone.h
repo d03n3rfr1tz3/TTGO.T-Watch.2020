@@ -23,5 +23,7 @@
     #define _ANALYZER_TONE_H
 
     void analyzer_tone_setup( uint32_t tile_num );
+    void analyzer_tone_leave( void );
+    void analyzer_tone_update( void );
 
 #endif // _ANALYZER_TONE_H
