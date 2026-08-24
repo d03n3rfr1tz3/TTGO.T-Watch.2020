@@ -63,6 +63,24 @@
      */
     void sound_play_rtttl( const char *song, bool ignore_silence = false );
     /**
+     * @brief play a sine tone of a given frequency, ends by itself after 30s
+     *
+     * @param   frequency       tone frequency in Hz, up to 8000
+     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
+     *                          and for measuring tools started by an explicit user action
+     */
+    void sound_play_tone( uint16_t frequency, bool ignore_silence = false );
+    /**
+     * @brief stop a running tone
+     */
+    void sound_stop_tone( void );
+    /**
+     * @brief check if a tone is playing
+     *
+     * @return true if a tone is playing
+     */
+    bool sound_tone_is_running( void );
+    /**
      * @brief setup sound
      */
     void sound_setup( void );

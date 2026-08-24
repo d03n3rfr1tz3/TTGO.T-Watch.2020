@@ -76,7 +76,7 @@ bool micctl_start( uint32_t sample_rate ) {
     i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
     i2s_config.communication_format = (i2s_comm_format_t)( I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB );
     i2s_config.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    i2s_config.dma_buf_count = 4;
+    i2s_config.dma_buf_count = 8;
     i2s_config.dma_buf_len = 256;
 
     if ( i2s_driver_install( I2S_NUM_0, &i2s_config, 0, NULL ) != ESP_OK ) {
@@ -173,6 +173,9 @@ bool micctl_register_cb( EventBits_t event, CALLBACK_FUNC callback_func, const c
 }
 
 bool micctl_send_event_cb( EventBits_t event, void *arg ) {
+    if ( micctl_callback == NULL )
+        return( false );
+
     return( callback_send( micctl_callback, event, arg ) );
 }
 

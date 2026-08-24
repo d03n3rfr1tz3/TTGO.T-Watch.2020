@@ -40,6 +40,7 @@
 
         #include "AudioFileSourceSPIFFS.h"
         #include "AudioFileSourcePROGMEM.h"
+        #include "AudioFileSourceFunction.h"
         #include "AudioFileSourceID3.h"
         #include "AudioGeneratorMP3.h"
         #include "AudioGeneratorWAV.h"
@@ -62,6 +63,18 @@
         AudioGeneratorRTTTL *rtttl = NULL;
         AudioFileSourcePROGMEM *rtttl_file = NULL;
         char rtttl_song[ 96 ] = "";
+        
+        AudioGeneratorWAV *sound_tone = NULL;
+        AudioFileSourceFunction *sound_tone_file = NULL;
+        static uint16_t sound_tone_hz = 1000;
+
+        #define SOUND_TONE_RATE         32000                                       /** @brief four samples per period at the highest tone */
+        #define SOUND_TONE_SECONDS      30.0f                                       /** @brief length of the generated source */
+        #define SOUND_TONE_AMPLITUDE    0.25f                                       /** @brief headroom, sound_apply_gain() goes up to 3.5 */
+        #define SOUND_TONE_TAIL         1600                                        /** @brief silent samples at the end, longer than the i2s dma ring */
+        #define SOUND_TONE_RAMP         160                                         /** @brief fade samples, a hard edge clicks */
+        #define SOUND_TONE_SAMPLES      ( ( uint32_t )( SOUND_TONE_SECONDS * SOUND_TONE_RATE ) )
+        #define SOUND_TONE_BODY         ( SOUND_TONE_SAMPLES - SOUND_TONE_TAIL )
     #elif defined( LILYGO_WATCH_2020_V2 )
     #elif defined( LILYGO_WATCH_2021 )    
     #elif defined( WT32_SC01 )
@@ -109,6 +122,27 @@ bool sound_is_silenced( void );
                 return;
             powermgm_cpu_boost_give();
             sound_boost = false;
+        }
+        /**
+         * @brief   one sine sample
+         * @param   t   time in seconds since the start of the source
+         * @return  sample between -1.0 and 1.0
+         */
+        static float sound_tone_sample( float t ) {
+            uint32_t n = ( uint32_t )( t * SOUND_TONE_RATE + 0.5f );
+
+            if ( n >= SOUND_TONE_BODY )
+                return( 0.0f );
+
+            float gain = SOUND_TONE_AMPLITUDE;
+            if ( n < SOUND_TONE_RAMP )
+                gain *= ( float )n / SOUND_TONE_RAMP;
+            else if ( n > SOUND_TONE_BODY - SOUND_TONE_RAMP )
+                gain *= ( float )( SOUND_TONE_BODY - n ) / SOUND_TONE_RAMP;
+
+            uint32_t phase = ( n % SOUND_TONE_RATE ) * sound_tone_hz % SOUND_TONE_RATE;
+
+            return( gain * sinf( ( float )phase * ( 2.0f * PI / SOUND_TONE_RATE ) ) );
         }
     #endif
 #endif
@@ -211,7 +245,7 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if ( mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() ) )
+            if ( mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() ) || ( sound_tone && sound_tone->isRunning() ) )
                 sound_boost_take();
 
             if ( mp3->isRunning() && !mp3->loop() ) {
@@ -226,8 +260,12 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
                 log_d("stop playing rtttl sound");
                 rtttl->stop();
             }
+            if ( sound_tone && sound_tone->isRunning() && !sound_tone->loop() ) {
+                log_d("stop playing tone");
+                sound_tone->stop();
+            }
 
-            if ( !mp3->isRunning() && !wav->isRunning() && !( rtttl && rtttl->isRunning() ) )
+            if ( !mp3->isRunning() && !wav->isRunning() && !( rtttl && rtttl->isRunning() ) && !( sound_tone && sound_tone->isRunning() ) )
                 sound_boost_give();
         }
     #endif
@@ -305,6 +343,7 @@ void sound_set_enabled( bool enabled ) {
                 if ( mp3->isRunning() ) mp3->stop();
                 if ( wav->isRunning() ) wav->stop();
                 if ( rtttl && rtttl->isRunning() ) rtttl->stop();
+                if ( sound_tone && sound_tone->isRunning() ) sound_tone->stop();
                 sound_boost_give();
             }
             /**
@@ -464,6 +503,77 @@ void sound_play_rtttl( const char *song, bool ignore_silence ) {
         } else {
             log_d("Cannot play rtttl, sound is disabled");
         }
+    #endif
+#endif
+}
+
+void sound_play_tone( uint16_t frequency, bool ignore_silence ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        if ( sound_config.enable && sound_init ) {
+            if ( ignore_silence || !sound_is_silenced() ) {
+                sound_set_enabled( sound_config.enable );
+                sound_apply_gain();
+                log_d("playing %d Hz tone", frequency );
+
+                if ( sound_tone ) {
+                    if ( sound_tone->isRunning() ) sound_tone->stop();
+                    delete sound_tone;
+                }
+                if ( sound_tone_file ) {
+                    delete sound_tone_file;
+                }
+
+                sound_tone_hz = frequency;
+                sound_tone = new AudioGeneratorWAV();
+                sound_tone_file = new AudioFileSourceFunction( SOUND_TONE_SECONDS, 1, SOUND_TONE_RATE, 16 );
+                sound_tone_file->addAudioGenerators( sound_tone_sample );
+                sound_tone->begin( sound_tone_file, out );
+                sound_boost_take();
+            }
+            else {
+                log_d("Cannot play tone, sound is silenced");
+            }
+        } else {
+            log_d("Cannot play tone, sound is disabled");
+        }
+    #endif
+#endif
+}
+
+void sound_stop_tone( void ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        if ( sound_tone && sound_tone->isRunning() )
+            sound_tone->stop();
+    #endif
+#endif
+}
+
+bool sound_tone_is_running( void ) {
+#ifdef NATIVE_64BIT
+    return( false );
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        return( sound_tone && sound_tone->isRunning() );
+    #else
+        return( false );
     #endif
 #endif
 }

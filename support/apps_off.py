@@ -18,6 +18,7 @@ NEEDS_IR = [
     "app/IRController",
 ]
 NEEDS_MIC = [
+    "app/analyzer",
     "app/soundmeter",
 ]
 
