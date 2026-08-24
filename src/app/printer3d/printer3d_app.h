@@ -31,7 +31,7 @@
         char host[32] = "";
         uint16_t port = 8899;
         char pass[16] = "";
-        char camera[64] = "";
+        char camera[96] = "";
     } printer3d_config_t;
 
     typedef struct {

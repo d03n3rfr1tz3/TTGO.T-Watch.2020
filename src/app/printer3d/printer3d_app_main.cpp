@@ -81,6 +81,7 @@ lv_obj_t* printer3d_printbed_temp;
 #ifndef NATIVE_64BIT
     lv_style_t printer3d_app_video_style;
     lv_obj_t* printer3d_video_img;
+    lv_obj_t* printer3d_video_btn = NULL;
 
     #define PRINTER3D_MJPEG_STRIP_H          16
     #define PRINTER3D_MJPEG_SCALE_ONE  ( 1 << 16 ) /** @brief q16 step of 1.0, the decoder output is shown as it is */
@@ -134,6 +135,10 @@ static void printer3d_setup_activate_callback ( void );
 static void printer3d_setup_hibernate_callback ( void );
 static void exit_printer3d_app_main_event_cb( lv_obj_t * obj, lv_event_t event );
 static void enter_printer3d_app_setup_event_cb( lv_obj_t * obj, lv_event_t event );
+#ifndef NATIVE_64BIT
+    static void enter_printer3d_app_video_event_cb( lv_obj_t * obj, lv_event_t event );
+    static void printer3d_update_video_btn( void );
+#endif
 static bool printer3d_powermgm_event_cb(EventBits_t event, void *arg);
 static bool printer3d_main_wifictl_event_cb( EventBits_t event, void *arg );
 
@@ -166,7 +171,13 @@ void printer3d_app_main_setup( uint32_t tile_num ) {
     lv_obj_align(exit_btn, printer3d_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
 
     lv_obj_t * setup_btn = wf_add_setup_button( printer3d_app_main_tile, enter_printer3d_app_setup_event_cb );
-    lv_obj_align(setup_btn, printer3d_app_main_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_ICON_PADDING, -THEME_ICON_PADDING );
+    lv_obj_align(setup_btn, printer3d_app_main_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -THEME_ICON_PADDING );
+
+    #ifndef NATIVE_64BIT
+        printer3d_video_btn = wf_add_right_button( printer3d_app_main_tile, enter_printer3d_app_video_event_cb );
+        lv_obj_align(printer3d_video_btn, printer3d_app_main_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_ICON_PADDING, -THEME_ICON_PADDING );
+        printer3d_update_video_btn();
+    #endif
 
     // headings
     printer3d_heading_name = lv_label_create( printer3d_app_main_tile, NULL);
@@ -268,11 +279,20 @@ void printer3d_app_main_setup( uint32_t tile_num ) {
     _printer3d_app_task = lv_task_create( printer3d_app_task, 1000, LV_TASK_PRIO_MID, NULL );
 }
 
+#ifndef NATIVE_64BIT
+    /** @brief announce the video tile only while a camera url is configured */
+    static void printer3d_update_video_btn( void ) {
+        if ( printer3d_video_btn )
+            lv_obj_set_hidden( printer3d_video_btn, strlen( printer3d_get_config()->camera ) == 0 );
+    }
+#endif
+
 static void printer3d_setup_activate_callback ( void ) {
     printer3d_open_state = true;
     nextmillis = 0;
     #ifndef NATIVE_64BIT
         mjpeg_nextmillis = 0;
+        printer3d_update_video_btn();
     #endif
 }
 
@@ -295,7 +315,7 @@ static bool printer3d_tile_on_screen( void ) {
         onscreen = area.x1 == 0 && area.y1 == 0;
     }
     #ifndef NATIVE_64BIT
-        if ( !onscreen && printer3d_app_video_tile != NULL && strlen( printer3d_get_config()->camera ) > 0 ) {
+        if ( !onscreen && printer3d_app_video_tile != NULL ) {
             lv_obj_get_coords( printer3d_app_video_tile, &area );
             onscreen = area.x1 == 0 && area.y1 == 0;
         }
@@ -355,6 +375,15 @@ static void exit_printer3d_app_main_event_cb( lv_obj_t * obj, lv_event_t event )
                                         break;
     }
 }
+
+#ifndef NATIVE_64BIT
+    static void enter_printer3d_app_video_event_cb( lv_obj_t * obj, lv_event_t event ) {
+        switch( event ) {
+            case( LV_EVENT_CLICKED ):       mainbar_slide_to_tilenumber( printer3d_app_get_app_main_tile_num() + 1, LV_ANIM_ON );
+                                            break;
+        }
+    }
+#endif
 
 void printer3d_app_task( lv_task_t * task ) {
     if (!printer3d_state) return;

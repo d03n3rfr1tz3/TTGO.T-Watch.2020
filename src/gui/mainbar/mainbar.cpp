@@ -550,6 +550,19 @@ void mainbar_jump_to_tilenumber( uint32_t tile_number, lv_anim_enable_t anim ) {
     mainbar_jump_to_tilenumber( tile_number, anim, statusbar_get_hidden_state() );
 }
 
+void mainbar_slide_to_tilenumber( uint32_t tile_number, lv_anim_enable_t anim ) {
+    ASSERT( mainbar, "main not initialized" );
+
+    if ( tile_number < tile_entrys ) {
+        MAINBAR_INFO_LOG("slide to tile %d", tile_number );
+        lv_tileview_set_tile_act( mainbar, tile_pos_table[ tile_number ].x, tile_pos_table[ tile_number ].y, anim );
+        gui_force_redraw( true );
+    }
+    else {
+        MAINBAR_ERROR_LOG( "tile number %d do not exist", tile_number );
+    }
+}
+
 lv_obj_t * mainbar_obj_create(lv_obj_t *parent) {
     /*
      * check if mainbar already initialized

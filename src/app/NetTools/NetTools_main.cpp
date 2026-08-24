@@ -162,7 +162,7 @@ static void enter_NetTools_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
 
 static void enter_NetTools_sniff_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
-        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( NetTools_get_app_sniff_tile_num(), LV_ANIM_ON, true );
+        case( LV_EVENT_CLICKED ):       mainbar_slide_to_tilenumber( NetTools_get_app_sniff_tile_num(), LV_ANIM_ON );
                                         break;
     }
 }

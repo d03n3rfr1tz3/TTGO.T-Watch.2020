@@ -155,11 +155,14 @@ void ping_app_main_setup( uint32_t tile_num ) {
     lv_label_set_text( ping_result_label, "" );
     ping_app_layout_result();
 
-    lv_obj_t *footer = wf_add_tile_footer_container( ping_app_main_tile, LV_LAYOUT_PRETTY_MID );
-    ping_exit_btn = wf_add_exit_button( footer, exit_ping_app_main_event_cb );
-    ping_start_btn = wf_add_image_button( footer, ping_app_32px, ping_start_event_cb );
-    lv_obj_align( footer, ping_app_main_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -10 );
+    ping_exit_btn = wf_add_exit_button( ping_app_main_tile, exit_ping_app_main_event_cb );
+    lv_obj_align( ping_exit_btn, ping_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
 
+    ping_start_btn = wf_add_image_button( ping_app_main_tile, ping_app_32px, ping_start_event_cb );
+    lv_obj_align( ping_start_btn, ping_app_main_tile, LV_ALIGN_IN_BOTTOM_MID, 0, -THEME_ICON_PADDING );
+
+    lv_tileview_add_element( ping_app_main_tile, ping_exit_btn );
+    lv_tileview_add_element( ping_app_main_tile, ping_start_btn );
     lv_tileview_add_element( ping_app_main_tile, tool_cont );
     lv_tileview_add_element( ping_app_main_tile, ping_tool_list );
     lv_tileview_add_element( ping_app_main_tile, ping_host_cont );
