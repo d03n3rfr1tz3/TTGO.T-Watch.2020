@@ -401,7 +401,7 @@ bool PongApp::BouncePlayer1()
     if (ball_bounce > 0) ball_speed++;
     ball_bounce++;
 
-    sound_play_rtttl( SND_PONG_BOUNCE_P1 );
+    sound_play_rtttl( SND_PONG_BOUNCE_P1, SOUND_TYPE_BACKGROUND );
     motor_vibe(3);
 
     return true;
@@ -420,7 +420,7 @@ bool PongApp::BouncePlayer2()
     if (ball_bounce > 0) ball_speed++;
     ball_bounce++;
 
-    sound_play_rtttl( SND_PONG_BOUNCE_P2 );
+    sound_play_rtttl( SND_PONG_BOUNCE_P2, SOUND_TYPE_BACKGROUND );
     motor_vibe(3);
 
     return true;
@@ -434,7 +434,7 @@ bool PongApp::ScorePlayer1()
     UpdateBoard();
     ResetBall();
 
-    sound_play_rtttl( SND_PONG_SCORE_P1 );
+    sound_play_rtttl( SND_PONG_SCORE_P1, SOUND_TYPE_BACKGROUND );
     motor_vibe(10);
 
     return true;
@@ -448,7 +448,7 @@ bool PongApp::ScorePlayer2()
     UpdateBoard();
     ResetBall();
 
-    sound_play_rtttl( SND_PONG_SCORE_P2 );
+    sound_play_rtttl( SND_PONG_SCORE_P2, SOUND_TYPE_BACKGROUND );
     motor_vibe(10);
 
     return true;

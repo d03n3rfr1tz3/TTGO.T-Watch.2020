@@ -68,6 +68,9 @@
         AudioFileSourceFunction *sound_tone_file = NULL;
         static uint16_t sound_tone_hz = 1000;
 
+        AudioGeneratorWAV *sound_spiffs_wav = NULL;
+        AudioFileSourceSPIFFS *sound_spiffs_wav_file = NULL;
+
         #define SOUND_TONE_RATE         32000                                       /** @brief four samples per period at the highest tone */
         #define SOUND_TONE_SECONDS      30.0f                                       /** @brief length of the generated source */
         #define SOUND_TONE_AMPLITUDE    0.25f                                       /** @brief headroom, sound_apply_gain() goes up to 3.5 */
@@ -245,7 +248,7 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if ( mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() ) || ( sound_tone && sound_tone->isRunning() ) )
+            if ( mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() ) || ( sound_tone && sound_tone->isRunning() ) || ( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) )
                 sound_boost_take();
 
             if ( mp3->isRunning() && !mp3->loop() ) {
@@ -264,8 +267,12 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
                 log_d("stop playing tone");
                 sound_tone->stop();
             }
+            if ( sound_spiffs_wav && sound_spiffs_wav->isRunning() && !sound_spiffs_wav->loop() ) {
+                log_d("stop playing spiffs wav sound");
+                sound_spiffs_wav->stop();
+            }
 
-            if ( !mp3->isRunning() && !wav->isRunning() && !( rtttl && rtttl->isRunning() ) && !( sound_tone && sound_tone->isRunning() ) )
+            if ( !mp3->isRunning() && !wav->isRunning() && !( rtttl && rtttl->isRunning() ) && !( sound_tone && sound_tone->isRunning() ) && !( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) )
                 sound_boost_give();
         }
     #endif
@@ -344,6 +351,7 @@ void sound_set_enabled( bool enabled ) {
                 if ( wav->isRunning() ) wav->stop();
                 if ( rtttl && rtttl->isRunning() ) rtttl->stop();
                 if ( sound_tone && sound_tone->isRunning() ) sound_tone->stop();
+                if ( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) sound_spiffs_wav->stop();
                 sound_boost_give();
             }
             /**
@@ -400,7 +408,7 @@ bool sound_get_random_spiffs_mp3( char *filename, size_t len ) {
 #endif
 }
 
-void sound_play_spiffs_mp3( const char *filename, bool ignore_silence ) {
+void sound_play_spiffs_mp3( const char *filename, sound_type_t sound_type ) {
     /**
      * check if sound available
      */
@@ -412,7 +420,7 @@ void sound_play_spiffs_mp3( const char *filename, bool ignore_silence ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if ( ignore_silence || !sound_is_silenced() ) {
+            if ( sound_type == SOUND_TYPE_FOREGROUND || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 sound_apply_gain();
                 log_d("playing file %s from SPIFFS", filename);
@@ -431,7 +439,7 @@ void sound_play_spiffs_mp3( const char *filename, bool ignore_silence ) {
 #endif
 }
 
-void sound_play_progmem_wav( const void *data, uint32_t len, bool ignore_silence ) {
+void sound_play_progmem_wav( const void *data, uint32_t len, sound_type_t sound_type ) {
     /**
      * check if sound available
      */
@@ -443,7 +451,7 @@ void sound_play_progmem_wav( const void *data, uint32_t len, bool ignore_silence
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if ( ignore_silence || !sound_is_silenced() ) {
+            if ( sound_type == SOUND_TYPE_FOREGROUND || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 sound_apply_gain();
                 log_d("playing audio (size %d) from PROGMEM ", len );
@@ -461,7 +469,7 @@ void sound_play_progmem_wav( const void *data, uint32_t len, bool ignore_silence
 #endif
 }
 
-void sound_play_rtttl( const char *song, bool ignore_silence ) {
+void sound_play_rtttl( const char *song, sound_type_t sound_type ) {
     /**
      * check if sound available
      */
@@ -473,7 +481,7 @@ void sound_play_rtttl( const char *song, bool ignore_silence ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if ( ignore_silence || !sound_is_silenced() ) {
+            if ( sound_type == SOUND_TYPE_FOREGROUND || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 sound_apply_gain();
                 log_d("playing rtttl \"%s\"", song );
@@ -507,7 +515,7 @@ void sound_play_rtttl( const char *song, bool ignore_silence ) {
 #endif
 }
 
-void sound_play_tone( uint16_t frequency, bool ignore_silence ) {
+void sound_play_tone( uint16_t frequency, sound_type_t sound_type ) {
     /**
      * check if sound available
      */
@@ -519,7 +527,7 @@ void sound_play_tone( uint16_t frequency, bool ignore_silence ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if ( ignore_silence || !sound_is_silenced() ) {
+            if ( sound_type == SOUND_TYPE_FOREGROUND || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 sound_apply_gain();
                 log_d("playing %d Hz tone", frequency );
@@ -578,7 +586,7 @@ bool sound_tone_is_running( void ) {
 #endif
 }
 
-void sound_speak( const char *str ) {
+void sound_play_spiffs_wav( const char *filename, sound_type_t sound_type ) {
     /**
      * check if sound available
      */
@@ -590,7 +598,76 @@ void sound_speak( const char *str ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if (!sound_is_silenced()) {
+            if ( sound_type == SOUND_TYPE_FOREGROUND || !sound_is_silenced() ) {
+                sound_set_enabled( sound_config.enable );
+                sound_apply_gain();
+                log_d("playing wav file %s", filename );
+
+                if ( sound_spiffs_wav ) {
+                    if ( sound_spiffs_wav->isRunning() ) sound_spiffs_wav->stop();
+                    delete sound_spiffs_wav;
+                }
+                if ( sound_spiffs_wav_file ) {
+                    delete sound_spiffs_wav_file;
+                }
+
+                sound_spiffs_wav = new AudioGeneratorWAV();
+                sound_spiffs_wav_file = new AudioFileSourceSPIFFS( filename );
+                sound_spiffs_wav->begin( sound_spiffs_wav_file, out );
+                sound_boost_take();
+            }
+            else {
+                log_d("Cannot play wav file, sound is silenced");
+            }
+        } else {
+            log_d("Cannot play wav file, sound is disabled");
+        }
+    #endif
+#endif
+}
+
+void sound_stop_spiffs_wav( void ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        if ( sound_spiffs_wav && sound_spiffs_wav->isRunning() )
+            sound_spiffs_wav->stop();
+    #endif
+#endif
+}
+
+bool sound_spiffs_wav_is_running( void ) {
+#ifdef NATIVE_64BIT
+    return( false );
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        return( sound_spiffs_wav && sound_spiffs_wav->isRunning() );
+    #else
+        return( false );
+    #endif
+#endif
+}
+
+void sound_speak( const char *str, sound_type_t sound_type ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        if ( sound_config.enable && sound_init ) {
+            if ( sound_type == SOUND_TYPE_FOREGROUND || !sound_is_silenced() ) {
                 sound_set_enabled( sound_config.enable );
                 log_d("Speaking text", str);
                 is_speaking = true;

@@ -208,7 +208,7 @@ static void FindPhone_PhoneSearch_task( lv_task_t * task )
 
 static void FindPhone_WatchFind_task( lv_task_t * task )
 {
-    sound_play_progmem_wav( piep_wav, piep_wav_len ); 
+    sound_play_progmem_wav( piep_wav, piep_wav_len, SOUND_TYPE_FOREGROUND );
 	motor_vibe(100); 
 }
 

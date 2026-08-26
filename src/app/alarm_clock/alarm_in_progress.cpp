@@ -99,7 +99,7 @@ static void alarm_task_function(lv_task_t * task){
             if (beep_often_countown > 0){
                 beep_often_countown--;
             }
-            sound_play_progmem_wav(piep_wav, piep_wav_len);
+            sound_play_progmem_wav(piep_wav, piep_wav_len, SOUND_TYPE_FOREGROUND);
         }
     }
     

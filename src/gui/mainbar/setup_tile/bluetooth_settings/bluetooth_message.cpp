@@ -797,17 +797,17 @@ void bluetooth_message_play_audio( int32_t entry ) {
                 if ( !strncmp( message, "/", 1 ) ) text = strchr( message, ' ' );
                 snprintf( tts, sizeof( tts ), "%s.", text );
                 
-                sound_speak( tts );
+                sound_speak( tts, SOUND_TYPE_BACKGROUND );
             }
             else {
-                sound_play_spiffs_mp3( custom_audio_notification.value );
+                sound_play_spiffs_mp3( custom_audio_notification.value, SOUND_TYPE_BACKGROUND );
             }
         }
         /**
          * if not custom audio notification found, play default piep
          */
         if ( !found ) {
-            sound_play_progmem_wav( piep_wav, piep_wav_len );
+            sound_play_progmem_wav( piep_wav, piep_wav_len, SOUND_TYPE_BACKGROUND );
         }
     }
     doc.clear();

@@ -30,6 +30,14 @@
     #define SOUNDCTL_VOLUME            _BV(1)         /** @brief event mask for sound volume change, callback arg is (uint8_t*)  */
 
     /**
+     * @brief how a sound is treated inside the silence timeframe
+     */
+    typedef enum {
+        SOUND_TYPE_FOREGROUND = 0,                  /** @brief alarm, find my watch or a sound the user asked for, plays inside the silence timeframe */
+        SOUND_TYPE_BACKGROUND                       /** @brief notification, game or system sound, stays silent inside the silence timeframe */
+    } sound_type_t;
+
+    /**
      * @brief pick a random mp3 file from SPIFFS
      *
      * @param   filename    takes the SPIFFS path of the picked file
@@ -42,9 +50,9 @@
      * @brief play mp3 file from SPIFFS by path/filename
      *
      * @param   filename        the SPIFFS path to the file to be played
-     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
+     * @param   sound_type      SOUND_TYPE_FOREGROUND ignores the silence timeframe, SOUND_TYPE_BACKGROUND respects it
      */
-    void sound_play_spiffs_mp3( const char *filename, bool ignore_silence = false );
+    void sound_play_spiffs_mp3( const char *filename, sound_type_t sound_type );
     /**
      * @brief play wave sound from PROGMEM
      *
@@ -52,24 +60,23 @@
      *
      * @param   data            data from PROGMEM as array
      * @param   len             data array length
-     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
+     * @param   sound_type      SOUND_TYPE_FOREGROUND ignores the silence timeframe, SOUND_TYPE_BACKGROUND respects it
      */
-    void sound_play_progmem_wav( const void *data, uint32_t len, bool ignore_silence = false );
+    void sound_play_progmem_wav( const void *data, uint32_t len, sound_type_t sound_type );
     /**
      * @brief play a RTTTL ringtone/jingle, no audio file needed
      *
      * @param   song            RTTTL string, e.g. "win:d=16,o=6,b=200:c,e,g,8c7"
-     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
+     * @param   sound_type      SOUND_TYPE_FOREGROUND ignores the silence timeframe, SOUND_TYPE_BACKGROUND respects it
      */
-    void sound_play_rtttl( const char *song, bool ignore_silence = false );
+    void sound_play_rtttl( const char *song, sound_type_t sound_type );
     /**
      * @brief play a sine tone of a given frequency, ends by itself after 30s
      *
      * @param   frequency       tone frequency in Hz, up to 8000
-     * @param   ignore_silence  true plays even inside the silence timeframe, for the speaker test
-     *                          and for measuring tools started by an explicit user action
+     * @param   sound_type      SOUND_TYPE_FOREGROUND ignores the silence timeframe, SOUND_TYPE_BACKGROUND respects it
      */
-    void sound_play_tone( uint16_t frequency, bool ignore_silence = false );
+    void sound_play_tone( uint16_t frequency, sound_type_t sound_type );
     /**
      * @brief stop a running tone
      */
@@ -80,6 +87,23 @@
      * @return true if a tone is playing
      */
     bool sound_tone_is_running( void );
+    /**
+     * @brief play a wave file from SPIFFS by path/filename
+     *
+     * @param   filename        the SPIFFS path to the file to be played
+     * @param   sound_type      SOUND_TYPE_FOREGROUND ignores the silence timeframe, SOUND_TYPE_BACKGROUND respects it
+     */
+    void sound_play_spiffs_wav( const char *filename, sound_type_t sound_type );
+    /**
+     * @brief stop a running wave file from SPIFFS
+     */
+    void sound_stop_spiffs_wav( void );
+    /**
+     * @brief check if a wave file from SPIFFS is playing
+     *
+     * @return true if a wave file is playing
+     */
+    bool sound_spiffs_wav_is_running( void );
     /**
      * @brief setup sound
      */
@@ -110,9 +134,10 @@
     /**
      * @brief speak
      *  
-     * @param   str    the text to be spoken
+     * @param   str             the text to be spoken
+     * @param   sound_type      SOUND_TYPE_FOREGROUND ignores the silence timeframe, SOUND_TYPE_BACKGROUND respects it
      */
-    void sound_speak( const char *str );
+    void sound_speak( const char *str, sound_type_t sound_type );
     /**
      * @brief save config for sound to spiffs
      */

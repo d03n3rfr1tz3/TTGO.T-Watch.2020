@@ -472,7 +472,7 @@ void TicTacToeApp::OnTileClicked(int index)
         lv_obj_add_style(mButtons[index], LV_BTN_PART_MAIN, style);
         lv_btn_set_state(mButtons[index], LV_BTN_STATE_DISABLED);
 
-        sound_play_rtttl( (mCurrentPlayer == Owner::Red) ? SND_TTT_MOVE_RED : SND_TTT_MOVE_BLUE );
+        sound_play_rtttl( (mCurrentPlayer == Owner::Red) ? SND_TTT_MOVE_RED : SND_TTT_MOVE_BLUE, SOUND_TYPE_BACKGROUND );
         motor_vibe(2);
 
         mWinLine = CheckWinner();
@@ -521,7 +521,7 @@ void TicTacToeApp::EndGame(GameState state)
         lv_label_set_text(mResultLabel, red ? "Red won!" : "Blue won!");
         lv_obj_set_style_local_text_color(mResultLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, red ? LV_COLOR_RED : LV_COLOR_BLUE);
 
-        sound_play_rtttl(SND_TTT_WIN);
+        sound_play_rtttl(SND_TTT_WIN, SOUND_TYPE_BACKGROUND);
         motor_vibe(10);
         StartFirework();
     }
@@ -532,7 +532,7 @@ void TicTacToeApp::EndGame(GameState state)
         lv_label_set_text(mResultLabel, "Draw!");
         lv_obj_set_style_local_text_color(mResultLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
 
-        sound_play_rtttl(SND_TTT_DRAW);
+        sound_play_rtttl(SND_TTT_DRAW, SOUND_TYPE_BACKGROUND);
         motor_vibe(5);
     }
 

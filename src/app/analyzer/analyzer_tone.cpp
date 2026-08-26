@@ -103,7 +103,7 @@ static void analyzer_tone_start( void ) {
     /*
      * a measuring tool started by hand, so it plays inside the silence timeframe too
      */
-    sound_play_tone( analyzer_tone_freq[ lv_roller_get_selected( analyzer_tone_roller ) ], true );
+    sound_play_tone( analyzer_tone_freq[ lv_roller_get_selected( analyzer_tone_roller ) ], SOUND_TYPE_FOREGROUND );
     analyzer_tone_show_playing( sound_tone_is_running() );
 }
 

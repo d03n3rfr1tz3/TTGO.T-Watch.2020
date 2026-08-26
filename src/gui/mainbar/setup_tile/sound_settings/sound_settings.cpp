@@ -268,14 +268,14 @@ static void sound_silence_time_setup_event_cb( lv_obj_t * obj, lv_event_t event 
 static void sound_test_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):           if ( obj != sound_test_audio_btn ) {
-                                                sound_play_rtttl( SND_SPEAKER_TEST, true );
+                                                sound_play_rtttl( SND_SPEAKER_TEST, SOUND_TYPE_FOREGROUND );
                                             }
                                             else {
                                                 char filename[ 64 ] = "";
                                                 if ( sound_get_random_spiffs_mp3( filename, sizeof( filename ) ) )
-                                                    sound_play_spiffs_mp3( filename, true );
+                                                    sound_play_spiffs_mp3( filename, SOUND_TYPE_FOREGROUND );
                                                 else
-                                                    sound_play_progmem_wav( piep_wav, piep_wav_len, true );
+                                                    sound_play_progmem_wav( piep_wav, piep_wav_len, SOUND_TYPE_FOREGROUND );
                                             }
                                             break;
     }
