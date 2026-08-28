@@ -28,6 +28,7 @@
 #include <SPIFFS.h>
 
 #include "voicerec_recorder.h"
+#include "voicerec_nr.h"
 
 #include "hardware/micctl.h"
 #include "hardware/powermgm.h"
@@ -336,13 +337,16 @@ static void voicerec_store( uint8_t *out, size_t i, int32_t value ) {
 static void voicerec_reader( void *arg ) {
     int16_t *block = ( int16_t * )MALLOC( VOICEREC_BLOCK_SAMPLES * sizeof( int16_t ) );
     uint8_t *out = ( uint8_t * )MALLOC( VOICEREC_BLOCK_SAMPLES * sizeof( int16_t ) );
+    float *scratch = ( float * )MALLOC( VOICEREC_BLOCK_SAMPLES * sizeof( float ) );
     voicerec_limiter_t *lim = ( voicerec_limiter_t * )CALLOC( 1, sizeof( voicerec_limiter_t ) );
+    bool nr = voicerec_nr_setup();                                  /** @brief allocated per take, so every take gets a fresh noise profile */
 
-    uint32_t limit = VOICEREC_MAX_SECONDS * VOICEREC_SAMPLE_RATE - VOICEREC_LIM_LOOKAHEAD;
+    uint32_t limit = VOICEREC_MAX_SECONDS * VOICEREC_SAMPLE_RATE - VOICEREC_LIM_LOOKAHEAD - VOICEREC_NR_DELAY;
     float hp_z1 = 0.0f;
     float hp_z2 = 0.0f;
+    bool ready = block && out && scratch && lim && nr;
 
-    if( !block || !out || !lim ) {
+    if( !ready ) {
         log_e("voicerec: reader block alloc failed");
         voicerec_stop_request = true;
     }
@@ -350,7 +354,7 @@ static void voicerec_reader( void *arg ) {
         lim->gain = 1.0f;
     }
 
-    while( block && out && lim && !voicerec_stop_request && voicerec_samples_recorded < limit ) {
+    while( ready && !voicerec_stop_request && voicerec_samples_recorded < limit ) {
         size_t samples = micctl_read( block, VOICEREC_BLOCK_SAMPLES, 100 );
         uint64_t energy = 0;
         uint32_t len = 0;
@@ -369,8 +373,13 @@ static void voicerec_reader( void *arg ) {
             hp_z2 = VOICEREC_HP_B2 * x - VOICEREC_HP_A2 * y;
             energy += ( uint64_t )( y * y );
 
-            voicerec_store( out, i, voicerec_limit( lim, y * voicerec_gain ) );
+            scratch[ i ] = y;
         }
+        
+        voicerec_nr_process( scratch, samples );
+
+        for( size_t i = 0 ; i < samples ; i++ )
+            voicerec_store( out, i, voicerec_limit( lim, scratch[ i ] * voicerec_gain ) );
 
         float rms = sqrtf( ( float )energy / ( float )samples );
         voicerec_level_db = rms < 1.0f ? VOICEREC_DB_FLOOR : 20.0f * log10f( rms / 32768.0f );
@@ -384,19 +393,34 @@ static void voicerec_reader( void *arg ) {
         voicerec_samples_recorded += samples;
     }
     
-    if( block && out && lim ) {
-        uint32_t len = VOICEREC_LIM_LOOKAHEAD;
+    voicerec_state = VOICEREC_FINALIZING;
 
-        for( size_t i = 0 ; i < VOICEREC_LIM_LOOKAHEAD ; i++ )
-            voicerec_store( out, i, voicerec_limit( lim, 0.0f ) );
+    if( ready ) {
+        uint32_t tail[ 2 ] = { VOICEREC_NR_DELAY, VOICEREC_LIM_LOOKAHEAD };
 
-        if( !voicerec_low_quality )
-            len *= sizeof( int16_t );
-        if( voicerec_ring_free() >= len )
-            voicerec_ring_put( out, len );
+        for( size_t pass = 0 ; pass < 2 ; pass++ ) {
+            uint32_t len = tail[ pass ];
 
-        voicerec_samples_recorded += VOICEREC_LIM_LOOKAHEAD;
+            if( !len )
+                continue;
+
+            memset( scratch, 0, len * sizeof( float ) );
+            if( !pass )
+                voicerec_nr_process( scratch, len );
+
+            for( size_t i = 0 ; i < len ; i++ )
+                voicerec_store( out, i, voicerec_limit( lim, scratch[ i ] * voicerec_gain ) );
+
+            if( !voicerec_low_quality )
+                len *= sizeof( int16_t );
+            if( voicerec_ring_free() >= len )
+                voicerec_ring_put( out, len );
+
+            voicerec_samples_recorded += tail[ pass ];
+        }
     }
+
+    voicerec_nr_free();
 
     if( lim )
         free( lim );
@@ -404,6 +428,8 @@ static void voicerec_reader( void *arg ) {
         free( block );
     if( out )
         free( out );
+    if( scratch )
+        free( scratch );
 
     voicerec_reader_done = true;
     voicerec_reader_task = NULL;
@@ -547,8 +573,11 @@ uint32_t voicerec_recorder_get_remaining_seconds( bool low_quality ) {
     uint32_t bps = voicerec_bytes_per_second( low_quality );
     uint32_t free_bytes;
 
-    if( voicerec_state == VOICEREC_RECORDING || voicerec_state == VOICEREC_FINALIZING )
-        return( ( voicerec_budget > voicerec_bytes_written ? voicerec_budget - voicerec_bytes_written : 0 ) / bps );
+    if( voicerec_state == VOICEREC_RECORDING || voicerec_state == VOICEREC_FINALIZING ) {
+        uint32_t used = voicerec_samples_recorded * ( bps / VOICEREC_SAMPLE_RATE );
+
+        return( ( voicerec_budget > used ? voicerec_budget - used : 0 ) / bps );
+    }
 
     free_bytes = voicerec_get_free_bytes( false );
 

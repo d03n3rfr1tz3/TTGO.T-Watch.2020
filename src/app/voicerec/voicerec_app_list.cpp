@@ -30,6 +30,7 @@
 #include "voicerec_app_list.h"
 #include "voicerec_recorder.h"
 
+#include "gui/keyboard.h"
 #include "gui/mainbar/mainbar.h"
 #include "gui/statusbar.h"
 #include "gui/widget_factory.h"
@@ -44,6 +45,7 @@ typedef struct {
 static lv_obj_t *voicerec_app_list_tile = NULL;
 static lv_obj_t *voicerec_list = NULL;
 static lv_obj_t *voicerec_list_hint = NULL;
+static lv_obj_t *voicerec_rename_ta = NULL;                         /** @brief hidden, the keyboard writes the new name in here */
 static lv_style_t voicerec_list_style;
 static lv_task_t *voicerec_app_list_task = NULL;
 static bool voicerec_list_visible = false;
@@ -54,6 +56,8 @@ static int voicerec_entrys = 0;
 static int voicerec_selected = -1;
 static lv_obj_t *voicerec_selected_btn = NULL;
 static char voicerec_delete_path[ VOICEREC_PATH_MAX ] = "";
+static char voicerec_rename_path[ VOICEREC_PATH_MAX ] = "";         /** @brief empty means no rename is pending */
+static bool voicerec_long_pressed = false;                          /** @brief a click still follows a long press, this swallows it */
 
 static lv_event_cb_t voicerec_default_msgbox_cb = NULL;
 
@@ -63,6 +67,7 @@ static void voicerec_app_list_lv_task( lv_task_t * task );
 static void voicerec_app_list_build( void );
 static void voicerec_app_list_select( lv_obj_t *btn, int index );
 static void voicerec_app_list_entry_event_cb( lv_obj_t * obj, lv_event_t event );
+static void voicerec_app_list_rename_cb( lv_obj_t * obj, lv_event_t event );
 static void voicerec_app_list_trash_event_cb( lv_obj_t * obj, lv_event_t event );
 static void voicerec_app_list_delete_cb( lv_obj_t * obj, lv_event_t event );
 static void voicerec_app_list_exit_event_cb( lv_obj_t * obj, lv_event_t event );
@@ -97,6 +102,11 @@ void voicerec_app_list_setup( uint32_t tile_num ) {
     lv_obj_t *trash_btn = wf_add_trash_button( voicerec_app_list_tile, voicerec_app_list_trash_event_cb );
     lv_obj_align( trash_btn, voicerec_app_list_tile, LV_ALIGN_IN_BOTTOM_RIGHT, -THEME_ICON_PADDING, -THEME_ICON_PADDING );
 
+    voicerec_rename_ta = lv_textarea_create( voicerec_app_list_tile, NULL );
+    lv_textarea_set_one_line( voicerec_rename_ta, true );
+    lv_obj_set_hidden( voicerec_rename_ta, true );
+    lv_obj_set_event_cb( voicerec_rename_ta, voicerec_app_list_rename_cb );
+
     lv_tileview_add_element( voicerec_app_list_tile, voicerec_list_hint );
     lv_tileview_add_element( voicerec_app_list_tile, exit_btn );
     lv_tileview_add_element( voicerec_app_list_tile, left_btn );
@@ -113,6 +123,8 @@ static void voicerec_app_list_activate_cb( void ) {
 static void voicerec_app_list_hibernate_cb( void ) {
     lv_task_set_prio( voicerec_app_list_task, LV_TASK_PRIO_OFF );
     sound_stop_spiffs_wav();
+    voicerec_rename_path[ 0 ] = '\0';
+    keyboard_hide();
 }
 
 static bool voicerec_app_list_is_visible( void ) {
@@ -160,16 +172,25 @@ static uint32_t voicerec_app_list_get_u32( const uint8_t *header, int offset ) {
     return( ( uint32_t )header[ offset ] | ( ( uint32_t )header[ offset + 1 ] << 8 ) | ( ( uint32_t )header[ offset + 2 ] << 16 ) | ( ( uint32_t )header[ offset + 3 ] << 24 ) );
 }
 
+/**
+ * @brief strip folder and extension from an entry path
+ */
+static void voicerec_app_list_entry_name( const char *path, char *name, size_t len ) {
+    const char *slash = strrchr( path, '/' );
+
+    snprintf( name, len, "%s", slash ? slash + 1 : path );
+
+    char *dot = strstr( name, ".wav" );
+    if( dot )
+        *dot = '\0';
+}
+
 static void voicerec_app_list_entry_text( voicerec_entry_t *entry, char *text, size_t len ) {
-    const char *slash = strrchr( entry->path, '/' );
     char name[ VOICEREC_NAME_MAX + 1 ] = "";
     char stamp[ VOICEREC_ICRD_SIZE ] = "";
     int year, month, day, hour, minute, second;
 
-    snprintf( name, sizeof( name ), "%s", slash ? slash + 1 : entry->path );
-    char *dot = strstr( name, ".wav" );
-    if( dot )
-        *dot = '\0';
+    voicerec_app_list_entry_name( entry->path, name, sizeof( name ) );
 
     if( voicerec_app_list_name_date( name, stamp, sizeof( stamp ) ) )
         snprintf( name, sizeof( name ), "%ds", ( int )entry->seconds );
@@ -268,6 +289,8 @@ static void voicerec_app_list_select( lv_obj_t *btn, int index ) {
 static void voicerec_app_list_entry_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):       {
+                                            if( voicerec_long_pressed )
+                                                return;
                                             if( voicerec_recorder_get_state() != VOICEREC_IDLE )
                                                 return;
 
@@ -285,7 +308,81 @@ static void voicerec_app_list_entry_event_cb( lv_obj_t * obj, lv_event_t event )
                                             voicerec_app_list_select( obj, index );
                                             break;
                                         }
+        case( LV_EVENT_LONG_PRESSED ):  {
+                                            char name[ VOICEREC_NAME_MAX + 1 ] = "";
+
+                                            if( voicerec_recorder_get_state() != VOICEREC_IDLE )
+                                                return;
+
+                                            int index = ( int )( intptr_t )lv_obj_get_user_data( obj );
+                                            if( index < 0 || index >= voicerec_entrys )
+                                                return;
+
+                                            voicerec_long_pressed = true;
+                                            voicerec_rename_path[ 0 ] = '\0';
+
+                                            voicerec_app_list_entry_name( voicerec_entry_table[ index ].path, name, sizeof( name ) );
+                                            lv_textarea_set_text( voicerec_rename_ta, name );
+
+                                            snprintf( voicerec_rename_path, sizeof( voicerec_rename_path ), "%s", voicerec_entry_table[ index ].path );
+                                            voicerec_app_list_select( obj, index );
+                                            keyboard_set_textarea( voicerec_rename_ta );
+                                            break;
+                                        }
+        case( LV_EVENT_RELEASED ):      voicerec_long_pressed = false;
+                                        break;
     }
+}
+
+static void voicerec_app_list_rename_cb( lv_obj_t * obj, lv_event_t event ) {
+    static const char *btns[] = { "Ok", "" };
+    char name[ VOICEREC_NAME_MAX + 1 ] = "";
+    char path[ VOICEREC_PATH_MAX ] = "";
+    size_t out = 0;
+
+    if( event != LV_EVENT_VALUE_CHANGED )
+        return;
+    if( !voicerec_rename_path[ 0 ] || voicerec_recorder_get_state() != VOICEREC_IDLE )
+        return;
+
+    const char *text = lv_textarea_get_text( obj );
+    while( *text == ' ' )
+        text++;
+
+    for( ; *text && out < VOICEREC_NAME_MAX ; text++ )
+        if( *text != '/' && ( uint8_t )*text >= 0x20 )
+            name[ out++ ] = *text;
+
+    while( out && name[ out - 1 ] == ' ' )
+        out--;
+    name[ out ] = '\0';
+
+    if( !out )
+        return;
+
+    snprintf( path, sizeof( path ), "%s/%s.wav", VOICEREC_DIR, name );
+    if( !strcmp( path, voicerec_rename_path ) ) {
+        voicerec_rename_path[ 0 ] = '\0';
+        return;
+    }
+
+    if( SPIFFS.exists( path ) ) {
+        lv_obj_t *mbox = lv_msgbox_create( lv_scr_act(), NULL );
+        lv_msgbox_set_text( mbox, "Name already taken" );
+        lv_msgbox_add_btns( mbox, btns );
+        lv_obj_set_width( mbox, 200 );
+        lv_obj_align( mbox, NULL, LV_ALIGN_CENTER, 0, 0 );
+        voicerec_rename_path[ 0 ] = '\0';
+        return;
+    }
+
+    sound_stop_spiffs_wav();
+
+    if( !SPIFFS.rename( voicerec_rename_path, path ) )
+        log_e("voicerec: rename to %s failed", path );
+
+    voicerec_rename_path[ 0 ] = '\0';
+    voicerec_app_list_build();
 }
 
 static void voicerec_app_list_trash_event_cb( lv_obj_t * obj, lv_event_t event ) {

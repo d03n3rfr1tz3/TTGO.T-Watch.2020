@@ -167,8 +167,9 @@ static void voicerec_app_main_lv_task( lv_task_t * task ) {
 
     lv_bar_set_value( voicerec_level_bar, level, LV_ANIM_ON );
 
-    lv_obj_set_hidden( voicerec_play_btn, recording );
-    lv_obj_set_hidden( voicerec_stop_btn, !recording );
+    lv_obj_set_hidden( voicerec_play_btn, busy );
+    lv_obj_set_hidden( voicerec_stop_btn, !busy );
+    lv_obj_set_click( voicerec_stop_btn, recording );
     lv_obj_set_click( voicerec_play_btn, !busy && !full );
     lv_obj_set_click( voicerec_quality_switch, !busy );
     lv_obj_set_click( voicerec_gain_list, !busy );

@@ -59,7 +59,7 @@
     typedef enum {
         VOICEREC_IDLE = 0,                                          /** @brief ready to record */
         VOICEREC_RECORDING,                                         /** @brief reader and writer are running */
-        VOICEREC_FINALIZING,                                        /** @brief ring is drained and the header patched */
+        VOICEREC_FINALIZING,                                        /** @brief capture stopped, the ring is still being written */
         VOICEREC_ERROR                                              /** @brief last take failed, start() clears it */
     } voicerec_state_t;
 
