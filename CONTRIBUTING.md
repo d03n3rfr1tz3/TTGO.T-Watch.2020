@@ -89,14 +89,17 @@ To play sounds from the inbuild speakers use `hardware/sound.h`:
 #include "hardware/sound.h"
 [...]
 // MP3 from SPIFFS:
-// void sound_play_spiffs_mp3( const char *filename );
+// void sound_play_spiffs_mp3( const char *filename, sound_type_t sound_type );
 // example:
-sound_play_spiffs_mp3( "/sound.mp3" )
+sound_play_spiffs_mp3( "/sound.mp3", SOUND_TYPE_BACKGROUND )
 
 // or WAV from PROGMEM via
-//void sound_play_progmem_wav( const void *data, uint32_t len );
+//void sound_play_progmem_wav( const void *data, uint32_t len, sound_type_t sound_type );
 
 ```
+
+`SOUND_TYPE_BACKGROUND` stays silent inside the configured silence timeframe, `SOUND_TYPE_FOREGROUND` plays anyway.
+Use foreground only for sounds the user just asked for or has to hear, like an alarm.
 
 There is a configuration tile to enable/disable all sound output and set the global volume.
 

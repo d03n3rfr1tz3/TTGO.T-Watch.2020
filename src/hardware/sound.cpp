@@ -460,7 +460,7 @@ void sound_play_progmem_wav( const void *data, uint32_t len, sound_type_t sound_
                 sound_boost_take();
             }
             else {
-                log_d("Cannot play mp3, sound is silenced");
+                log_d("Cannot play wav, sound is silenced");
             }
         } else {
             log_d("Cannot play wav, sound is disabled");
@@ -677,7 +677,7 @@ void sound_speak( const char *str, sound_type_t sound_type ) {
                 is_speaking = false;
             }
             else {
-                log_d("Cannot play mp3, sound is silenced");
+                log_d("Cannot speak, sound is silenced");
             }
         }
         else {

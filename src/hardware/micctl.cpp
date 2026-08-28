@@ -23,6 +23,7 @@
 
 #include "micctl.h"
 #include "powermgm.h"
+#include "sound.h"
 #include "callback.h"
 
 float micctl_dbfs_to_spl( float dbfs ) {
@@ -65,6 +66,14 @@ bool micctl_start( uint32_t sample_rate ) {
             return( true );
         micctl_stop_now();
     }
+
+    // v3 mic shares the switchable AXP202_LDO4 audio rail with the amp
+    #if defined( LILYGO_WATCH_2020_V3 )
+        TTGOClass *ttgo = TTGOClass::getWatch();
+        ttgo->power->setPowerOutPut( AXP202_LDO4, AXP202_ON );
+        delay( 50 );
+    #endif
+
     /**
      * PDM RX is only available on I2S0
      */
@@ -123,6 +132,14 @@ static void micctl_stop_now( void ) {
         return;
 
     i2s_driver_uninstall( I2S_NUM_0 );
+
+    #if defined( LILYGO_WATCH_2020_V3 )
+        if( !sound_get_enabled_config() ) {
+            TTGOClass *ttgo = TTGOClass::getWatch();
+            ttgo->power->setPowerOutPut( AXP202_LDO4, AXP202_OFF );
+        }
+    #endif
+
     micctl_running = false;
     log_i("mic stopped");
 

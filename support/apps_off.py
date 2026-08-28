@@ -20,6 +20,7 @@ NEEDS_IR = [
 NEEDS_MIC = [
     "app/analyzer",
     "app/soundmeter",
+    "app/voicerec",
 ]
 
 # Boards with certain available or missing hardware support.
