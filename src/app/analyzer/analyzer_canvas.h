@@ -23,7 +23,7 @@
     #define _ANALYZER_CANVAS_H
 
     #define ANALYZER_CANVAS_WIDTH       240         /** @brief canvas width, matches the display */
-    #define ANALYZER_CANVAS_HEIGHT      120         /** @brief canvas height */
+    #define ANALYZER_CANVAS_HEIGHT      170         /** @brief canvas height, from the top edge down to the axis row */
     /*
      * these are levels per frequency bin, not broadband levels - noise like signal
      * spreads over all bins and lands about 10*log10( bins ) lower than the readout

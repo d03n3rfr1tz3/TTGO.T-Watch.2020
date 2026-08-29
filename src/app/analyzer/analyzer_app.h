@@ -26,8 +26,8 @@
 
     #include "gui/widget_factory.h"
 
-    #define ANALYZER_APP_HEADER_Y       30                                                          /** @brief header below the statusbar */
-    #define ANALYZER_APP_CANVAS_Y       50                                                          /** @brief canvas between header and axis */
+    #define ANALYZER_APP_HEADER_Y       THEME_PADDING                                               /** @brief readout inside the canvas, top center */
+    #define ANALYZER_APP_CANVAS_Y       0                                                           /** @brief canvas starts at the top edge */
     #define ANALYZER_APP_AXIS_Y         ( ANALYZER_APP_CANVAS_Y + ANALYZER_CANVAS_HEIGHT + THEME_PADDING )   /** @brief axis right below the canvas */
     #define ANALYZER_APP_TILES          4                                                           /** @brief waterfall, spectrum, scope and tone */
     #define ANALYZER_APP_IDLE_PERIOD    250                                                         /** @brief poll period in ms while the app is off screen */

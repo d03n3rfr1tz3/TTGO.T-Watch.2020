@@ -105,13 +105,17 @@ void analyzer_app_setup( void ) {
         mainbar_add_tile_hibernate_cb( tile_num, analyzer_app_hibernate_cb );
 
         analyzer_app_tile_table[ i ].tile = mainbar_get_tile_obj( tile_num );
-        analyzer_app_tile_table[ i ].header = analyzer_app_add_header( analyzer_app_tile_table[ i ].tile );
     }
 
     analyzer_waterfall_setup( analyzer_app_main_tile_num );
     analyzer_spectrum_setup( analyzer_app_main_tile_num + 1 );
     analyzer_scope_setup( analyzer_app_main_tile_num + 2 );
     analyzer_tone_setup( analyzer_app_main_tile_num + 3 );
+    /*
+     * after the canvases, the header lies on top of them
+     */
+    for( int i = 0 ; i < ANALYZER_APP_TILES ; i++ )
+        analyzer_app_tile_table[ i ].header = analyzer_app_add_header( analyzer_app_tile_table[ i ].tile );
 
     analyzer_app_task = lv_task_create( analyzer_app_lv_task, ANALYZER_TASK_PERIOD, LV_TASK_PRIO_OFF, NULL );
 }
@@ -124,6 +128,14 @@ static lv_obj_t * analyzer_app_add_header( lv_obj_t *tile ) {
     lv_obj_t *header = wf_add_label( tile, "---- Hz   -- dB" );
 
     lv_label_set_align( header, LV_LABEL_ALIGN_CENTER );
+    /*
+     * a plate keeps the readout legible over the waterfall
+     */
+    lv_obj_set_style_local_bg_color( header, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, analyzer_canvas_floor_color() );
+    lv_obj_set_style_local_bg_opa( header, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_70 );
+    lv_obj_set_style_local_pad_left( header, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, THEME_PADDING );
+    lv_obj_set_style_local_pad_right( header, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, THEME_PADDING );
+    lv_obj_set_style_local_radius( header, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 3 );
     lv_obj_align( header, tile, LV_ALIGN_IN_TOP_MID, 0, ANALYZER_APP_HEADER_Y );
     lv_tileview_add_element( tile, header );
 

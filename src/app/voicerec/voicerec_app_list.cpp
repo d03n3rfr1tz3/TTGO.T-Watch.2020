@@ -149,6 +149,9 @@ static void voicerec_app_list_lv_task( lv_task_t * task ) {
         return;
     }
     
+    if( visible && sound_spiffs_wav_is_running() )
+        lv_disp_trig_activity( NULL );
+
     if( visible && voicerec_list_pending && voicerec_recorder_get_state() == VOICEREC_IDLE )
         voicerec_app_list_build();
 }

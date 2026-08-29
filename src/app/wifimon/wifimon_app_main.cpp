@@ -49,18 +49,38 @@
     static bool wifimon_sniffer_active = false;
 #endif
 
-lv_obj_t *wifimon_app_main_tile = NULL;
-lv_obj_t *chart = NULL;
-lv_obj_t *channel_select = NULL; 
-lv_chart_series_t *ser1 = NULL;
-lv_chart_series_t *ser2 = NULL;
-lv_chart_series_t *ser3 = NULL;
-lv_task_t *_wifimon_app_task = NULL;
-int wifimon_display_timeout = 0;
+#define WIFIMON_POINTS          32                                      /** @brief seconds of history */
+#define WIFIMON_STRIP_HEIGHT    24                                      /** @brief reserved for legend and scale, no curve reaches into it */
+#define WIFIMON_LABEL_Y         4
+#define WIFIMON_ROLLER_WIDTH    40
+
+#define WIFIMON_FLOOR_COLOR     LV_COLOR_MAKE( 0x00, 0x02, 0x28 )
+#define WIFIMON_GRID_COLOR      LV_COLOR_MAKE( 0x18, 0x22, 0x44 )
+#define WIFIMON_BORDER_COLOR    LV_COLOR_MAKE( 0x30, 0x3c, 0x60 )
+#define WIFIMON_SELECT_COLOR    LV_COLOR_MAKE( 0x2a, 0x3f, 0x6e )
+#define WIFIMON_MGMT_COLOR      LV_COLOR_MAKE( 0xf0, 0x10, 0x10 )
+#define WIFIMON_DATA_COLOR      LV_COLOR_MAKE( 0x70, 0xd0, 0x20 )
+#define WIFIMON_MISC_COLOR      LV_COLOR_MAKE( 0xf0, 0xe0, 0x20 )
+
+static lv_obj_t *wifimon_app_main_tile = NULL;
+static lv_obj_t *chart = NULL;
+static lv_obj_t *channel_select = NULL;
+static lv_obj_t *wifimon_scale_label = NULL;
+static lv_chart_series_t *ser1 = NULL;
+static lv_chart_series_t *ser2 = NULL;
+static lv_chart_series_t *ser3 = NULL;
+static lv_task_t *_wifimon_app_task = NULL;
+static int wifimon_display_timeout = 0;
 static bool wifimon_app_active = false;         /** @brief app owns the wifi driver */
 static bool wifimon_wifi_state = false;         /** @brief wifi state before the app took over */
 static bool wifimon_wifi_off = false;           /** @brief wifictl has really switched the wifi off */
 static uint8_t wifimon_wifi_off_timeout = 0;
+
+static const lv_coord_t wifimon_range_steps[] = { 100, 250, 500, 1000, 2500, 5000 };
+static lv_coord_t wifimon_peak[ WIFIMON_POINTS ];
+static uint8_t wifimon_peak_pos = 0;
+static lv_coord_t wifimon_range = 0;
+static uint8_t wifimon_channel = 1;
 
 LV_IMG_DECLARE(exit_dark_48px);
 LV_IMG_DECLARE(wifimon_app_32px);
@@ -73,8 +93,26 @@ static void wifimon_activate_cb( void );
 static void wifimon_hibernate_cb( void );
 static bool wifimon_wifictl_event_cb( EventBits_t event, void *arg );
 
-uint8_t level = 0, channel = 1;
-int data = 0, mgmt = 0, misc = 0; 
+static volatile int data = 0, mgmt = 0, misc = 0;
+
+static void wifimon_reset_scale( void ) {
+    for( int i = 0 ; i < WIFIMON_POINTS ; i++ )
+        wifimon_peak[ i ] = 0;
+    wifimon_peak_pos = 0;
+    wifimon_range = wifimon_range_steps[ 0 ];
+    data = 0;
+    mgmt = 0;
+    misc = 0;
+
+    if( chart ) {
+        lv_chart_set_y_range( chart, LV_CHART_AXIS_PRIMARY_Y, 0, wifimon_range );
+        lv_chart_init_points( chart, ser1, 0 );
+        lv_chart_init_points( chart, ser2, 0 );
+        lv_chart_init_points( chart, ser3, 0 );
+        lv_chart_refresh( chart );
+        wf_label_printf( wifimon_scale_label, chart, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING, WIFIMON_LABEL_Y, "%d", wifimon_range );
+    }
+}
 
 #ifdef NATIVE_64BIT
 
@@ -108,7 +146,12 @@ static void wifimon_channel_select_event_handler( lv_obj_t * obj, lv_event_t eve
         case LV_EVENT_VALUE_CHANGED: {
             char buf[32];
             lv_roller_get_selected_str( obj, buf, sizeof( buf ) );
-            wifimon_sniffer_set_channel( atoi(buf) );
+            wifimon_channel = atoi( buf );
+            wifimon_sniffer_set_channel( wifimon_channel );
+            /**
+             * do not mix two channels into one sample
+             */
+            wifimon_reset_scale();
             break;
         }
     }
@@ -121,44 +164,76 @@ void wifimon_app_main_setup( uint32_t tile_num ) {
      * add chart widget
      */
     chart = lv_chart_create( wifimon_app_main_tile, NULL );
-    lv_obj_set_size( chart, lv_disp_get_hor_res( NULL ), lv_disp_get_ver_res( NULL ) - THEME_ICON_SIZE );
-    lv_obj_align( chart, NULL, LV_ALIGN_IN_TOP_LEFT, 0, 0 );
-    lv_chart_set_type( chart, LV_CHART_TYPE_LINE );  
-    lv_chart_set_point_count( chart, 32 );
-    lv_obj_set_style_local_bg_opa( chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_OPA_50 );
+    lv_obj_set_size( chart, lv_disp_get_hor_res( NULL ), lv_disp_get_ver_res( NULL ) );
+    lv_obj_align( chart, wifimon_app_main_tile, LV_ALIGN_IN_TOP_LEFT, 0, 0 );
+    lv_chart_set_type( chart, LV_CHART_TYPE_LINE );
+    lv_chart_set_point_count( chart, WIFIMON_POINTS );
+    lv_chart_set_div_line_count( chart, 3, 7 );
+    lv_obj_add_style( chart, LV_OBJ_PART_MAIN, APP_STYLE );
+
+    lv_obj_set_style_local_bg_color( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, WIFIMON_FLOOR_COLOR );
+    lv_obj_set_style_local_bg_opa( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, LV_OPA_COVER );
+    lv_obj_set_style_local_border_width( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, 0 );
+    lv_obj_set_style_local_radius( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, 0 );
+
+    lv_obj_set_style_local_pad_top( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, WIFIMON_STRIP_HEIGHT );
+    lv_obj_set_style_local_pad_bottom( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, THEME_PADDING );
+    lv_obj_set_style_local_pad_left( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, 0 );
+    lv_obj_set_style_local_pad_right( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, 0 );
+    lv_obj_set_style_local_line_color( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, WIFIMON_GRID_COLOR );
+    lv_obj_set_style_local_line_width( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, 1 );
+    lv_obj_set_style_local_line_opa( chart, LV_CHART_PART_BG, LV_STATE_DEFAULT, LV_OPA_COVER );
+    lv_obj_set_style_local_size( chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 0 );
+    lv_obj_set_style_local_line_width( chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 2 );
+    lv_obj_set_style_local_bg_opa( chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_OPA_40 );
     lv_obj_set_style_local_bg_grad_dir( chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_GRAD_DIR_VER );
     lv_obj_set_style_local_bg_main_stop( chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 255 );
     lv_obj_set_style_local_bg_grad_stop( chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 0 );
     /**
      * add chart series
      */
-    ser1 = lv_chart_add_series( chart, LV_COLOR_RED );
-    ser2 = lv_chart_add_series( chart, LV_COLOR_GREEN );
-    ser3 = lv_chart_add_series( chart, LV_COLOR_YELLOW );
+    ser1 = lv_chart_add_series( chart, WIFIMON_MGMT_COLOR );
+    ser2 = lv_chart_add_series( chart, WIFIMON_DATA_COLOR );
+    ser3 = lv_chart_add_series( chart, WIFIMON_MISC_COLOR );
+    lv_chart_set_y_range( chart, LV_CHART_AXIS_PRIMARY_Y, 0, wifimon_range_steps[ 0 ] );
     /**
-     * add exit button
+     * add legend and scale into the reserved top strip
      */
-    lv_obj_t * exit_btn = wf_add_exit_button( wifimon_app_main_tile, exit_wifimon_app_main_event_cb );
-    lv_obj_align( exit_btn, wifimon_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
+    lv_obj_t * chart_series_label = wf_add_label( chart, "", APP_ICON_LABEL_STYLE );
+    lv_label_set_recolor( chart_series_label, true );
+    lv_label_set_text( chart_series_label, "#f01010 mgmt#  #70d020 data#  #f0e020 misc#" );
+    lv_obj_align( chart_series_label, chart, LV_ALIGN_IN_TOP_LEFT, THEME_PADDING, WIFIMON_LABEL_Y );
+
+    wifimon_scale_label = wf_add_label( chart, "100", APP_ICON_LABEL_STYLE );
+    lv_obj_align( wifimon_scale_label, chart, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING, WIFIMON_LABEL_Y );
     /**
      * add channel select roller
      */
-    channel_select = lv_roller_create(wifimon_app_main_tile, NULL);
-    lv_roller_set_options( channel_select, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13", LV_ROLLER_MODE_INIFINITE );
-    lv_roller_set_visible_row_count( channel_select, 5 );
-    lv_obj_align( channel_select, NULL, LV_ALIGN_IN_TOP_LEFT, THEME_ICON_PADDING, THEME_ICON_PADDING );
+    channel_select = wf_add_roller( wifimon_app_main_tile, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13", LV_ROLLER_MODE_INIFINITE, 5 );
+    lv_obj_set_width( channel_select, WIFIMON_ROLLER_WIDTH );
+    lv_obj_align( channel_select, chart, LV_ALIGN_IN_LEFT_MID, THEME_PADDING, 0 );
     lv_obj_set_event_cb( channel_select, wifimon_channel_select_event_handler );
+    lv_obj_set_style_local_bg_color( channel_select, LV_ROLLER_PART_BG, LV_STATE_DEFAULT, WIFIMON_FLOOR_COLOR );
+    lv_obj_set_style_local_bg_opa( channel_select, LV_ROLLER_PART_BG, LV_STATE_DEFAULT, LV_OPA_60 );
+    lv_obj_set_style_local_border_color( channel_select, LV_ROLLER_PART_BG, LV_STATE_DEFAULT, WIFIMON_BORDER_COLOR );
+    lv_obj_set_style_local_border_width( channel_select, LV_ROLLER_PART_BG, LV_STATE_DEFAULT, 1 );
+    lv_obj_set_style_local_border_opa( channel_select, LV_ROLLER_PART_BG, LV_STATE_DEFAULT, LV_OPA_COVER );
+    lv_obj_set_style_local_radius( channel_select, LV_ROLLER_PART_BG, LV_STATE_DEFAULT, 3 );
+    lv_obj_set_style_local_text_color( channel_select, LV_ROLLER_PART_BG, LV_STATE_DEFAULT, LV_COLOR_SILVER );
     /**
-     * add chart series label
+     * the roller is a page, its scrollable part would cover the chart again
      */
-    lv_obj_t * chart_series_label = lv_label_create( wifimon_app_main_tile, NULL );
-    lv_label_set_long_mode( chart_series_label, LV_LABEL_LONG_BREAK );
-    lv_label_set_recolor( chart_series_label, true );
-    lv_label_set_align( chart_series_label, LV_LABEL_ALIGN_RIGHT );       
-    lv_label_set_text( chart_series_label, "#ffff00 - misc#\n#ff0000 - mgmt#\n#11ff00 - data#"); 
-    lv_obj_set_width( chart_series_label, 70 );
-    lv_obj_align( chart_series_label, NULL, LV_ALIGN_IN_TOP_RIGHT, -THEME_ICON_PADDING, THEME_ICON_PADDING );
+    lv_obj_set_style_local_bg_opa( channel_select, LV_PAGE_PART_SCROLLABLE, LV_STATE_DEFAULT, LV_OPA_TRANSP );
+    lv_obj_set_style_local_bg_color( channel_select, LV_ROLLER_PART_SELECTED, LV_STATE_DEFAULT, WIFIMON_SELECT_COLOR );
+    lv_obj_set_style_local_bg_opa( channel_select, LV_ROLLER_PART_SELECTED, LV_STATE_DEFAULT, LV_OPA_70 );
+    lv_obj_set_style_local_text_color( channel_select, LV_ROLLER_PART_SELECTED, LV_STATE_DEFAULT, LV_COLOR_WHITE );
+    /**
+     * add exit button last
+     */
+    lv_obj_t * exit_btn = wf_add_exit_button( wifimon_app_main_tile, exit_wifimon_app_main_event_cb );
+    lv_obj_align( exit_btn, wifimon_app_main_tile, LV_ALIGN_IN_BOTTOM_LEFT, THEME_ICON_PADDING, -THEME_ICON_PADDING );
 
+    mainbar_add_slide_element( chart );
     mainbar_add_tile_activate_cb( tile_num, wifimon_activate_cb );
     mainbar_add_tile_hibernate_cb( tile_num, wifimon_hibernate_cb );
     wifictl_register_cb( WIFICTL_ON | WIFICTL_OFF, wifimon_wifictl_event_cb, "wifimon main" );
@@ -230,6 +305,11 @@ static void wifimon_activate_cb( void ) {
     wifimon_wifi_off_timeout = 3;
     wifictl_off();
     /**
+     * start with an empty chart and the lowest scale
+     */
+    wifimon_channel = 1;
+    wifimon_reset_scale();
+    /**
      * start stats fetch task
      */
     _wifimon_app_task = lv_task_create( wifimon_app_task, 1000, LV_TASK_PRIO_MID, NULL );
@@ -258,32 +338,64 @@ static void wifimon_app_task( lv_task_t * task ) {
         esp_wifi_set_promiscuous( true );
         esp_wifi_set_promiscuous_rx_cb( &wifimon_sniffer_packet_handler );
         lv_roller_set_selected( channel_select, 0, LV_ANIM_OFF );
-        wifimon_sniffer_set_channel( 1 );
+        wifimon_channel = 1;
+        wifimon_sniffer_set_channel( wifimon_channel );
         wifimon_sniffer_active = true;
         return;
     }
 #endif
     /**
-     * limit scale
+     * take over the packet counter
      */
-    if( mgmt > 100 ) mgmt = 100; 
-    if( data > 100 ) data = 100; 
-    if( misc > 100 ) misc = 100; 
+    int mgmt_count = mgmt;
+    int data_count = data;
+    int misc_count = misc;
+
+    data = 0;
+    mgmt = 0;
+    misc = 0;
+
+    lv_coord_t peak = mgmt_count;
+    if( data_count > peak ) peak = data_count;
+    if( misc_count > peak ) peak = misc_count;
+
+    wifimon_peak[ wifimon_peak_pos ] = peak;
+    wifimon_peak_pos = ( wifimon_peak_pos + 1 ) % WIFIMON_POINTS;
+    /**
+     * scale to the loudest second in the window, it decays when the burst scrolls out
+     */
+    lv_coord_t window = 0;
+    for( int i = 0 ; i < WIFIMON_POINTS ; i++ )
+        if( wifimon_peak[ i ] > window )
+            window = wifimon_peak[ i ];
+
+    size_t steps = sizeof( wifimon_range_steps ) / sizeof( wifimon_range_steps[ 0 ] );
+    lv_coord_t range = wifimon_range_steps[ steps - 1 ];
+    for( size_t i = 0 ; i < steps ; i++ ) {
+        if( window <= wifimon_range_steps[ i ] ) {
+            range = wifimon_range_steps[ i ];
+            break;
+        }
+    }
+
+    if( range != wifimon_range ) {
+        wifimon_range = range;
+        lv_chart_set_y_range( chart, LV_CHART_AXIS_PRIMARY_Y, 0, wifimon_range );
+        wf_label_printf( wifimon_scale_label, chart, LV_ALIGN_IN_TOP_RIGHT, -THEME_PADDING, WIFIMON_LABEL_Y, "%d", wifimon_range );
+    }
     /**
      * add seria data
      */
-    lv_chart_set_next(chart, ser1, mgmt);
-    lv_chart_set_next(chart, ser2, data);
-    lv_chart_set_next(chart, ser3, misc);
+    if( mgmt_count > wifimon_range ) mgmt_count = wifimon_range;
+    if( data_count > wifimon_range ) data_count = wifimon_range;
+    if( misc_count > wifimon_range ) misc_count = wifimon_range;
+
+    lv_chart_set_next( chart, ser1, mgmt_count );
+    lv_chart_set_next( chart, ser2, data_count );
+    lv_chart_set_next( chart, ser3, misc_count );
     /**
      * refresh chart
      */
-    lv_chart_refresh(chart);
-    /**
-     * reset packet counter
-     */
-    data = 0;
-    mgmt = 0;
-    misc = 0; 
+    lv_chart_refresh( chart );
 }
 
