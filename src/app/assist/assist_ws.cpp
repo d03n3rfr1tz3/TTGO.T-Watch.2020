@@ -538,7 +538,7 @@ static void assist_ws_handle_event( JsonDocument &doc ) {
         assist_ws_set_message( data["code"] | "run error" );
         log_e("assist: run error, %s", data["message"] | "" );
     }
-    else if( strcmp( event, "stt-start" ) && strcmp( event, "stt-vad-start" ) && strcmp( event, "tts-start" ) ) {
+    else if( strcmp( event, "stt-start" ) && strcmp( event, "stt-vad-start" ) && strcmp( event, "intent-start" ) && strcmp( event, "tts-start" ) ) {
         log_i("assist: event %s", event );
     }
 }

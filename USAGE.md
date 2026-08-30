@@ -292,6 +292,20 @@ Set "Output filtering" to trasmit the sentences: RMB,RMC,APB
 Contact [fliuzzi02](https://github.com/fliuzzi02) for further info and help.
 Some improvements might come in the future.
 
+## Assist
+
+The voice assistant of Home Assistant on your wrist. Tap the button, ask your question and the watch
+shows what it understood and what Home Assistant answered. With `speak answer` turned on, the answer
+is spoken as well, using the voice of your pipeline.
+
+Pairing works with a QR code, so no long token has to be typed on the watch. The pairing tile shows
+the code, your phone confirms it in Home Assistant and the watch issues its own token afterwards.
+Only the pipeline is left to choose, if you have more than one.
+
+Needs a microphone, so this app is only built for the T-Watch 2020 V3.
+
+![screenshot](images/assist.png)
+
 ## Calc
 
 A simple calculator.
@@ -324,6 +338,21 @@ on a buzzer in a specific project.
 
 ![screenshot](images/mqtt_control.png)
 
+## NetTools
+
+Wake-on-LAN for the machines at home. Every configured target gets its own button and a tap sends the
+magic packet, to the broadcast address of the current network as well, because some access points drop
+the limited broadcast.
+
+Since nobody knows the MAC address of his devices by heart, there is a small sniffer next to it. It
+listens for wake, DHCP and NetBIOS packets and offers what it has seen, so you can just power on a
+device once and pick it from the list.
+
+## Ping
+
+Ping, traceroute and a simple port check, for the moment when the WiFi feels broken and the computer is
+two rooms away. Enter a host name or an IP, pick the tool and read the result on the watch.
+
 ## Pong
 
 Based on some groundwork of [bwagstaff](https://github.com/bwagstaff), that can be found here: https://github.com/bwagstaff/My-TTGO-Watch/tree/master/src/app/games
@@ -338,12 +367,48 @@ An app to view the state and progress of my 3D Printer. Uses G-Codes over WiFi t
 
 ![screenshot](images/printer3d.png)
 
+## Sound Analyzer
+
+A small measurement kit for the microphone. It has a waterfall over time, a third octave spectrum, an
+oscilloscope and a tone generator with the 20 third octave center frequencies from 100 Hz to 8 kHz. The
+header always shows the loudest frequency and the level in dB SPL.
+
+I use it to find out which of my devices is humming, and the tone generator to check if a speaker still
+does what it should.
+
+Needs a microphone, so this app is only built for the T-Watch 2020 V3.
+
+![screenshot](images/analyzer1.png)
+![screenshot](images/analyzer2.png)
+
+## Sound Meter
+
+A sound level meter and nothing else. It shows the current level in dB SPL, a bar for the eye and the
+loudest peak since you entered the app.
+
+Needs a microphone, so this app is only built for the T-Watch 2020 V3.
+
+![screenshot](images/soundmeter.png)
+
 ## TiltMouse
 
 A Bluetooth mouse using the Accelerometer of the T-Watch 2020, that you can connect to your PC or
 even your android device. Getting it to connect can be hard on some devices, but should work fine on most.
 
 ![screenshot](images/tiltmouse.png)
+
+## Voice Recorder
+
+Records up to ten seconds per take and stores them as wav files in `/rec/`. The list tile plays them
+back, a long touch renames a recording and the trash can deletes it.
+
+Choose a gain that fits your distance to the watch, a low quality recording halves the size by storing
+8 bit instead of 16 bit samples. Recordings stop early when the flash runs low, so the rest of the watch
+keeps working.
+
+Needs a microphone, so this app is only built for the T-Watch 2020 V3.
+
+![screenshot](images/voicerec.png)
 
 ## WeatherStation
 
