@@ -82,6 +82,224 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t dept
 uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t depth );
 static uri_load_dsc_t *uri_load_to_ram_depth( const char *uri, progress_cb_t *progresscb, uint8_t depth );
 
+#ifndef NATIVE_64BIT
+    /**
+     * @brief grow the data buffer, doubling, the extra byte holds the string terminator
+     *
+     * @param   uri_load_dsc    descriptor to grow
+     * @param   alloc           current allocation, updated on success
+     * @param   need            bytes about to be written
+     *
+     * @return  true if success
+     */
+    static bool uri_load_reserve( uri_load_dsc_t *uri_load_dsc, uint32_t *alloc, uint32_t need ) {
+        if ( uri_load_dsc->size + need > URI_LOAD_MAX_STREAM_SIZE ) {
+            URI_LOAD_ERROR_LOG("download exceeds %d bytes", URI_LOAD_MAX_STREAM_SIZE );
+            return( false );
+        }
+
+        if ( uri_load_dsc->size + need + 1 <= *alloc ) {
+            return( true );
+        }
+
+        uint32_t new_alloc = *alloc ? *alloc : URI_BLOCK_SIZE * 4;
+        while ( new_alloc < uri_load_dsc->size + need + 1 ) {
+            new_alloc *= 2;
+        }
+
+        uint8_t *ptr = (uint8_t*)REALLOC( uri_load_dsc->data, new_alloc );
+        if ( !ptr ) {
+            URI_LOAD_ERROR_LOG("data alloc failed, %d bytes", new_alloc );
+            return( false );
+        }
+
+        uri_load_dsc->data = ptr;
+        *alloc = new_alloc;
+
+        return( true );
+    }
+    /**
+     * @brief read one crlf terminated line, gives the cpu away while it waits
+     *
+     * @param   stream      open stream
+     * @param   line        buffer for the line, always terminated
+     * @param   len         size of the line buffer
+     * @param   timeout     abort after this many milliseconds without data
+     *
+     * @return  true if a line was read
+     */
+    static bool uri_load_read_line( WiFiClient *stream, char *line, size_t len, uint32_t timeout ) {
+        uint32_t last_progress = millis();
+        size_t pos = 0;
+
+        line[ 0 ] = '\0';
+
+        while ( true ) {
+            if ( stream->available() ) {
+                int c = stream->read();
+
+                if ( c < 0 ) {
+                    continue;
+                }
+                if ( c == '\n' ) {
+                    line[ pos ] = '\0';
+                    return( true );
+                }
+                if ( c != '\r' && pos < len - 1 ) {
+                    line[ pos++ ] = ( char )c;
+                }
+
+                last_progress = millis();
+            }
+            else {
+                if ( !stream->connected() ) {
+                    return( false );
+                }
+                delay( 5 );
+                if ( millis() - last_progress > timeout ) {
+                    return( false );
+                }
+            }
+        }
+    }
+    /**
+     * @brief read data into the descriptor, gives the cpu away while it waits
+     *
+     * @param   uri_load_dsc    descriptor to write the data into
+     * @param   alloc           current allocation, updated while growing
+     * @param   stream          open stream
+     * @param   len             bytes to read, negative reads until the peer closes
+     * @param   timeout         abort after this many milliseconds without data
+     *
+     * @return  bytes read, -1 on error
+     */
+    static int32_t uri_load_read_data( uri_load_dsc_t *uri_load_dsc, uint32_t *alloc, WiFiClient *stream, int32_t len, uint32_t timeout ) {
+        uint32_t last_progress = millis();
+        int32_t bytes_read = 0;
+
+        while ( len < 0 || bytes_read < len ) {
+            int available = stream->available();
+
+            if ( available > 0 ) {
+                uint32_t chunk = available > URI_BLOCK_SIZE ? URI_BLOCK_SIZE : available;
+
+                if ( len >= 0 && chunk > ( uint32_t )( len - bytes_read ) ) {
+                    chunk = len - bytes_read;
+                }
+                if ( !uri_load_reserve( uri_load_dsc, alloc, chunk ) ) {
+                    return( -1 );
+                }
+
+                int c = stream->read( uri_load_dsc->data + uri_load_dsc->size, chunk );
+                if ( c <= 0 ) {
+                    continue;
+                }
+
+                uri_load_dsc->size += c;
+                bytes_read += c;
+                last_progress = millis();
+            }
+            else {
+                /**
+                 * a closed connection ends an unknown length, but only after the buffer ran dry
+                 */
+                if ( !stream->connected() ) {
+                    if ( len < 0 ) {
+                        break;
+                    }
+                    URI_LOAD_ERROR_LOG("download closed early, %d bytes", uri_load_dsc->size );
+                    return( -1 );
+                }
+
+                delay( 5 );
+                if ( millis() - last_progress > timeout ) {
+                    URI_LOAD_ERROR_LOG("download stalled, %d bytes", uri_load_dsc->size );
+                    return( -1 );
+                }
+            }
+        }
+
+        return( bytes_read );
+    }
+    /**
+     * @brief load a body without a content length, chunked or terminated by the connection close
+     *
+     * @param   uri_load_dsc    descriptor to write the data into
+     * @param   download_client an open client, right after a successful GET
+     *
+     * @return  true if success
+     */
+    static bool uri_load_body_to_ram( uri_load_dsc_t *uri_load_dsc, HTTPClient &download_client ) {
+        WiFiClient *stream = download_client.getStreamPtr();
+        bool chunked = download_client.header("Transfer-Encoding").equalsIgnoreCase("chunked");
+        uint32_t timeout = URI_LOAD_STREAM_TIMEOUT;
+        uint32_t alloc = 0;
+        bool success = true;
+
+        if ( !stream ) {
+            URI_LOAD_ERROR_LOG("no stream");
+            return( false );
+        }
+        /**
+         * unchunk here, HTTPClient does it only in writeToStream, and that one spins without
+         * a yield while it waits for the next chunk header
+         */
+        if ( chunked ) {
+            char line[ 32 ] = "";
+
+            while ( success ) {
+                if ( !uri_load_read_line( stream, line, sizeof( line ), timeout ) ) {
+                    URI_LOAD_ERROR_LOG("chunk header missing, %d bytes", uri_load_dsc->size );
+                    success = false;
+                    break;
+                }
+
+                int32_t len = strtol( line, NULL, 16 );
+                if ( len <= 0 ) {
+                    break;
+                }
+                if ( uri_load_read_data( uri_load_dsc, &alloc, stream, len, timeout ) != len ) {
+                    success = false;
+                    break;
+                }
+
+                uri_load_read_line( stream, line, sizeof( line ), timeout );
+                timeout = URI_LOAD_STALL_TIMEOUT;
+            }
+        }
+        else {
+            success = uri_load_read_data( uri_load_dsc, &alloc, stream, -1, timeout ) >= 0;
+        }
+
+        if ( !success ) {
+            return( false );
+        }
+
+        if ( !uri_load_dsc->size ) {
+            URI_LOAD_ERROR_LOG("download empty");
+            return( false );
+        }
+        /**
+         * terminate strings like the content length path does
+         */
+        uint8_t *ptr = (uint8_t*)REALLOC( uri_load_dsc->data, uri_load_dsc->size + 1 );
+        if ( !ptr ) {
+            URI_LOAD_ERROR_LOG("data alloc failed, %d bytes", uri_load_dsc->size + 1 );
+            return( false );
+        }
+        uri_load_dsc->data = ptr;
+        uri_load_dsc->data[ uri_load_dsc->size ] = '\0';
+
+        URI_LOAD_LOG("%d bytes without a content length, %s", uri_load_dsc->size, chunked ? "chunked" : "identity" );
+
+        if ( uri_load_dsc->progresscb ) {
+            uri_load_dsc->progresscb( 100 );
+        }
+
+        return( true );
+    }
+#endif
+
 uri_load_dsc_t *uri_load_to_ram( const char *uri, progress_cb_t *progresscb ) {
     return( uri_load_to_ram_depth( uri, progresscb, 0 ) );
 }
@@ -369,8 +587,8 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t dept
     }
 
 #else
-    const char * headerKeys[] = {"location", "redirect", "Content-Type", "Content-Length", "Content-Disposition" };
-    const size_t numberOfHeaders = 5;
+    const char * headerKeys[] = {"location", "redirect", "Content-Type", "Content-Length", "Content-Disposition", "Transfer-Encoding" };
+    const size_t numberOfHeaders = 6;
     /**
      * check if alloc was failed
      */
@@ -389,63 +607,76 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t dept
          * request successfull?
          */
         if ( httpCode == HTTP_CODE_OK  ) {
+            int content_length = download_client.getSize();                         /** @brief -1 if the server sends no content length */
             /**
-             * get file size and alloc memory for the file
+             * without a content length the body is chunked or ends with the connection
              */
-            uri_load_dsc->size = download_client.getSize();
-            uri_load_dsc->data = (uint8_t*)CALLOC( 1, uri_load_dsc->size + 1 );
-            URI_LOAD_LOG("uri_load_dsc->data: alloc %d bytes at %p", uri_load_dsc->size, uri_load_dsc->data );
-            /**
-             * check if alloc success
-             */
-            if ( uri_load_dsc->data ) {
-                /**
-                 * setup data write counter/pointer/buffer and data stream
-                 */
-                uint32_t bytes_left = uri_load_dsc->size;                           /** @brief download left byte counter */
-                uint8_t *data_write_p = uri_load_dsc->data;                         /** @brief write pointer for the raw file download */
-                WiFiClient *download_stream = download_client.getStreamPtr();       /** @brief get streampointer */
-                uint32_t last_progress = millis();                                  /** @brief timestamp of the last received chunk */
-                /**
-                 * get download data
-                 */
-                while( download_client.connected() && ( bytes_left > 0 ) ) {
-                    /**
-                     * get bytes in buffer and store them
-                     */
-                    size_t size = download_stream->available();
-                    if ( size > 0 ) {
-                        size_t c = download_stream->readBytes( data_write_p, size < bytes_left ? size : bytes_left );
-                        bytes_left -= c;
-                        data_write_p = data_write_p + c;
-                        if ( uri_load_dsc->progresscb ) {
-                            uri_load_dsc->progresscb( ( 100 * ( uri_load_dsc->size - bytes_left ) ) / uri_load_dsc->size );
-                        }
-                        last_progress = millis();
-                    }
-                    else {
-                        /**
-                         * give the cpu to other tasks and abort if the download stalls
-                         */
-                        delay( 5 );
-                        if ( millis() - last_progress > URI_LOAD_STALL_TIMEOUT ) {
-                            URI_LOAD_ERROR_LOG("download stalled");
-                            break;
-                        }
-                    }
-                }
-                if ( bytes_left != 0 ) {
-                    URI_LOAD_ERROR_LOG("download failed");
+            if ( content_length <= 0 ) {
+                if ( !uri_load_body_to_ram( uri_load_dsc, download_client ) ) {
                     download_client.end();
                     uri_load_free_all( uri_load_dsc );
                     return( NULL );
                 }
             }
             else {
-                URI_LOAD_ERROR_LOG("data alloc failed, %d bytes", uri_load_dsc->size );
-                download_client.end();
-                uri_load_free_all( uri_load_dsc );
-                return( NULL );
+                /**
+                 * get file size and alloc memory for the file
+                 */
+                uri_load_dsc->size = content_length;
+                uri_load_dsc->data = (uint8_t*)CALLOC( 1, uri_load_dsc->size + 1 );
+                URI_LOAD_LOG("uri_load_dsc->data: alloc %d bytes at %p", uri_load_dsc->size, uri_load_dsc->data );
+                /**
+                 * check if alloc success
+                 */
+                if ( uri_load_dsc->data ) {
+                    /**
+                     * setup data write counter/pointer/buffer and data stream
+                     */
+                    uint32_t bytes_left = uri_load_dsc->size;                           /** @brief download left byte counter */
+                    uint8_t *data_write_p = uri_load_dsc->data;                         /** @brief write pointer for the raw file download */
+                    WiFiClient *download_stream = download_client.getStreamPtr();       /** @brief get streampointer */
+                    uint32_t last_progress = millis();                                  /** @brief timestamp of the last received chunk */
+                    /**
+                     * get download data
+                     */
+                    while( download_client.connected() && ( bytes_left > 0 ) ) {
+                        /**
+                         * get bytes in buffer and store them
+                         */
+                        size_t size = download_stream->available();
+                        if ( size > 0 ) {
+                            size_t c = download_stream->readBytes( data_write_p, size < bytes_left ? size : bytes_left );
+                            bytes_left -= c;
+                            data_write_p = data_write_p + c;
+                            if ( uri_load_dsc->progresscb ) {
+                                uri_load_dsc->progresscb( ( 100 * ( uri_load_dsc->size - bytes_left ) ) / uri_load_dsc->size );
+                            }
+                            last_progress = millis();
+                        }
+                        else {
+                            /**
+                             * give the cpu to other tasks and abort if the download stalls
+                             */
+                            delay( 5 );
+                            if ( millis() - last_progress > URI_LOAD_STALL_TIMEOUT ) {
+                                URI_LOAD_ERROR_LOG("download stalled");
+                                break;
+                            }
+                        }
+                    }
+                    if ( bytes_left != 0 ) {
+                        URI_LOAD_ERROR_LOG("download failed");
+                        download_client.end();
+                        uri_load_free_all( uri_load_dsc );
+                        return( NULL );
+                    }
+                }
+                else {
+                    URI_LOAD_ERROR_LOG("data alloc failed, %d bytes", uri_load_dsc->size );
+                    download_client.end();
+                    uri_load_free_all( uri_load_dsc );
+                    return( NULL );
+                }
             }
         }
         else {
@@ -455,10 +686,10 @@ uri_load_dsc_t *uri_load_http_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t dept
              */
             if ( httpCode == 301 || httpCode == 302 ) {
                 if ( download_client.header("location") != "" ) {
-                    location = download_client.header("location");    
+                    location = download_client.header("location");
                 }
                 else {
-                    location = download_client.header("redirect");    
+                    location = download_client.header("redirect");
                 }
                 URI_LOAD_INFO_LOG("301/302 redirect to: %s", location.c_str() );
             }
@@ -600,8 +831,8 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t dep
     }
 
 #else
-    const char * headerKeys[] = {"location", "redirect", "Content-Type", "Content-Length", "Content-Disposition" };
-    const size_t numberOfHeaders = 5;
+    const char * headerKeys[] = {"location", "redirect", "Content-Type", "Content-Length", "Content-Disposition", "Transfer-Encoding" };
+    const size_t numberOfHeaders = 6;
     /**
      * check if alloc was failed
      */
@@ -623,53 +854,12 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t dep
          * request successfull?
          */
         if ( httpCode == HTTP_CODE_OK  ) {
+            int content_length = download_client.getSize();                         /** @brief -1 if the server sends no content length */
             /**
-             * get file size and alloc memory for the file
+             * without a content length the body is chunked or ends with the connection
              */
-            uri_load_dsc->size = download_client.getSize();
-            uri_load_dsc->data = (uint8_t*)CALLOC( 1, uri_load_dsc->size + 1 );
-            URI_LOAD_LOG("uri_load_dsc->data: alloc %d bytes at %p", uri_load_dsc->size, uri_load_dsc->data );
-            /**
-             * check if alloc success
-             */
-            if ( uri_load_dsc->data ) {
-                /**
-                 * setup data write counter/pointer/buffer and data stream
-                 */
-                uint32_t bytes_left = uri_load_dsc->size;                           /** @brief download left byte counter */
-                uint8_t *data_write_p = uri_load_dsc->data;                         /** @brief write pointer for the raw file download */
-                WiFiClient *download_stream = download_client.getStreamPtr();       /** @brief get streampointer */
-                uint32_t last_progress = millis();                                  /** @brief timestamp of the last received chunk */
-                /**
-                 * get download data
-                 */
-                while( download_client.connected() && ( bytes_left > 0 ) ) {
-                    /**
-                     * get bytes in buffer and store them
-                     */
-                    size_t size = download_stream->available();
-                    if ( size > 0 ) {
-                        size_t c = download_stream->readBytes( data_write_p, size < bytes_left ? size : bytes_left );
-                        bytes_left -= c;
-                        data_write_p = data_write_p + c;
-                        if ( uri_load_dsc->progresscb ) {
-                            uri_load_dsc->progresscb( ( 100 * ( uri_load_dsc->size - bytes_left ) ) / uri_load_dsc->size );
-                        }
-                        last_progress = millis();
-                    }
-                    else {
-                        /**
-                         * give the cpu to other tasks and abort if the download stalls
-                         */
-                        delay( 5 );
-                        if ( millis() - last_progress > URI_LOAD_STALL_TIMEOUT ) {
-                            URI_LOAD_ERROR_LOG("download stalled");
-                            break;
-                        }
-                    }
-                }
-                if ( bytes_left != 0 ) {
-                    URI_LOAD_ERROR_LOG("download failed");
+            if ( content_length <= 0 ) {
+                if ( !uri_load_body_to_ram( uri_load_dsc, download_client ) ) {
                     download_client.end();
                     client.stop();
                     uri_load_free_all( uri_load_dsc );
@@ -678,12 +868,68 @@ uri_load_dsc_t *uri_load_https_to_ram( uri_load_dsc_t *uri_load_dsc, uint8_t dep
                 }
             }
             else {
-                URI_LOAD_ERROR_LOG("data alloc failed, %d bytes", uri_load_dsc->size );
-                download_client.end();
-                client.stop();
-                uri_load_free_all( uri_load_dsc );
-                heap_caps_malloc_extmem_enable( 16 * 1024 );
-                return( NULL );
+                /**
+                 * get file size and alloc memory for the file
+                 */
+                uri_load_dsc->size = content_length;
+                uri_load_dsc->data = (uint8_t*)CALLOC( 1, uri_load_dsc->size + 1 );
+                URI_LOAD_LOG("uri_load_dsc->data: alloc %d bytes at %p", uri_load_dsc->size, uri_load_dsc->data );
+                /**
+                 * check if alloc success
+                 */
+                if ( uri_load_dsc->data ) {
+                    /**
+                     * setup data write counter/pointer/buffer and data stream
+                     */
+                    uint32_t bytes_left = uri_load_dsc->size;                           /** @brief download left byte counter */
+                    uint8_t *data_write_p = uri_load_dsc->data;                         /** @brief write pointer for the raw file download */
+                    WiFiClient *download_stream = download_client.getStreamPtr();       /** @brief get streampointer */
+                    uint32_t last_progress = millis();                                  /** @brief timestamp of the last received chunk */
+                    /**
+                     * get download data
+                     */
+                    while( download_client.connected() && ( bytes_left > 0 ) ) {
+                        /**
+                         * get bytes in buffer and store them
+                         */
+                        size_t size = download_stream->available();
+                        if ( size > 0 ) {
+                            size_t c = download_stream->readBytes( data_write_p, size < bytes_left ? size : bytes_left );
+                            bytes_left -= c;
+                            data_write_p = data_write_p + c;
+                            if ( uri_load_dsc->progresscb ) {
+                                uri_load_dsc->progresscb( ( 100 * ( uri_load_dsc->size - bytes_left ) ) / uri_load_dsc->size );
+                            }
+                            last_progress = millis();
+                        }
+                        else {
+                            /**
+                             * give the cpu to other tasks and abort if the download stalls
+                             */
+                            delay( 5 );
+                            if ( millis() - last_progress > URI_LOAD_STALL_TIMEOUT ) {
+                                URI_LOAD_ERROR_LOG("download stalled");
+                                break;
+                            }
+                        }
+                    }
+                    if ( bytes_left != 0 ) {
+                        URI_LOAD_ERROR_LOG("download failed");
+                        download_client.end();
+                        client.stop();
+                        uri_load_free_all( uri_load_dsc );
+                        heap_caps_malloc_extmem_enable( 16 * 1024 );
+                        return( NULL );
+                    }
+                }
+                else {
+                    URI_LOAD_ERROR_LOG("data alloc failed, %d bytes", uri_load_dsc->size );
+                    download_client.end();
+                    client.stop();
+                    uri_load_free_all( uri_load_dsc );
+                    heap_caps_malloc_extmem_enable( 16 * 1024 );
+                    return( NULL );
+                }
             }
         }
         else {

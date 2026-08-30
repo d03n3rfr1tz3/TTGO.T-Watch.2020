@@ -31,6 +31,8 @@
     #define URI_BLOCK_SIZE      4096
     #define URI_LOAD_MAX_REDIRECT   5
     #define URI_LOAD_STALL_TIMEOUT  5000
+    #define URI_LOAD_STREAM_TIMEOUT     15000               /** @brief patience for the first byte, the server may still be creating it */
+    #define URI_LOAD_MAX_STREAM_SIZE    ( 1024 * 1024 )     /** @brief cap for answers without a content length */
 
     /**
      * @brief typedef for the callback function call

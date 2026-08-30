@@ -37,11 +37,13 @@
     #if defined( M5PAPER )
     #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         #include "TTGO.h"
+        #include "utils/alloc.h"
 
         #include "AudioFileSourceSPIFFS.h"
         #include "AudioFileSourcePROGMEM.h"
         #include "AudioFileSourceFunction.h"
         #include "AudioFileSourceID3.h"
+        #include "AudioGenerator.h"
         #include "AudioGeneratorMP3.h"
         #include "AudioGeneratorWAV.h"
         #include "AudioGeneratorRTTTL.h"
@@ -70,6 +72,13 @@
 
         AudioGeneratorWAV *sound_spiffs_wav = NULL;
         AudioFileSourceSPIFFS *sound_spiffs_wav_file = NULL;
+
+        AudioGenerator *sound_ram_audio = NULL;                                     /** @brief wav or mp3, depending on the data */
+        AudioFileSourcePROGMEM *sound_ram_audio_file = NULL;
+        void *sound_ram_audio_space = NULL;                                         /** @brief mp3 decoder buffers, psram instead of the internal heap */
+
+        #define SOUND_RAM_AUDIO_HEADER  12                                          /** @brief bytes needed to tell wav from mp3 */
+        #define SOUND_RAM_AUDIO_GAIN    1.0f                                        /** @brief AudioOutput::Amplify() clips hard above this */
 
         #define SOUND_TONE_RATE         32000                                       /** @brief four samples per period at the highest tone */
         #define SOUND_TONE_SECONDS      30.0f                                       /** @brief length of the generated source */
@@ -248,7 +257,7 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         if ( sound_config.enable && sound_init ) {
-            if ( mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() ) || ( sound_tone && sound_tone->isRunning() ) || ( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) )
+            if ( mp3->isRunning() || wav->isRunning() || ( rtttl && rtttl->isRunning() ) || ( sound_tone && sound_tone->isRunning() ) || ( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) || ( sound_ram_audio && sound_ram_audio->isRunning() ) )
                 sound_boost_take();
 
             if ( mp3->isRunning() && !mp3->loop() ) {
@@ -271,8 +280,12 @@ bool sound_powermgm_loop_cb( EventBits_t event, void *arg ) {
                 log_d("stop playing spiffs wav sound");
                 sound_spiffs_wav->stop();
             }
+            if ( sound_ram_audio && sound_ram_audio->isRunning() && !sound_ram_audio->loop() ) {
+                log_d("stop playing ram audio");
+                sound_ram_audio->stop();
+            }
 
-            if ( !mp3->isRunning() && !wav->isRunning() && !( rtttl && rtttl->isRunning() ) && !( sound_tone && sound_tone->isRunning() ) && !( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) )
+            if ( !mp3->isRunning() && !wav->isRunning() && !( rtttl && rtttl->isRunning() ) && !( sound_tone && sound_tone->isRunning() ) && !( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) && !( sound_ram_audio && sound_ram_audio->isRunning() ) )
                 sound_boost_give();
         }
     #endif
@@ -352,6 +365,7 @@ void sound_set_enabled( bool enabled ) {
                 if ( rtttl && rtttl->isRunning() ) rtttl->stop();
                 if ( sound_tone && sound_tone->isRunning() ) sound_tone->stop();
                 if ( sound_spiffs_wav && sound_spiffs_wav->isRunning() ) sound_spiffs_wav->stop();
+                if ( sound_ram_audio && sound_ram_audio->isRunning() ) sound_ram_audio->stop();
                 sound_boost_give();
             }
             /**
@@ -649,6 +663,105 @@ bool sound_spiffs_wav_is_running( void ) {
 #else
     #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
         return( sound_spiffs_wav && sound_spiffs_wav->isRunning() );
+    #else
+        return( false );
+    #endif
+#endif
+}
+
+void sound_play_ram_audio( const void *data, uint32_t len, sound_type_t sound_type ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        if ( !data || len < SOUND_RAM_AUDIO_HEADER ) {
+            log_e("Cannot play ram audio, no data");
+            return;
+        }
+
+        const uint8_t *header = ( const uint8_t* )data;
+        bool is_wav = !memcmp( header, "RIFF", 4 ) && !memcmp( header + 8, "WAVE", 4 );
+
+        if ( sound_config.enable && sound_init ) {
+            if ( sound_type == SOUND_TYPE_FOREGROUND || !sound_is_silenced() ) {
+                sound_set_enabled( sound_config.enable );
+                /**
+                 * a full scale stream clips above gain 1.0
+                 */
+                float gain = 3.5f * ( sound_config.volume / 100.0f );
+                out->SetGain( gain > SOUND_RAM_AUDIO_GAIN ? SOUND_RAM_AUDIO_GAIN : gain );
+                log_d("playing %s from ram, %d bytes", is_wav ? "wav" : "mp3", len );
+
+                if ( sound_ram_audio ) {
+                    if ( sound_ram_audio->isRunning() ) sound_ram_audio->stop();
+                    delete sound_ram_audio;
+                }
+                if ( sound_ram_audio_file ) {
+                    delete sound_ram_audio_file;
+                }
+
+                if ( is_wav ) {
+                    sound_ram_audio = ( AudioGenerator* )new AudioGeneratorWAV();
+                }
+                else {
+                    /**
+                     * libmad wants about 20k, keep it out of the internal heap
+                     */
+                    if ( !sound_ram_audio_space )
+                        sound_ram_audio_space = MALLOC( AudioGeneratorMP3::preAllocSize() );
+
+                    sound_ram_audio = sound_ram_audio_space
+                                    ? ( AudioGenerator* )new AudioGeneratorMP3( sound_ram_audio_space, AudioGeneratorMP3::preAllocSize() )
+                                    : ( AudioGenerator* )new AudioGeneratorMP3();
+                }
+                sound_ram_audio_file = new AudioFileSourcePROGMEM( data, len );
+
+                if ( !sound_ram_audio->begin( sound_ram_audio_file, out ) ) {
+                    log_e("Cannot play ram audio, %s generator failed", is_wav ? "wav" : "mp3" );
+                    return;
+                }
+
+                sound_boost_take();
+            }
+            else {
+                log_d("Cannot play ram audio, sound is silenced");
+            }
+        } else {
+            log_d("Cannot play ram audio, sound is disabled");
+        }
+    #endif
+#endif
+}
+
+void sound_stop_ram_audio( void ) {
+    /**
+     * check if sound available
+     */
+    if( !sound_get_available() ) {
+        return;
+    }
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        if ( sound_ram_audio && sound_ram_audio->isRunning() )
+            sound_ram_audio->stop();
+    #endif
+#endif
+}
+
+bool sound_ram_audio_is_running( void ) {
+#ifdef NATIVE_64BIT
+    return( false );
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
+        return( sound_ram_audio && sound_ram_audio->isRunning() );
     #else
         return( false );
     #endif

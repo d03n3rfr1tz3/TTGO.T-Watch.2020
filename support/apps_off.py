@@ -19,6 +19,7 @@ NEEDS_IR = [
 ]
 NEEDS_MIC = [
     "app/analyzer",
+    "app/assist",
     "app/soundmeter",
     "app/voicerec",
 ]
