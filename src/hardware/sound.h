@@ -105,6 +105,26 @@
      */
     bool sound_spiffs_wav_is_running( void );
     /**
+     * @brief play a wave or mp3 stream from RAM, the format is taken from the data
+     *
+     * The buffer belongs to the caller and must stay valid until the playback ended.
+     *
+     * @param   data            pointer to the audio data, PSRAM is fine
+     * @param   len             data length
+     * @param   sound_type      SOUND_TYPE_FOREGROUND ignores the silence timeframe, SOUND_TYPE_BACKGROUND respects it
+     */
+    void sound_play_ram_audio( const void *data, uint32_t len, sound_type_t sound_type );
+    /**
+     * @brief stop a running stream from RAM
+     */
+    void sound_stop_ram_audio( void );
+    /**
+     * @brief check if a stream from RAM is playing
+     *
+     * @return true if a stream from RAM is playing
+     */
+    bool sound_ram_audio_is_running( void );
+    /**
      * @brief setup sound
      */
     void sound_setup( void );

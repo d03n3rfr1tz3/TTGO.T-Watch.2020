@@ -25,6 +25,7 @@
 #include "assist_app_main.h"
 #include "assist_config.h"
 #include "assist_stream.h"
+#include "assist_tts.h"
 #include "assist_ws.h"
 
 #include "gui/mainbar/mainbar.h"
@@ -183,6 +184,7 @@ static void assist_app_main_hibernate_cb( void ) {
     assist_connect_wanted = false;
 
     assist_stream_abort();
+    assist_tts_stop();
     assist_config_save_dirty();
     assist_ws_disconnect();
 }
@@ -191,9 +193,11 @@ static void assist_app_main_lv_task( lv_task_t * task ) {
     assist_config_t *assist_config = assist_get_config();
     assist_ws_run_t run = assist_ws_get_run();
     assist_stream_state_t stream = assist_stream_get_state();
+    assist_tts_state_t tts = assist_tts_get_state();
     bool recording = ( stream == ASSIST_STREAM_RECORDING );
     bool waiting = ( run == ASSIST_RUN_STARTING || run == ASSIST_RUN_LISTENING || run == ASSIST_RUN_THINKING );
-    bool busy = recording || waiting || stream == ASSIST_STREAM_SENDING;
+    bool speaking = ( tts == ASSIST_TTS_LOADING || tts == ASSIST_TTS_READY || tts == ASSIST_TTS_SPEAKING );
+    bool busy = recording || waiting || speaking || stream == ASSIST_STREAM_SENDING;
     const char *message = assist_ws_get_message();
     int16_t level = 0;
 
@@ -204,7 +208,7 @@ static void assist_app_main_lv_task( lv_task_t * task ) {
         assist_stream_abort();
         assist_no_answer = true;
         waiting = false;
-        busy = recording;
+        busy = recording || speaking;
     }
 
     if( recording )
@@ -220,6 +224,11 @@ static void assist_app_main_lv_task( lv_task_t * task ) {
 
     if( assist_ws_take_text() )
         lv_label_set_text( assist_answer_label, assist_ws_get_answer() );
+
+    if( assist_ws_take_tts() && assist_speak )
+        assist_tts_fetch( assist_ws_get_tts_url() );
+
+    assist_tts_update();
 
     if( recording )
         level = ( int16_t )( ( micctl_dbfs_to_spl( assist_stream_get_level_db() ) - ASSIST_SPL_FLOOR ) * 100.0f / ( ASSIST_SPL_CEIL - ASSIST_SPL_FLOOR ) );
@@ -247,7 +256,8 @@ static void assist_app_main_talk_event_cb( lv_obj_t * obj, lv_event_t event ) {
                                         lv_label_set_text( assist_answer_label, "" );
                                         assist_no_answer = false;
                                         assist_run_start = millis();
-                                        assist_stream_start( assist_config->pipeline, assist_config->gain );
+                                        assist_tts_stop();
+                                        assist_stream_start( assist_config->pipeline, assist_config->gain, assist_speak );
                                         break;
     }
 }
@@ -262,6 +272,7 @@ static void assist_app_main_send_event_cb( lv_obj_t * obj, lv_event_t event ) {
 static void assist_app_main_cancel_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):       assist_stream_abort();
+                                        assist_tts_stop();
                                         break;
     }
 }
@@ -291,6 +302,7 @@ static void assist_app_main_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
 static void assist_app_main_exit_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):       assist_stream_abort();
+                                        assist_tts_stop();
                                         mainbar_jump_back();
                                         break;
     }

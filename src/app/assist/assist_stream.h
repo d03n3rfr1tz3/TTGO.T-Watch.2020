@@ -68,8 +68,9 @@
      *
      * @param   pipeline        pipeline id, empty lets home assistant pick its preferred one
      * @param   gain_index      entry of ASSIST_GAIN_OPTIONS
+     * @param   tts             true asks home assistant for a spoken answer
      */
-    bool assist_stream_start( const char *pipeline, uint8_t gain_index );
+    bool assist_stream_start( const char *pipeline, uint8_t gain_index, bool tts );
     /**
      * @brief end of speech, the rest of the ring is still sent, returns at once
      */

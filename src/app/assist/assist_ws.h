@@ -43,6 +43,7 @@
     #define ASSIST_WS_TRANSCRIPT_LEN    128
     #define ASSIST_WS_ANSWER_LEN        256
     #define ASSIST_WS_CONV_ID_LEN       64                          /** @brief a conversation id is an ulid, 26 chars */
+    #define ASSIST_WS_TTS_URL_LEN       192                         /** @brief home assistant sends a path, an absolute url still fits */
     #define ASSIST_WS_CLIENT_NAME_LEN   48                          /** @brief has to be unique per user in home assistant */
     #define ASSIST_WS_TOKEN_LIFESPAN    3650                        /** @brief days, ten years spares us any refresh logic */
     #define ASSIST_WS_PIPELINE_MAX      8                           /** @brief entries taken from the list, the rest is dropped */
@@ -112,8 +113,9 @@
      * every run gets its own id, events carrying another one are dropped
      *
      * @param   pipeline        pipeline id, empty lets home assistant pick its preferred one
+     * @param   tts             true ends the run at tts and delivers an audio url
      */
-    bool assist_ws_run( const char *pipeline );
+    bool assist_ws_run( const char *pipeline, bool tts );
     /**
      * @brief forget the run, late events are dropped by their id and home assistant times out on its own
      */
@@ -139,5 +141,13 @@
     bool assist_ws_take_text( void );
     const char *assist_ws_get_transcript( void );
     const char *assist_ws_get_answer( void );
+    /**
+     * @brief true once after tts-end brought an url, gui thread only
+     */
+    bool assist_ws_take_tts( void );
+    /**
+     * @brief the audio url of the last answer, a path relative to the host or absolute
+     */
+    const char *assist_ws_get_tts_url( void );
 
 #endif // _ASSIST_WS_H

@@ -50,6 +50,7 @@ static TaskHandle_t assist_stream_sender_task = NULL;
 
 static char assist_stream_pipeline[ ASSIST_PIPELINE_LEN ] = "";
 static float assist_stream_gain = 1.0f;
+static bool assist_stream_tts = false;
 static bool assist_stream_boost = false;
 
 static const float assist_stream_gain_table[ ASSIST_GAIN_COUNT ] = { 1.0f, 8.0f, 32.0f, 64.0f, 128.0f };
@@ -99,7 +100,7 @@ static void assist_stream_ring_put( const uint8_t *data, uint32_t len ) {
     assist_stream_ring_head = head;
 }
 
-bool assist_stream_start( const char *pipeline, uint8_t gain_index ) {
+bool assist_stream_start( const char *pipeline, uint8_t gain_index, bool tts ) {
     if( assist_stream_reader_task || assist_stream_sender_task )
         return( false );
 
@@ -112,6 +113,7 @@ bool assist_stream_start( const char *pipeline, uint8_t gain_index ) {
 
     snprintf( assist_stream_pipeline, sizeof( assist_stream_pipeline ), "%s", pipeline ? pipeline : "" );
     assist_stream_gain = assist_stream_get_gain( gain_index );
+    assist_stream_tts = tts;
     assist_stream_ring_head = 0;
     assist_stream_ring_tail = 0;
     assist_stream_samples = 0;
@@ -336,7 +338,7 @@ static bool assist_stream_send_chunk( void ) {
 }
 
 static void assist_stream_sender( void *arg ) {
-    if( !assist_ws_run( assist_stream_pipeline ) ) {
+    if( !assist_ws_run( assist_stream_pipeline, assist_stream_tts ) ) {
         log_e("assist: run command failed");
         assist_stream_abort_request = true;
     }

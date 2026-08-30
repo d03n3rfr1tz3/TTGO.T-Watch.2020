@@ -57,9 +57,11 @@ static volatile assist_ws_run_t assist_ws_run_state = ASSIST_RUN_OFF;
 static volatile uint32_t assist_ws_run_id = ASSIST_WS_ID_RUN;
 static volatile uint8_t assist_ws_handler_id = 0;
 static volatile bool assist_ws_text_fresh = false;
+static volatile bool assist_ws_tts_fresh = false;
 static char assist_ws_transcript[ ASSIST_WS_TRANSCRIPT_LEN ] = "";
 static char assist_ws_answer[ ASSIST_WS_ANSWER_LEN ] = "";
 static char assist_ws_conversation_id[ ASSIST_WS_CONV_ID_LEN ] = "";
+static char assist_ws_tts_url[ ASSIST_WS_TTS_URL_LEN ] = "";
 
 static bool assist_ws_powermgm_event_cb( EventBits_t event, void *arg );
 static void assist_ws_event_cb( void *arg, esp_event_base_t base, int32_t id, void *event_data );
@@ -209,7 +211,7 @@ const char *assist_ws_get_pipeline_id( uint8_t index ) {
     return( assist_ws_pipeline_id[ index ] );
 }
 
-bool assist_ws_run( const char *pipeline ) {
+bool assist_ws_run( const char *pipeline, bool tts ) {
     char pipeline_arg[ ASSIST_PIPELINE_LEN + 16 ] = "";
     char conversation_arg[ ASSIST_WS_CONV_ID_LEN + 24 ] = "";
     char buf[ ASSIST_PIPELINE_LEN + ASSIST_WS_CONV_ID_LEN + 224 ] = "";
@@ -225,14 +227,16 @@ bool assist_ws_run( const char *pipeline ) {
 
     assist_ws_transcript[ 0 ] = '\0';
     assist_ws_answer[ 0 ] = '\0';
+    assist_ws_tts_url[ 0 ] = '\0';
+    assist_ws_tts_fresh = false;
     assist_ws_handler_id = 0;
     assist_ws_run_id++;
     assist_ws_run_state = ASSIST_RUN_STARTING;
     assist_ws_text_fresh = true;
 
-    snprintf( buf, sizeof( buf ), "{\"id\":%u,\"type\":\"assist_pipeline/run\",\"start_stage\":\"stt\",\"end_stage\":\"intent\","
+    snprintf( buf, sizeof( buf ), "{\"id\":%u,\"type\":\"assist_pipeline/run\",\"start_stage\":\"stt\",\"end_stage\":\"%s\","
                                   "\"input\":{\"sample_rate\":%d},\"timeout\":%d%s%s}",
-              ( uint32_t )assist_ws_run_id, MICCTL_DEFAULT_SAMPLE_RATE, ASSIST_WS_HA_TIMEOUT, pipeline_arg, conversation_arg );
+              ( uint32_t )assist_ws_run_id, tts ? "tts" : "intent", MICCTL_DEFAULT_SAMPLE_RATE, ASSIST_WS_HA_TIMEOUT, pipeline_arg, conversation_arg );
 
     if( !assist_ws_send( buf, strlen( buf ), false ) ) {
         assist_ws_run_state = ASSIST_RUN_FAILED;
@@ -286,6 +290,19 @@ const char *assist_ws_get_transcript( void ) {
 
 const char *assist_ws_get_answer( void ) {
     return( assist_ws_answer );
+}
+
+bool assist_ws_take_tts( void ) {
+    if( !assist_ws_tts_fresh )
+        return( false );
+
+    assist_ws_tts_fresh = false;
+
+    return( true );
+}
+
+const char *assist_ws_get_tts_url( void ) {
+    return( assist_ws_tts_url );
 }
 
 static bool assist_ws_send( const char *data, uint32_t len, bool binary ) {
@@ -405,6 +422,7 @@ static void assist_ws_handle_message( const char *msg ) {
     filter["event"]["data"]["stt_output"]["text"] = true;
     filter["event"]["data"]["intent_output"]["conversation_id"] = true;
     filter["event"]["data"]["intent_output"]["response"]["speech"]["plain"]["speech"] = true;
+    filter["event"]["data"]["tts_output"]["url"] = true;
 
     DynamicJsonDocument doc( ASSIST_WS_JSON_SIZE );
 
@@ -504,6 +522,14 @@ static void assist_ws_handle_event( JsonDocument &doc ) {
         snprintf( assist_ws_conversation_id, sizeof( assist_ws_conversation_id ), "%s", data["intent_output"]["conversation_id"] | "" );
         assist_ws_text_fresh = true;
     }
+    else if( !strcmp( event, "tts-end" ) ) {
+        snprintf( assist_ws_tts_url, sizeof( assist_ws_tts_url ), "%s", data["tts_output"]["url"] | "" );
+
+        if( assist_ws_tts_url[ 0 ] )
+            assist_ws_tts_fresh = true;
+        else
+            log_e("assist: tts-end without an url");
+    }
     else if( !strcmp( event, "run-end" ) ) {
         assist_ws_run_state = ASSIST_RUN_DONE;
     }
@@ -512,7 +538,7 @@ static void assist_ws_handle_event( JsonDocument &doc ) {
         assist_ws_set_message( data["code"] | "run error" );
         log_e("assist: run error, %s", data["message"] | "" );
     }
-    else if( strcmp( event, "stt-start" ) && strcmp( event, "stt-vad-start" ) ) {
+    else if( strcmp( event, "stt-start" ) && strcmp( event, "stt-vad-start" ) && strcmp( event, "tts-start" ) ) {
         log_i("assist: event %s", event );
     }
 }
