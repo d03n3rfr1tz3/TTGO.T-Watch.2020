@@ -36,6 +36,13 @@
     #define ASSIST_WS_TASK_PRIO         3
     #define ASSIST_WS_ID_TOKEN          1                           /** @brief message id of the long lived token request */
     #define ASSIST_WS_ID_PIPELINES      2                           /** @brief message id of the pipeline list request */
+    #define ASSIST_WS_ID_RUN            3                           /** @brief first pipeline run, home assistant wants increasing ids per connection */
+    #define ASSIST_WS_RUN_TIMEOUT       35000                       /** @brief ms without run-end, a bit above the timeout home assistant gets */
+    #define ASSIST_WS_HA_TIMEOUT        30                          /** @brief seconds home assistant gives its own run */
+    #define ASSIST_WS_AUDIO_FRAME       1024                        /** @brief pcm bytes per binary frame, plus the handler byte it stays below the frame size */
+    #define ASSIST_WS_TRANSCRIPT_LEN    128
+    #define ASSIST_WS_ANSWER_LEN        256
+    #define ASSIST_WS_CONV_ID_LEN       64                          /** @brief a conversation id is an ulid, 26 chars */
     #define ASSIST_WS_CLIENT_NAME_LEN   48                          /** @brief has to be unique per user in home assistant */
     #define ASSIST_WS_TOKEN_LIFESPAN    3650                        /** @brief days, ten years spares us any refresh logic */
     #define ASSIST_WS_PIPELINE_MAX      8                           /** @brief entries taken from the list, the rest is dropped */
@@ -48,6 +55,15 @@
         ASSIST_WS_READY,
         ASSIST_WS_ERROR
     } assist_ws_state_t;
+
+    typedef enum {
+        ASSIST_RUN_OFF = 0,
+        ASSIST_RUN_STARTING,                                        /** @brief run sent, waiting for run-start */
+        ASSIST_RUN_LISTENING,                                       /** @brief the handler id is known, audio may flow */
+        ASSIST_RUN_THINKING,                                        /** @brief no more audio, waiting for the answer */
+        ASSIST_RUN_DONE,
+        ASSIST_RUN_FAILED
+    } assist_ws_run_t;
 
     /**
      * @brief register the standby handler, called once from assist_app_setup()
@@ -90,5 +106,38 @@
      * @brief the id belonging to an option, empty when out of range
      */
     const char *assist_ws_get_pipeline_id( uint8_t index );
+    /**
+     * @brief start a pipeline run, transcript and answer show up in the getters below
+     *
+     * every run gets its own id, events carrying another one are dropped
+     *
+     * @param   pipeline        pipeline id, empty lets home assistant pick its preferred one
+     */
+    bool assist_ws_run( const char *pipeline );
+    /**
+     * @brief forget the run, late events are dropped by their id and home assistant times out on its own
+     */
+    void assist_ws_run_reset( void );
+    /**
+     * @brief plain read, safe from any task
+     */
+    assist_ws_run_t assist_ws_get_run( void );
+    /**
+     * @brief send one pcm block, the handler byte is put in front here
+     *
+     * @param   pcm             signed 16 bit little endian mono samples
+     * @param   len             bytes, at most ASSIST_WS_AUDIO_FRAME
+     */
+    bool assist_ws_send_audio( const void *pcm, uint32_t len );
+    /**
+     * @brief the lone handler byte, it tells home assistant that the audio ended
+     */
+    bool assist_ws_send_audio_end( void );
+    /**
+     * @brief true once after transcript or answer changed, gui thread only
+     */
+    bool assist_ws_take_text( void );
+    const char *assist_ws_get_transcript( void );
+    const char *assist_ws_get_answer( void );
 
 #endif // _ASSIST_WS_H

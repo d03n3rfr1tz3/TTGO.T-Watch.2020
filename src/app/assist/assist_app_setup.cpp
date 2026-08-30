@@ -88,7 +88,10 @@ void assist_app_setup_setup( uint32_t tile_num ) {
     lv_obj_align( pipeline_cont, pair_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
 
     assist_setup_state_label = wf_add_label( assist_app_setup_tile, "", SETUP_STYLE );
-    lv_obj_align( assist_setup_state_label, pipeline_cont, LV_ALIGN_OUT_BOTTOM_LEFT, THEME_ICON_PADDING, THEME_ICON_PADDING );
+    lv_label_set_long_mode( assist_setup_state_label, LV_LABEL_LONG_BREAK );
+    lv_label_set_align( assist_setup_state_label, LV_LABEL_ALIGN_CENTER );
+    lv_obj_set_width( assist_setup_state_label, lv_disp_get_hor_res( NULL ) - 2 * THEME_ICON_PADDING );
+    lv_obj_align( assist_setup_state_label, pipeline_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
 
     lv_tileview_add_element( assist_app_setup_tile, host_cont );
     lv_tileview_add_element( assist_app_setup_tile, port_cont );

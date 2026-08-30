@@ -25,6 +25,13 @@
     #include "gui/widget_factory.h"
 
     #define ASSIST_APP_MAIN_PERIOD      100                         /** @brief gui refresh period in ms */
+    #define ASSIST_SPL_FLOOR            30.0f                       /** @brief lower end of the level bar in dB SPL, same scale as the soundmeter */
+    #define ASSIST_SPL_CEIL             110.0f                      /** @brief upper end of the level bar in dB SPL */
+    #define ASSIST_BAR_HEIGHT           8                           /** @brief level bar height, the answer page needs the rest */
+    #define ASSIST_TIGHT_PADDING        ( THEME_PADDING / 2 )       /** @brief the answer page gets every pixel the layout can spare */
+    #define ASSIST_ROW_PADDING          4                           /** @brief vertical padding of the two setting rows, the theme would spend 14 */
+    #define ASSIST_SWITCH_WIDTH         40
+    #define ASSIST_SWITCH_HEIGHT        20
 
     void assist_app_main_setup( uint32_t tile_num );
     /**

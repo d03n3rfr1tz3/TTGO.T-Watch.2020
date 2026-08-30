@@ -29,6 +29,7 @@
 #include "assist_ws.h"
 #include "assist_config.h"
 
+#include "hardware/micctl.h"
 #include "hardware/powermgm.h"
 #include "utils/alloc.h"
 
@@ -50,17 +51,31 @@ static char assist_ws_pipeline_options[ ASSIST_WS_PIPELINE_MAX * ASSIST_WS_PIPEL
 static volatile uint8_t assist_ws_pipeline_count = 0;
 static volatile bool assist_ws_pipeline_fresh = false;
 
+static SemaphoreHandle_t assist_ws_send_mutex = NULL;               /** @brief held by every sender outside the client task, and by the teardown */
+static uint8_t assist_ws_audio_frame[ ASSIST_WS_AUDIO_FRAME + 1 ];  /** @brief handler byte plus pcm, only the sender task uses it */
+static volatile assist_ws_run_t assist_ws_run_state = ASSIST_RUN_OFF;
+static volatile uint32_t assist_ws_run_id = ASSIST_WS_ID_RUN;
+static volatile uint8_t assist_ws_handler_id = 0;
+static volatile bool assist_ws_text_fresh = false;
+static char assist_ws_transcript[ ASSIST_WS_TRANSCRIPT_LEN ] = "";
+static char assist_ws_answer[ ASSIST_WS_ANSWER_LEN ] = "";
+static char assist_ws_conversation_id[ ASSIST_WS_CONV_ID_LEN ] = "";
+
 static bool assist_ws_powermgm_event_cb( EventBits_t event, void *arg );
 static void assist_ws_event_cb( void *arg, esp_event_base_t base, int32_t id, void *event_data );
 static void assist_ws_collect( esp_websocket_event_data_t *data );
 static void assist_ws_handle_message( const char *msg );
+static void assist_ws_handle_event( JsonDocument &doc );
 static void assist_ws_handle_token( const char *msg );
 static void assist_ws_handle_pipelines( const char *msg );
 static void assist_ws_set_message( const char *msg );
+static bool assist_ws_send( const char *data, uint32_t len, bool binary );
 static void assist_ws_teardown( void );
 static void assist_ws_stop_task( void *arg );
 
 void assist_ws_setup( void ) {
+    assist_ws_send_mutex = xSemaphoreCreateMutex();
+
     powermgm_register_cb_with_prio( POWERMGM_STANDBY, assist_ws_powermgm_event_cb, "assist ws", CALL_CB_FIRST );
 }
 
@@ -93,6 +108,9 @@ bool assist_ws_connect( const char *token ) {
     assist_ws_buffer_len = 0;
     assist_ws_buffer_drop = false;
     assist_ws_issued_token[ 0 ] = '\0';
+    assist_ws_conversation_id[ 0 ] = '\0';
+    assist_ws_run_id = ASSIST_WS_ID_RUN - 1;
+    assist_ws_run_state = ASSIST_RUN_OFF;
     snprintf( assist_ws_token, sizeof( assist_ws_token ), "%s", token );
     snprintf( uri, sizeof( uri ), "ws://%s:%d%s", assist_config->host, assist_config->port, ASSIST_WS_PATH );
 
@@ -191,14 +209,121 @@ const char *assist_ws_get_pipeline_id( uint8_t index ) {
     return( assist_ws_pipeline_id[ index ] );
 }
 
+bool assist_ws_run( const char *pipeline ) {
+    char pipeline_arg[ ASSIST_PIPELINE_LEN + 16 ] = "";
+    char conversation_arg[ ASSIST_WS_CONV_ID_LEN + 24 ] = "";
+    char buf[ ASSIST_PIPELINE_LEN + ASSIST_WS_CONV_ID_LEN + 224 ] = "";
+
+    if( assist_ws_state != ASSIST_WS_READY )
+        return( false );
+
+    if( pipeline && pipeline[ 0 ] )
+        snprintf( pipeline_arg, sizeof( pipeline_arg ), ",\"pipeline\":\"%s\"", pipeline );
+
+    if( assist_ws_conversation_id[ 0 ] )
+        snprintf( conversation_arg, sizeof( conversation_arg ), ",\"conversation_id\":\"%s\"", assist_ws_conversation_id );
+
+    assist_ws_transcript[ 0 ] = '\0';
+    assist_ws_answer[ 0 ] = '\0';
+    assist_ws_handler_id = 0;
+    assist_ws_run_id++;
+    assist_ws_run_state = ASSIST_RUN_STARTING;
+    assist_ws_text_fresh = true;
+
+    snprintf( buf, sizeof( buf ), "{\"id\":%u,\"type\":\"assist_pipeline/run\",\"start_stage\":\"stt\",\"end_stage\":\"intent\","
+                                  "\"input\":{\"sample_rate\":%d},\"timeout\":%d%s%s}",
+              ( uint32_t )assist_ws_run_id, MICCTL_DEFAULT_SAMPLE_RATE, ASSIST_WS_HA_TIMEOUT, pipeline_arg, conversation_arg );
+
+    if( !assist_ws_send( buf, strlen( buf ), false ) ) {
+        assist_ws_run_state = ASSIST_RUN_FAILED;
+        assist_ws_set_message( "send failed" );
+        return( false );
+    }
+
+    return( true );
+}
+
+void assist_ws_run_reset( void ) {
+    assist_ws_run_state = ASSIST_RUN_OFF;
+    assist_ws_run_id++;
+}
+
+assist_ws_run_t assist_ws_get_run( void ) {
+    return( assist_ws_run_state );
+}
+
+bool assist_ws_send_audio( const void *pcm, uint32_t len ) {
+    if( assist_ws_run_state != ASSIST_RUN_LISTENING || !len || len > ASSIST_WS_AUDIO_FRAME )
+        return( false );
+
+    assist_ws_audio_frame[ 0 ] = assist_ws_handler_id;
+    memcpy( assist_ws_audio_frame + 1, pcm, len );
+
+    return( assist_ws_send( ( const char* )assist_ws_audio_frame, len + 1, true ) );
+}
+
+bool assist_ws_send_audio_end( void ) {
+    if( assist_ws_run_state == ASSIST_RUN_OFF || !assist_ws_handler_id )
+        return( false );
+
+    assist_ws_audio_frame[ 0 ] = assist_ws_handler_id;
+
+    return( assist_ws_send( ( const char* )assist_ws_audio_frame, 1, true ) );
+}
+
+bool assist_ws_take_text( void ) {
+    if( !assist_ws_text_fresh )
+        return( false );
+
+    assist_ws_text_fresh = false;
+
+    return( true );
+}
+
+const char *assist_ws_get_transcript( void ) {
+    return( assist_ws_transcript );
+}
+
+const char *assist_ws_get_answer( void ) {
+    return( assist_ws_answer );
+}
+
+static bool assist_ws_send( const char *data, uint32_t len, bool binary ) {
+    int sent = -1;
+
+    if( !assist_ws_send_mutex )
+        return( false );
+
+    xSemaphoreTake( assist_ws_send_mutex, portMAX_DELAY );
+
+    if( assist_ws_client && !assist_ws_stopping ) {
+        if( binary )
+            sent = esp_websocket_client_send_bin( assist_ws_client, data, len, pdMS_TO_TICKS( ASSIST_WS_SEND_TIMEOUT ) );
+        else
+            sent = esp_websocket_client_send_text( assist_ws_client, data, len, pdMS_TO_TICKS( ASSIST_WS_SEND_TIMEOUT ) );
+    }
+
+    xSemaphoreGive( assist_ws_send_mutex );
+
+    return( sent >= 0 && ( uint32_t )sent == len );
+}
+
 static void assist_ws_set_message( const char *msg ) {
     snprintf( assist_ws_message, sizeof( assist_ws_message ), "%s", msg );
 }
 
 static void assist_ws_teardown( void ) {
+    if( assist_ws_send_mutex )
+        xSemaphoreTake( assist_ws_send_mutex, portMAX_DELAY );
+
     esp_websocket_client_stop( assist_ws_client );
     esp_websocket_client_destroy( assist_ws_client );
     assist_ws_client = NULL;
+
+    if( assist_ws_send_mutex )
+        xSemaphoreGive( assist_ws_send_mutex );
+
+    assist_ws_run_state = ASSIST_RUN_OFF;
 
     free( assist_ws_buffer );
     assist_ws_buffer = NULL;
@@ -230,7 +355,7 @@ static void assist_ws_event_cb( void *arg, esp_event_base_t base, int32_t id, vo
 }
 
 /*
- * a message arrives in chunks, payload_offset tells where this one belongs
+ * a message arrives in chunks
  */
 static void assist_ws_collect( esp_websocket_event_data_t *data ) {
     if( !assist_ws_buffer )
@@ -330,6 +455,16 @@ static void assist_ws_handle_message( const char *msg ) {
         else
             log_e("assist: pipeline list failed, %s", doc["error"]["message"] | "" );
     }
+    else if( !strcmp( type, "event" ) && ( uint32_t )( doc["id"] | 0 ) == assist_ws_run_id ) {
+        assist_ws_handle_event( doc );
+    }
+    else if( !strcmp( type, "result" ) && ( uint32_t )( doc["id"] | 0 ) == assist_ws_run_id ) {
+        if( !( doc["success"] | false ) ) {
+            assist_ws_run_state = ASSIST_RUN_FAILED;
+            assist_ws_set_message( "run refused" );
+            log_e("assist: run refused, %s", doc["error"]["message"] | "" );
+        }
+    }
     else if( !strcmp( type, "auth_invalid" ) ) {
         assist_ws_state = ASSIST_WS_ERROR;
         assist_ws_set_message( "token rejected" );
@@ -337,6 +472,48 @@ static void assist_ws_handle_message( const char *msg ) {
     }
     else {
         log_i("assist: unhandled message, %.256s", msg );
+    }
+}
+
+static void assist_ws_handle_event( JsonDocument &doc ) {
+    const char *event = doc["event"]["type"] | "";
+    JsonVariant data = doc["event"]["data"];
+
+    if( !strcmp( event, "run-start" ) ) {
+        assist_ws_handler_id = data["runner_data"]["stt_binary_handler_id"] | 0;
+
+        if( !assist_ws_handler_id ) {
+            assist_ws_run_state = ASSIST_RUN_FAILED;
+            assist_ws_set_message( "no audio handler" );
+            log_e("assist: run-start without a handler id");
+            return;
+        }
+
+        assist_ws_run_state = ASSIST_RUN_LISTENING;
+    }
+    else if( !strcmp( event, "stt-vad-end" ) ) {
+        assist_ws_run_state = ASSIST_RUN_THINKING;
+    }
+    else if( !strcmp( event, "stt-end" ) ) {
+        snprintf( assist_ws_transcript, sizeof( assist_ws_transcript ), "%s", data["stt_output"]["text"] | "" );
+        assist_ws_run_state = ASSIST_RUN_THINKING;
+        assist_ws_text_fresh = true;
+    }
+    else if( !strcmp( event, "intent-end" ) ) {
+        snprintf( assist_ws_answer, sizeof( assist_ws_answer ), "%s", data["intent_output"]["response"]["speech"]["plain"]["speech"] | "" );
+        snprintf( assist_ws_conversation_id, sizeof( assist_ws_conversation_id ), "%s", data["intent_output"]["conversation_id"] | "" );
+        assist_ws_text_fresh = true;
+    }
+    else if( !strcmp( event, "run-end" ) ) {
+        assist_ws_run_state = ASSIST_RUN_DONE;
+    }
+    else if( !strcmp( event, "error" ) ) {
+        assist_ws_run_state = ASSIST_RUN_FAILED;
+        assist_ws_set_message( data["code"] | "run error" );
+        log_e("assist: run error, %s", data["message"] | "" );
+    }
+    else if( strcmp( event, "stt-start" ) && strcmp( event, "stt-vad-start" ) ) {
+        log_i("assist: event %s", event );
     }
 }
 
