@@ -24,10 +24,11 @@
 
     #include "gui/widget_factory.h"
 
-    #define ASSIST_SETUP_TILES          1                           /** @brief setup, the pairing tile follows */
+    #define ASSIST_SETUP_TILES          2                           /** @brief setup and pairing, horizontally adjacent */
 
     void assist_app_setup( void );
     uint32_t assist_app_get_app_main_tile_num( void );
     uint32_t assist_app_get_setup_tile_num( void );
+    uint32_t assist_app_get_pair_tile_num( void );
 
 #endif // _ASSIST_APP_H

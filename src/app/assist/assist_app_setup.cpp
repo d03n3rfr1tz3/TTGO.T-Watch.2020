@@ -21,8 +21,11 @@
  */
 #include "config.h"
 
+#include "assist_app.h"
+#include "assist_app_pair.h"
 #include "assist_app_setup.h"
 #include "assist_config.h"
+#include "assist_ws.h"
 
 #include "gui/keyboard.h"
 #include "gui/mainbar/mainbar.h"
@@ -39,11 +42,21 @@
 static lv_obj_t *assist_app_setup_tile = NULL;
 static lv_obj_t *assist_host_textfield = NULL;
 static lv_obj_t *assist_port_textfield = NULL;
-static lv_obj_t *assist_token_textfield = NULL;
+static lv_obj_t *assist_pair_button = NULL;
+static lv_obj_t *assist_pair_state_label = NULL;
+static lv_obj_t *assist_setup_state_label = NULL;
+static lv_task_t *assist_app_setup_task = NULL;
+static bool assist_setup_connect_wanted = false;
+static bool assist_setup_visible = false;
 
+static void assist_app_setup_activate_cb( void );
 static void assist_app_setup_hibernate_cb( void );
+static void assist_app_setup_lv_task( lv_task_t * task );
+static bool assist_app_setup_is_visible( void );
 static void assist_app_setup_store( void );
 static lv_obj_t *assist_app_setup_add_row( lv_obj_t *above, const char *text, lv_obj_t **ret_textfield, const char *value, lv_event_cb_t event_cb );
+static lv_obj_t *assist_app_setup_add_pair_row( lv_obj_t *above );
+static void assist_app_setup_pair_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_exit_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_textarea_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_num_textarea_event_cb( lv_obj_t * obj, lv_event_t event );
@@ -52,6 +65,7 @@ void assist_app_setup_setup( uint32_t tile_num ) {
     assist_config_t *assist_config = assist_get_config();
     char buf[ 8 ] = "";
 
+    mainbar_add_tile_activate_cb( tile_num, assist_app_setup_activate_cb );
     mainbar_add_tile_hibernate_cb( tile_num, assist_app_setup_hibernate_cb );
 
     assist_app_setup_tile = mainbar_get_tile_obj( tile_num );
@@ -64,11 +78,68 @@ void assist_app_setup_setup( uint32_t tile_num ) {
     snprintf( buf, sizeof( buf ), "%d", assist_config->port );
     lv_obj_t *port_cont = assist_app_setup_add_row( host_cont, "port", &assist_port_textfield, buf, assist_app_setup_num_textarea_event_cb );
 
-    lv_obj_t *token_cont = assist_app_setup_add_row( port_cont, "token", &assist_token_textfield, assist_config->token, assist_app_setup_textarea_event_cb );
+    lv_obj_t *pair_cont = assist_app_setup_add_pair_row( port_cont );
+
+    assist_setup_state_label = wf_add_label( assist_app_setup_tile, "", SETUP_STYLE );
+    lv_obj_align( assist_setup_state_label, pair_cont, LV_ALIGN_OUT_BOTTOM_LEFT, THEME_ICON_PADDING, THEME_ICON_PADDING );
 
     lv_tileview_add_element( assist_app_setup_tile, host_cont );
     lv_tileview_add_element( assist_app_setup_tile, port_cont );
-    lv_tileview_add_element( assist_app_setup_tile, token_cont );
+    lv_tileview_add_element( assist_app_setup_tile, pair_cont );
+    lv_tileview_add_element( assist_app_setup_tile, assist_setup_state_label );
+
+    assist_app_setup_task = lv_task_create( assist_app_setup_lv_task, ASSIST_SETUP_PERIOD, LV_TASK_PRIO_OFF, NULL );
+}
+
+static void assist_app_setup_activate_cb( void ) {
+    lv_label_set_text( assist_setup_state_label, "" );
+    assist_app_setup_enable( true );
+    assist_app_pair_enable( true );
+}
+
+void assist_app_setup_enable( bool enable ) {
+    if( !enable ) {
+        assist_setup_connect_wanted = false;
+        assist_setup_visible = false;
+    }
+
+    lv_task_set_prio( assist_app_setup_task, enable ? LV_TASK_PRIO_MID : LV_TASK_PRIO_OFF );
+}
+
+static bool assist_app_setup_is_visible( void ) {
+    lv_area_t area;
+
+    lv_obj_get_coords( assist_app_setup_tile, &area );
+
+    return( abs( area.x1 ) + abs( area.y1 ) < lv_disp_get_hor_res( NULL ) / 2 );
+}
+
+static void assist_app_setup_lv_task( lv_task_t * task ) {
+    assist_config_t *assist_config = assist_get_config();
+    bool visible = assist_app_setup_is_visible();
+
+    if( visible != assist_setup_visible ) {
+        assist_setup_visible = visible;
+
+        if( visible ) {
+            lv_label_set_text( assist_setup_state_label, "" );
+            assist_setup_connect_wanted = true;
+        }
+        else {
+            assist_app_setup_leave();
+            return;
+        }
+    }
+
+    if( !visible )
+        return;
+
+    if( assist_setup_connect_wanted && assist_ws_get_state() != ASSIST_WS_READY )
+        assist_setup_connect_wanted = !assist_ws_connect( assist_config->token );
+
+    lv_label_set_text( assist_setup_state_label, assist_ws_get_message() );
+    lv_label_set_text( assist_pair_state_label, assist_config->token[ 0 ] ? "paired" : "not paired" );
+    lv_obj_align( assist_pair_state_label, assist_pair_button, LV_ALIGN_OUT_LEFT_MID, -THEME_ICON_PADDING, 0 );
 }
 
 static lv_obj_t *assist_app_setup_add_row( lv_obj_t *above, const char *text, lv_obj_t **ret_textfield, const char *value, lv_event_cb_t event_cb ) {
@@ -96,16 +167,47 @@ static lv_obj_t *assist_app_setup_add_row( lv_obj_t *above, const char *text, lv
     return( cont );
 }
 
+static lv_obj_t *assist_app_setup_add_pair_row( lv_obj_t *above ) {
+    lv_obj_t *cont = lv_obj_create( assist_app_setup_tile, NULL );
+    lv_obj_set_size( cont, lv_disp_get_hor_res( NULL ), ASSIST_SETUP_CONT_HEIGHT );
+    lv_obj_add_style( cont, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    lv_obj_align( cont, above, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
+
+    lv_obj_t *label = lv_label_create( cont, NULL );
+    lv_obj_add_style( label, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    lv_label_set_text( label, "pairing" );
+    lv_obj_align( label, cont, LV_ALIGN_IN_LEFT_MID, THEME_ICON_PADDING, 0 );
+
+    assist_pair_button = wf_add_right_button( cont, assist_app_setup_pair_event_cb );
+    lv_obj_set_size( assist_pair_button, wf_get_right_img().header.w, wf_get_right_img().header.h );
+    lv_obj_align( assist_pair_button, cont, LV_ALIGN_IN_RIGHT_MID, -THEME_ICON_PADDING, 0 );
+
+    assist_pair_state_label = lv_label_create( cont, NULL );
+    lv_obj_add_style( assist_pair_state_label, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    lv_label_set_text( assist_pair_state_label, "" );
+    lv_obj_align( assist_pair_state_label, assist_pair_button, LV_ALIGN_OUT_LEFT_MID, -THEME_ICON_PADDING, 0 );
+
+    return( cont );
+}
+
 static void assist_app_setup_hibernate_cb( void ) {
+    assist_app_setup_leave();
+    assist_app_setup_enable( false );
+    assist_app_pair_enable( false );
+}
+
+void assist_app_setup_leave( void ) {
+    assist_setup_connect_wanted = false;
+
     keyboard_hide();
     assist_app_setup_store();
     assist_config_save_dirty();
+    assist_ws_disconnect();
 }
 
 static void assist_app_setup_store( void ) {
     assist_config_t *assist_config = assist_get_config();
     const char *host = lv_textarea_get_text( assist_host_textfield );
-    const char *token = lv_textarea_get_text( assist_token_textfield );
     uint16_t port = atoi( lv_textarea_get_text( assist_port_textfield ) );
 
     if( !port )
@@ -113,11 +215,6 @@ static void assist_app_setup_store( void ) {
 
     if( strcmp( assist_config->host, host ) ) {
         snprintf( assist_config->host, sizeof( assist_config->host ), "%s", host );
-        assist_config_set_dirty();
-    }
-
-    if( strcmp( assist_config->token, token ) ) {
-        snprintf( assist_config->token, sizeof( assist_config->token ), "%s", token );
         assist_config_set_dirty();
     }
 
@@ -136,6 +233,14 @@ static void assist_app_setup_textarea_event_cb( lv_obj_t * obj, lv_event_t event
 static void assist_app_setup_num_textarea_event_cb( lv_obj_t * obj, lv_event_t event ) {
     if( event == LV_EVENT_CLICKED ) {
         num_keyboard_set_textarea( obj );
+    }
+}
+
+static void assist_app_setup_pair_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    switch( event ) {
+        case( LV_EVENT_CLICKED ):       keyboard_hide();
+                                        mainbar_slide_to_tilenumber( assist_app_get_pair_tile_num(), LV_ANIM_ON );
+                                        break;
     }
 }
 

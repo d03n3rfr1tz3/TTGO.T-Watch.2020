@@ -1,5 +1,5 @@
 /****************************************************************************
- *   Aug 29 20:00:00 2026
+ *   Aug 30 12:00:00 2026
  *   Copyright  2026  Dirk Sarodnick
  *   Email: programmer@dirk-sarodnick.de
  ****************************************************************************/
@@ -19,26 +19,17 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef _ASSIST_APP_SETUP_H
-    #define _ASSIST_APP_SETUP_H
+#ifndef _ASSIST_APP_PAIR_H
+    #define _ASSIST_APP_PAIR_H
 
     #include "gui/widget_factory.h"
 
-    #define ASSIST_SETUP_CONT_HEIGHT    37                          /** @brief one setup row, four of them fill the tile */
-    #define ASSIST_SETUP_PERIOD         100                         /** @brief gui refresh period in ms */
+    #define ASSIST_PAIR_QR_OFFSET       12                          /** @brief top margin of the canvas, the same below it up to the label */
 
-    void assist_app_setup_setup( uint32_t tile_num );
+    void assist_app_pair_setup( uint32_t tile_num );
     /**
-     * @brief keyboard, store, save and disconnect, idempotent
-     *
-     * both the visibility probe and the hibernate callback call it, swiping fires
-     * no callback at all and mainbar_jump_back() resolves the callback by the
-     * current tile, so neither alone would catch every way out
+     * @brief switch the tile task, the setup tile owns it, both tiles are entered through it
      */
-    void assist_app_setup_leave( void );
-    /**
-     * @brief switch the tile task, off means the tile owns nothing
-     */
-    void assist_app_setup_enable( bool enable );
+    void assist_app_pair_enable( bool enable );
 
-#endif // _ASSIST_APP_SETUP_H
+#endif // _ASSIST_APP_PAIR_H

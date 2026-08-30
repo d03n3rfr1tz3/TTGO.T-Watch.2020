@@ -23,8 +23,10 @@
 
 #include "assist_app.h"
 #include "assist_app_main.h"
+#include "assist_app_pair.h"
 #include "assist_app_setup.h"
 #include "assist_config.h"
+#include "assist_ws.h"
 
 #include "gui/mainbar/mainbar.h"
 #include "gui/app.h"
@@ -56,6 +58,7 @@ void assist_app_setup( void ) {
     }
 
     assist_get_config()->load();
+    assist_ws_setup();
 
     assist_app_main_tile_num = mainbar_add_app_tile( 1, 1, "assist app" );
     assist_app_setup_tile_num = mainbar_add_setup_tile( ASSIST_SETUP_TILES, 1, "assist setup" );
@@ -63,6 +66,7 @@ void assist_app_setup( void ) {
 
     assist_app_main_setup( assist_app_main_tile_num );
     assist_app_setup_setup( assist_app_setup_tile_num );
+    assist_app_pair_setup( assist_app_setup_tile_num + 1 );
 }
 
 uint32_t assist_app_get_app_main_tile_num( void ) {
@@ -71,6 +75,10 @@ uint32_t assist_app_get_app_main_tile_num( void ) {
 
 uint32_t assist_app_get_setup_tile_num( void ) {
     return( assist_app_setup_tile_num );
+}
+
+uint32_t assist_app_get_pair_tile_num( void ) {
+    return( assist_app_setup_tile_num + 1 );
 }
 
 static void enter_assist_app_event_cb( lv_obj_t * obj, lv_event_t event ) {
