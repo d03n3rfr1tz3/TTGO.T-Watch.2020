@@ -24,7 +24,9 @@
 
     #include "gui/widget_factory.h"
 
-    #define ASSIST_SETUP_CONT_HEIGHT    37                          /** @brief one setup row, four of them fill the tile */
+    #define ASSIST_SETUP_CONT_HEIGHT    37                          /** @brief one setup row, three of them plus the pipeline list fill the tile */
+    #define ASSIST_SETUP_LIST_HEIGHT    120                         /** @brief the open pipeline list scrolls instead of running off the tile */
+    #define ASSIST_SETUP_PIPELINE_PREFERRED "preferred"             /** @brief first list entry, it stores an empty pipeline and lets home assistant pick */
     #define ASSIST_SETUP_PERIOD         100                         /** @brief gui refresh period in ms */
 
     void assist_app_setup_setup( uint32_t tile_num );

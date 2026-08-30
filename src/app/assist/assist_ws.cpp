@@ -45,10 +45,17 @@ static char *assist_ws_buffer = NULL;
 static uint32_t assist_ws_buffer_len = 0;
 static bool assist_ws_buffer_drop = false;
 
+static char assist_ws_pipeline_id[ ASSIST_WS_PIPELINE_MAX ][ ASSIST_PIPELINE_LEN ];
+static char assist_ws_pipeline_options[ ASSIST_WS_PIPELINE_MAX * ASSIST_WS_PIPELINE_NAME_LEN ] = "";
+static volatile uint8_t assist_ws_pipeline_count = 0;
+static volatile bool assist_ws_pipeline_fresh = false;
+
 static bool assist_ws_powermgm_event_cb( EventBits_t event, void *arg );
 static void assist_ws_event_cb( void *arg, esp_event_base_t base, int32_t id, void *event_data );
 static void assist_ws_collect( esp_websocket_event_data_t *data );
 static void assist_ws_handle_message( const char *msg );
+static void assist_ws_handle_token( const char *msg );
+static void assist_ws_handle_pipelines( const char *msg );
 static void assist_ws_set_message( const char *msg );
 static void assist_ws_teardown( void );
 static void assist_ws_stop_task( void *arg );
@@ -160,6 +167,30 @@ const char *assist_ws_get_issued_token( void ) {
     return( assist_ws_issued_token );
 }
 
+bool assist_ws_take_pipelines( void ) {
+    if( !assist_ws_pipeline_fresh )
+        return( false );
+
+    assist_ws_pipeline_fresh = false;
+
+    return( true );
+}
+
+const char *assist_ws_get_pipeline_options( void ) {
+    return( assist_ws_pipeline_options );
+}
+
+uint8_t assist_ws_get_pipeline_count( void ) {
+    return( assist_ws_pipeline_count );
+}
+
+const char *assist_ws_get_pipeline_id( uint8_t index ) {
+    if( index >= assist_ws_pipeline_count )
+        return( "" );
+
+    return( assist_ws_pipeline_id[ index ] );
+}
+
 static void assist_ws_set_message( const char *msg ) {
     snprintf( assist_ws_message, sizeof( assist_ws_message ), "%s", msg );
 }
@@ -240,7 +271,6 @@ static void assist_ws_handle_message( const char *msg ) {
     filter["type"] = true;
     filter["message"] = true;
     filter["success"] = true;
-    filter["result"] = true;
     filter["error"]["code"] = true;
     filter["error"]["message"] = true;
     filter["event"]["type"] = true;
@@ -268,32 +298,37 @@ static void assist_ws_handle_message( const char *msg ) {
         esp_websocket_client_send_text( assist_ws_client, buf, strlen( buf ), pdMS_TO_TICKS( ASSIST_WS_SEND_TIMEOUT ) );
     }
     else if( !strcmp( type, "auth_ok" ) ) {
+        char buf[ ASSIST_WS_CLIENT_NAME_LEN + 96 ] = "";
+
         assist_ws_state = ASSIST_WS_READY;
         assist_ws_set_message( "connected" );
-        /*
-         * the ten year token only exists over the websocket
-         */
-        if( assist_ws_client_name[ 0 ] ) {
-            char buf[ ASSIST_WS_CLIENT_NAME_LEN + 96 ] = "";
 
+        if( assist_ws_client_name[ 0 ] ) {
             snprintf( buf, sizeof( buf ), "{\"id\":%d,\"type\":\"auth/long_lived_access_token\",\"client_name\":\"%s\",\"lifespan\":%d}",
                       ASSIST_WS_ID_TOKEN, assist_ws_client_name, ASSIST_WS_TOKEN_LIFESPAN );
             assist_ws_set_message( "asking for token" );
-            esp_websocket_client_send_text( assist_ws_client, buf, strlen( buf ), pdMS_TO_TICKS( ASSIST_WS_SEND_TIMEOUT ) );
         }
+        else {
+            snprintf( buf, sizeof( buf ), "{\"id\":%d,\"type\":\"assist_pipeline/pipeline/list\"}", ASSIST_WS_ID_PIPELINES );
+        }
+
+        esp_websocket_client_send_text( assist_ws_client, buf, strlen( buf ), pdMS_TO_TICKS( ASSIST_WS_SEND_TIMEOUT ) );
     }
     else if( !strcmp( type, "result" ) && ( doc["id"] | 0 ) == ASSIST_WS_ID_TOKEN ) {
-        const char *result = doc["result"] | "";
-
-        if( ( doc["success"] | false ) && result[ 0 ] ) {
-            snprintf( assist_ws_issued_token, sizeof( assist_ws_issued_token ), "%s", result );
-            assist_ws_set_message( "token issued" );
+        if( doc["success"] | false ) {
+            assist_ws_handle_token( msg );
         }
         else {
             assist_ws_state = ASSIST_WS_ERROR;
             assist_ws_set_message( "token refused" );
             log_e("assist: token request failed, %s", doc["error"]["message"] | "" );
         }
+    }
+    else if( !strcmp( type, "result" ) && ( doc["id"] | 0 ) == ASSIST_WS_ID_PIPELINES ) {
+        if( doc["success"] | false )
+            assist_ws_handle_pipelines( msg );
+        else
+            log_e("assist: pipeline list failed, %s", doc["error"]["message"] | "" );
     }
     else if( !strcmp( type, "auth_invalid" ) ) {
         assist_ws_state = ASSIST_WS_ERROR;
@@ -303,6 +338,60 @@ static void assist_ws_handle_message( const char *msg ) {
     else {
         log_i("assist: unhandled message, %.256s", msg );
     }
+}
+
+static void assist_ws_handle_token( const char *msg ) {
+    StaticJsonDocument< 32 > filter;
+    StaticJsonDocument< ASSIST_TOKEN_LEN + 128 > doc;
+
+    filter["result"] = true;
+
+    if( deserializeJson( doc, msg, DeserializationOption::Filter( filter ) ) || !( doc["result"] | "" )[ 0 ] ) {
+        assist_ws_state = ASSIST_WS_ERROR;
+        assist_ws_set_message( "token refused" );
+        log_e("assist: no token in the answer");
+        return;
+    }
+
+    snprintf( assist_ws_issued_token, sizeof( assist_ws_issued_token ), "%s", doc["result"] | "" );
+    assist_ws_set_message( "token issued" );
+}
+
+static void assist_ws_handle_pipelines( const char *msg ) {
+    StaticJsonDocument< 192 > filter;
+    DynamicJsonDocument doc( ASSIST_WS_LIST_JSON_SIZE );
+    uint8_t count = 0;
+    uint32_t len = 0;
+
+    filter["result"]["pipelines"][0]["id"] = true;
+    filter["result"]["pipelines"][0]["name"] = true;
+
+    if( deserializeJson( doc, msg, DeserializationOption::Filter( filter ) ) ) {
+        log_e("assist: pipeline list does not fit into %d bytes", ASSIST_WS_LIST_JSON_SIZE );
+        return;
+    }
+
+    for( JsonObject pipeline : doc["result"]["pipelines"].as< JsonArray >() ) {
+        const char *id = pipeline["id"] | "";
+        const char *name = pipeline["name"] | "";
+
+        if( count >= ASSIST_WS_PIPELINE_MAX || !id[ 0 ] || !name[ 0 ] )
+            break;
+
+        len += snprintf( assist_ws_pipeline_options + len, ASSIST_WS_PIPELINE_NAME_LEN, count ? "\n%.*s" : "%.*s", ASSIST_WS_PIPELINE_NAME_LEN - 2, name );
+        snprintf( assist_ws_pipeline_id[ count ], ASSIST_PIPELINE_LEN, "%s", id );
+        count++;
+    }
+
+    if( !count ) {
+        log_i("assist: no pipelines in %.256s", msg );
+        return;
+    }
+
+    assist_ws_pipeline_count = count;
+    assist_ws_pipeline_fresh = true;
+
+    log_i("assist: %d pipelines", count );
 }
 
 static bool assist_ws_powermgm_event_cb( EventBits_t event, void *arg ) {

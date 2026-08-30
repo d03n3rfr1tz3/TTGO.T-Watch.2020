@@ -44,6 +44,7 @@ static lv_obj_t *assist_host_textfield = NULL;
 static lv_obj_t *assist_port_textfield = NULL;
 static lv_obj_t *assist_pair_button = NULL;
 static lv_obj_t *assist_pair_state_label = NULL;
+static lv_obj_t *assist_pipeline_list = NULL;
 static lv_obj_t *assist_setup_state_label = NULL;
 static lv_task_t *assist_app_setup_task = NULL;
 static bool assist_setup_connect_wanted = false;
@@ -56,7 +57,9 @@ static bool assist_app_setup_is_visible( void );
 static void assist_app_setup_store( void );
 static lv_obj_t *assist_app_setup_add_row( lv_obj_t *above, const char *text, lv_obj_t **ret_textfield, const char *value, lv_event_cb_t event_cb );
 static lv_obj_t *assist_app_setup_add_pair_row( lv_obj_t *above );
+static void assist_app_setup_fill_pipelines( void );
 static void assist_app_setup_pair_event_cb( lv_obj_t * obj, lv_event_t event );
+static void assist_app_setup_pipeline_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_exit_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_textarea_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_num_textarea_event_cb( lv_obj_t * obj, lv_event_t event );
@@ -80,12 +83,17 @@ void assist_app_setup_setup( uint32_t tile_num ) {
 
     lv_obj_t *pair_cont = assist_app_setup_add_pair_row( port_cont );
 
+    lv_obj_t *pipeline_cont = wf_add_labeled_list( assist_app_setup_tile, "pipeline", &assist_pipeline_list, ASSIST_SETUP_PIPELINE_PREFERRED, assist_app_setup_pipeline_event_cb, SETUP_STYLE );
+    lv_dropdown_set_max_height( assist_pipeline_list, ASSIST_SETUP_LIST_HEIGHT );
+    lv_obj_align( pipeline_cont, pair_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
+
     assist_setup_state_label = wf_add_label( assist_app_setup_tile, "", SETUP_STYLE );
-    lv_obj_align( assist_setup_state_label, pair_cont, LV_ALIGN_OUT_BOTTOM_LEFT, THEME_ICON_PADDING, THEME_ICON_PADDING );
+    lv_obj_align( assist_setup_state_label, pipeline_cont, LV_ALIGN_OUT_BOTTOM_LEFT, THEME_ICON_PADDING, THEME_ICON_PADDING );
 
     lv_tileview_add_element( assist_app_setup_tile, host_cont );
     lv_tileview_add_element( assist_app_setup_tile, port_cont );
     lv_tileview_add_element( assist_app_setup_tile, pair_cont );
+    lv_tileview_add_element( assist_app_setup_tile, pipeline_cont );
     lv_tileview_add_element( assist_app_setup_tile, assist_setup_state_label );
 
     assist_app_setup_task = lv_task_create( assist_app_setup_lv_task, ASSIST_SETUP_PERIOD, LV_TASK_PRIO_OFF, NULL );
@@ -136,6 +144,9 @@ static void assist_app_setup_lv_task( lv_task_t * task ) {
 
     if( assist_setup_connect_wanted && assist_ws_get_state() != ASSIST_WS_READY )
         assist_setup_connect_wanted = !assist_ws_connect( assist_config->token );
+
+    if( assist_ws_take_pipelines() )
+        assist_app_setup_fill_pipelines();
 
     lv_label_set_text( assist_setup_state_label, assist_ws_get_message() );
     lv_label_set_text( assist_pair_state_label, assist_config->token[ 0 ] ? "paired" : "not paired" );
@@ -190,6 +201,24 @@ static lv_obj_t *assist_app_setup_add_pair_row( lv_obj_t *above ) {
     return( cont );
 }
 
+static void assist_app_setup_fill_pipelines( void ) {
+    assist_config_t *assist_config = assist_get_config();
+    char options[ ASSIST_WS_PIPELINE_MAX * ASSIST_WS_PIPELINE_NAME_LEN + sizeof( ASSIST_SETUP_PIPELINE_PREFERRED ) + 1 ] = "";
+    uint8_t count = assist_ws_get_pipeline_count();
+
+    snprintf( options, sizeof( options ), "%s\n%s", ASSIST_SETUP_PIPELINE_PREFERRED, assist_ws_get_pipeline_options() );
+    lv_dropdown_set_options( assist_pipeline_list, options );
+
+    for( uint8_t index = 0 ; index < count ; index++ ) {
+        if( !strcmp( assist_ws_get_pipeline_id( index ), assist_config->pipeline ) ) {
+            lv_dropdown_set_selected( assist_pipeline_list, index + 1 );
+            return;
+        }
+    }
+
+    lv_dropdown_set_selected( assist_pipeline_list, 0 );
+}
+
 static void assist_app_setup_hibernate_cb( void ) {
     assist_app_setup_leave();
     assist_app_setup_enable( false );
@@ -241,6 +270,23 @@ static void assist_app_setup_pair_event_cb( lv_obj_t * obj, lv_event_t event ) {
         case( LV_EVENT_CLICKED ):       keyboard_hide();
                                         mainbar_slide_to_tilenumber( assist_app_get_pair_tile_num(), LV_ANIM_ON );
                                         break;
+    }
+}
+
+static void assist_app_setup_pipeline_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    assist_config_t *assist_config = assist_get_config();
+
+    switch( event ) {
+        case( LV_EVENT_VALUE_CHANGED ):     {
+                                                uint16_t index = lv_dropdown_get_selected( obj );
+                                                const char *id = index ? assist_ws_get_pipeline_id( index - 1 ) : "";
+
+                                                if( strcmp( assist_config->pipeline, id ) ) {
+                                                    snprintf( assist_config->pipeline, sizeof( assist_config->pipeline ), "%s", id );
+                                                    assist_config_set_dirty();
+                                                }
+                                                break;
+                                            }
     }
 }
 
