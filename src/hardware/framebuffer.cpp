@@ -371,13 +371,21 @@ static void framebuffer_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area,
              * and start DMA transfer if enabled
              * stop transmission
              */
-            ttgo->tft->startWrite();
-            ttgo->tft->setAddrWindow(area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1));
-            if ( framebuffer_use_dma )
+            if ( framebuffer_use_dma ) {
+                ttgo->tft->dmaWait();
+                ttgo->tft->startWrite();
+                ttgo->tft->setAddrWindow(area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1));
                 ttgo->tft->pushPixelsDMA(( uint16_t *)color_p, size);
-            else
+                
+                if ( lv_disp_flush_is_last( disp_drv ) )
+                    ttgo->tft->endWrite();
+            }
+            else {
+                ttgo->tft->startWrite();
+                ttgo->tft->setAddrWindow(area->x1, area->y1, (area->x2 - area->x1 + 1), (area->y2 - area->y1 + 1));
                 ttgo->tft->pushPixels(( uint16_t *)color_p, size);
-            ttgo->tft->endWrite();
+                ttgo->tft->endWrite();
+            }
         #elif defined( LILYGO_WATCH_2021 )
             /**
              * get buffer size
