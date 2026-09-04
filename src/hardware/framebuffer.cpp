@@ -104,17 +104,16 @@ void framebuffer_setup( void ) {
             tft.setTextSize(1);
             tft.setTextColor(TFT_GREEN, TFT_BLACK);
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-            /**
-             * enable DMA only for V1 and V2
-             */
-            #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 )
-                framebuffer_use_dma = true;
-            #endif
+            framebuffer_use_dma = true;
             /**
              * if dma enabled, initDMA
              */
             if ( framebuffer_use_dma ) {
                 TTGOClass *ttgo = TTGOClass::getWatch();
+                #if defined( LILYGO_WATCH_2020_V3 )
+                    // set same pinout as V1 and V2 to fix dma problem
+                    ttgo->tft->setPins( TWATCH_TFT_MOSI, GPIO_NUM_0, TWATCH_TFT_SCLK, TWATCH_TFT_CS, TWATCH_TFT_DC );
+                #endif
                 ttgo->tft->initDMA();
             }
         #elif defined( LILYGO_WATCH_2021 )
