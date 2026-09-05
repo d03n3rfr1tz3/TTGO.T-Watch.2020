@@ -14,6 +14,21 @@ Widgets are:
 
  You can swipe with you fingers up, down, left and right between the four main screens. The four screens are organized in time, apps, note and setup tile.
 
+# Notes
+
+![screenshot](images/note.png)
+
+The note tile holds a few post-it notes, as many as fit on the screen at once. There is no list and
+no archive: what you see is all there is. The plus button adds a text note and opens the keyboard,
+tapping a note edits it again, and the check mark in its corner ticks it off. A note that is ticked
+off fades out and is deleted a minute later, so tapping the check again undoes it. When every slot
+is taken, the plus buttons grey out until you tick a note off.
+
+On watches with a microphone the recorder adds a second plus button. It takes you straight to the
+recording screen, and the finished take comes back as a voice note with a play button. The note
+only references the recording — checking it off removes the note, the file stays in the voice
+recorder app.
+
 # Quick Settings
 
 ![screenshot](images/screen2.png)
