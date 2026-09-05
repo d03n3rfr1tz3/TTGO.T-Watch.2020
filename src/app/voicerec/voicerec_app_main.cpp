@@ -190,7 +190,7 @@ static void voicerec_app_main_lv_task( lv_task_t * task ) {
             strftime( name, sizeof( name ), "%d.%m. %H:%M", &info );
 
             note_tile_add_audio_note( voicerec_recorder_get_filename(), name );
-            mainbar_jump_to_tilenumber( note_tile_get_tile_num(), LV_ANIM_OFF, true );
+            mainbar_jump_to_tilenumber( note_tile_get_tile_num(), LV_ANIM_OFF, false );
         }
         voicerec_from_note = false;
     }
