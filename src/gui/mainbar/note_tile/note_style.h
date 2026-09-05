@@ -29,9 +29,7 @@
     /**
      * @brief build the post-it styles from the current theme, call once from note_tile_setup()
      *
-     * the paper is bright in every theme and the ink is always black, so an outdated theme
-     * never makes a note unreadable. a theme change takes effect after the next start, like on
-     * the neighbour tiles.
+     * a theme change takes effect after the next start, like on the neighbour tiles.
      */
     void note_style_setup( void );
     /**

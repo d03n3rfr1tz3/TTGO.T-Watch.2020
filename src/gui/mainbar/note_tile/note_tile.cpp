@@ -42,15 +42,15 @@
 
 #define NOTE_CELL_MAX           8                                       /** @brief cap for the static cell table */
 #define NOTE_GRID_MAX           4                                       /** @brief most columns or rows to try */
-#define NOTE_TAPE_OVERHANG      THEME_PADDING                           /** @brief how far the tape sticks onto the ground */
-#define NOTE_TEXT_Y             ( THEME_PADDING + 2 )                   /** @brief keeps the glue zone free */
-#define NOTE_CHECK_EXT          ( THEME_PADDING * 2 )                   /** @brief grows the check to button size without taking the space */
-#define NOTE_CHECK_OPA          LV_OPA_70                               /** @brief an open note only hints at its check */
+#define NOTE_TAPE_OVERHANG      THEME_PADDING                           /** @brief how far the tape sticks out over the top edge */
+#define NOTE_TEXT_Y             ( THEME_PADDING + 2 )                   /** @brief first text line, below the tape */
+#define NOTE_CHECK_EXT          ( THEME_PADDING * 2 )                   /** @brief extra touch area around the check glyph */
+#define NOTE_CHECK_OPA          LV_OPA_70                               /** @brief text opacity of the check on an open note */
 #define NOTE_TASK_PERIOD        1000
 #define NOTE_TASK_IDLE_PERIOD   2000
 
 /**
- * @brief one post-it, the tape strip is a sibling because lvgl 7 clips children hard
+ * @brief one post-it, the tape is a sibling of the paper because a child would be clipped
  */
 typedef struct {
     lv_obj_t *paper;
@@ -143,10 +143,7 @@ static void note_tile_stop_playback( void ) {
 }
 
 /**
- * @brief   center the footer buttons in their cell
- *
- * a pretty layout stacks its rows from the top, so the container has to be as tall as its
- * content and gets centered by hand. a source registered later makes it grow, hence the helper.
+ * @brief center the footer in its cell, a pretty layout stacks its rows from the top
  */
 static void note_tile_align_footer( void ) {
     lv_obj_align( note_footer, note_cont, LV_ALIGN_IN_TOP_LEFT,
@@ -155,10 +152,7 @@ static void note_tile_align_footer( void ) {
 }
 
 /**
- * @brief   free a cell for a new note
- *
- * checking a note off gives its place back at once, the grace period is there to take it back,
- * not to block the plus button.
+ * @brief free a cell for a new note, checked notes go before the grace period ends
  */
 static bool note_tile_make_room( void ) {
     while ( note_config_get_entrys() >= note_tile_visible ) {
@@ -170,7 +164,7 @@ static bool note_tile_make_room( void ) {
 }
 
 /**
- * @brief plus buttons stay visible when all slots are taken, they just go dim
+ * @brief dim the create buttons instead of hiding them when no cell is left
  */
 static void note_tile_set_full( bool full ) {
     lv_obj_t *btn_table[ NOTE_SOURCE_MAX + 1 ] = { note_add_btn };
@@ -277,9 +271,8 @@ bool note_tile_add_audio_note( const char *path, const char *name ) {
 /**
  * @brief   fit the squarest grid of cells into the tile, the last cell is the footer
  *
- * a note is a square piece of paper, so the cells are scored by how close to square they are.
- * a cell has to hold the plus button plus one registered source side by side, that lower bound
- * is what keeps a 240 px display at two columns.
+ * cells are scored by how close to square they are. a cell has to hold the plus button and one
+ * registered source side by side, that is the lower bound for its width.
  */
 static void note_tile_build_grid( int32_t *columns, int32_t *rows ) {
     lv_coord_t usable_w = lv_disp_get_hor_res( NULL ) - 2 * THEME_PADDING;

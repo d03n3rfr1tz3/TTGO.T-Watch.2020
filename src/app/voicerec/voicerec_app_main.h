@@ -31,10 +31,7 @@
 
     void voicerec_app_main_setup( uint32_t tile_num );
     /**
-     * @brief   arm the note handover for the next take
-     *
-     * set when the recorder is entered from the note tile. the take after it becomes a voice note,
-     * every other take behaves as before.
+     * @brief arm the note handover, the next take becomes a voice note
      */
     void voicerec_app_main_set_from_note( void );
 

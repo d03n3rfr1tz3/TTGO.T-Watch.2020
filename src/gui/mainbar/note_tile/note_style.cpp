@@ -28,7 +28,7 @@
 #define NOTE_PAPER_GREEN        0xb7e58a
 #define NOTE_PAPER_NIGHT        LV_OPA_30   /** @brief brightness taken off the paper in a dark theme */
 
-#define NOTE_GLUE_DARKEN        LV_OPA_20   /** @brief the top zone that carries the glue on a real post-it */
+#define NOTE_GLUE_DARKEN        LV_OPA_20   /** @brief darker top zone, the glue band of a real post-it */
 #define NOTE_SHADOW_MIX         160         /** @brief paper share in the hard shadow edge */
 #define NOTE_SHADOW_WIDTH       2
 #define NOTE_TAPE_OPA           LV_OPA_30

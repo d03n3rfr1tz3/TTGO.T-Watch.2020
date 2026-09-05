@@ -26,7 +26,7 @@
     #include "utils/basejsonconfig.h"
 
     #define NOTE_JSON_CONFIG_FILE   "/note.json"
-    #define NOTE_MAX                7       /** @brief one cell less than NOTE_CELL_MAX, what fits on the biggest display */
+    #define NOTE_MAX                7       /** @brief cap for the json buffer, more than any display shows at once */
     #define NOTE_TEXT_MAX           256
     #define NOTE_PATH_MAX           32      /** @brief CONFIG_SPIFFS_OBJ_NAME_LEN */
     #define NOTE_DONE_GRACE         60      /** @brief seconds until a checked note is dropped */

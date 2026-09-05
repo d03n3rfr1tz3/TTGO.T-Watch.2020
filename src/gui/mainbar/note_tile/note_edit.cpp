@@ -89,7 +89,7 @@ void note_edit_open( int32_t entry ) {
 }
 
 /**
- * @brief an empty text note is no note, an audio note keeps its old name instead
+ * @brief an emptied text note is dropped, an audio note keeps its name
  */
 static void note_edit_save( void ) {
     const char *text = lv_textarea_get_text( note_edit_textarea );

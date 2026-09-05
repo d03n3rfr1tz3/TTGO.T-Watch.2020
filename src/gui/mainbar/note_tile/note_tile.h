@@ -48,8 +48,7 @@
     /**
      * @brief   register an additional create button on the note tile
      *
-     * apps call this from their setup, the note tile knows nothing about them. registering is
-     * optional in every sense: without it the tile just shows the plain plus button.
+     * apps call this from their setup, the note tile knows nothing about them.
      *
      * @param   name        source name, for logging
      * @param   icon        system icon in the current theme size, must differ from the plus button
@@ -61,8 +60,7 @@
     /**
      * @brief   add a note referencing an existing audio file
      *
-     * the note holds a reference, not the file. checking the note off drops the note and leaves
-     * the recording where it is.
+     * the note holds a reference, not the file. checking it off leaves the recording where it is.
      *
      * @param   path    file to play, for example "/rec/2026-09-04_0712.wav"
      * @param   name    display name
