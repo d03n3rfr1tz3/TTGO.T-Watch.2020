@@ -1,5 +1,5 @@
 /****************************************************************************
- *   Aug 25 20:00:00 2026
+ *   Sep 04 20:00:00 2026
  *   Copyright  2026  Dirk Sarodnick
  *   Email: programmer@dirk-sarodnick.de
  ****************************************************************************/
@@ -19,20 +19,32 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef _VOICEREC_APP_MAIN_H
-    #define _VOICEREC_APP_MAIN_H
+#ifndef _NOTE_STYLE_H
+    #define _NOTE_STYLE_H
 
-    #include "gui/widget_factory.h"
+    #include "gui/widget_styles.h"
 
-    #define VOICEREC_APP_MAIN_PERIOD    100                         /** @brief gui refresh period in ms */
-    #define VOICEREC_SPL_FLOOR          30.0f                       /** @brief lower end of the level bar in dB SPL, same scale as the soundmeter */
-    #define VOICEREC_SPL_CEIL           110.0f                      /** @brief upper end of the level bar in dB SPL */
-    #define VOICEREC_BAR_HEIGHT         20                          /** @brief level bar height */
+    #define NOTE_PAPER_VARIANTS     3       /** @brief number of paper shades, cycled by note index */
 
-    void voicerec_app_main_setup( uint32_t tile_num );
     /**
-     * @brief arm the note handover, the next take becomes a voice note
+     * @brief build the post-it styles from the current theme, call once from note_tile_setup()
+     *
+     * a theme change takes effect after the next start, like on the neighbour tiles.
      */
-    void voicerec_app_main_set_from_note( void );
+    void note_style_setup( void );
+    /**
+     * @brief   get the paper style for a note
+     *
+     * @param   index   note index, shades repeat every NOTE_PAPER_VARIANTS
+     */
+    lv_style_t *note_style_get_paper( int32_t index );
+    /**
+     * @brief   style for the tape strip, an alpha only image colored by image_recolor
+     */
+    lv_style_t *note_style_get_tape( void );
+    /**
+     * @brief   style for the note text
+     */
+    lv_style_t *note_style_get_text( void );
 
-#endif // _VOICEREC_APP_MAIN_H
+#endif // _NOTE_STYLE_H

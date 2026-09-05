@@ -27,6 +27,7 @@
 #include "voicerec_recorder.h"
 
 #include "gui/mainbar/mainbar.h"
+#include "gui/mainbar/note_tile/note_tile.h"
 #include "gui/statusbar.h"
 #include "gui/widget_factory.h"
 #include "gui/widget_styles.h"
@@ -48,6 +49,8 @@ static lv_task_t *voicerec_app_main_task = NULL;
 
 static voicerec_config_t voicerec_config;
 static bool voicerec_config_changed = false;
+static bool voicerec_from_note = false;                             /** @brief the take after entering from the note tile becomes a voice note */
+static bool voicerec_was_busy = false;
 
 static void voicerec_app_main_activate_cb( void );
 static void voicerec_app_main_hibernate_cb( void );
@@ -176,6 +179,27 @@ static void voicerec_app_main_lv_task( lv_task_t * task ) {
     lv_obj_set_click( voicerec_play_btn, !busy && !full );
     lv_obj_set_click( voicerec_quality_switch, !busy );
     lv_obj_set_click( voicerec_gain_list, !busy );
+
+    if( voicerec_was_busy && !busy ) {
+        if( voicerec_from_note && state == VOICEREC_IDLE ) {
+            char name[ 16 ] = "";
+            time_t now = time( NULL );
+            struct tm info;
+
+            localtime_r( &now, &info );
+            strftime( name, sizeof( name ), "%d.%m. %H:%M", &info );
+
+            note_tile_add_audio_note( voicerec_recorder_get_filename(), name );
+            mainbar_jump_to_tilenumber( note_tile_get_tile_num(), LV_ANIM_OFF, false );
+        }
+        voicerec_from_note = false;
+    }
+
+    voicerec_was_busy = busy;
+}
+
+void voicerec_app_main_set_from_note( void ) {
+    voicerec_from_note = true;
 }
 
 static void voicerec_app_main_play_event_cb( lv_obj_t * obj, lv_event_t event ) {
@@ -218,6 +242,7 @@ static void voicerec_app_main_right_event_cb( lv_obj_t * obj, lv_event_t event )
 static void voicerec_app_main_exit_event_cb( lv_obj_t * obj, lv_event_t event ) {
     switch( event ) {
         case( LV_EVENT_CLICKED ):       voicerec_recorder_stop();
+                                        voicerec_from_note = false;
                                         mainbar_jump_back();
                                         break;
     }
