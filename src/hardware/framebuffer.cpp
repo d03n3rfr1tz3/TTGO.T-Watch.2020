@@ -281,9 +281,6 @@ void framebuffer_refresh( void ) {
 }
 
 static void framebuffer_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p) {
-    if( !framebuffer_drawing )
-            lv_disp_flush_ready( disp_drv );
-
     #ifdef NATIVE_64BIT
         /**
          * flush SDL screen
