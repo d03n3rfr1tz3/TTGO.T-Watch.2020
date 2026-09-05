@@ -1,5 +1,5 @@
 /****************************************************************************
- *   Aug 25 20:00:00 2026
+ *   Sep 04 20:00:00 2026
  *   Copyright  2026  Dirk Sarodnick
  *   Email: programmer@dirk-sarodnick.de
  ****************************************************************************/
@@ -19,23 +19,27 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef _VOICEREC_APP_MAIN_H
-    #define _VOICEREC_APP_MAIN_H
+#ifndef _NOTE_EDIT_H
+    #define _NOTE_EDIT_H
 
-    #include "gui/widget_factory.h"
+    #include "config.h"
+    #ifdef LV_LVGL_H_INCLUDE_SIMPLE
+        #include "lv_core/lv_obj.h"
+    #else
+        #include "lvgl/src/lv_core/lv_obj.h"
+    #endif
 
-    #define VOICEREC_APP_MAIN_PERIOD    100                         /** @brief gui refresh period in ms */
-    #define VOICEREC_SPL_FLOOR          30.0f                       /** @brief lower end of the level bar in dB SPL, same scale as the soundmeter */
-    #define VOICEREC_SPL_CEIL           110.0f                      /** @brief upper end of the level bar in dB SPL */
-    #define VOICEREC_BAR_HEIGHT         20                          /** @brief level bar height */
-
-    void voicerec_app_main_setup( uint32_t tile_num );
     /**
-     * @brief   arm the note handover for the next take
-     *
-     * set when the recorder is entered from the note tile. the take after it becomes a voice note,
-     * every other take behaves as before.
+     * @brief setup the note editor app tile, called from note_tile_setup()
      */
-    void voicerec_app_main_set_from_note( void );
+    void note_edit_setup( void );
+    /**
+     * @brief   open the editor
+     *
+     * an audio note only edits its display name, never its path.
+     *
+     * @param   entry   note to edit, below zero starts a new text note
+     */
+    void note_edit_open( int32_t entry );
 
-#endif // _VOICEREC_APP_MAIN_H
+#endif // _NOTE_EDIT_H
