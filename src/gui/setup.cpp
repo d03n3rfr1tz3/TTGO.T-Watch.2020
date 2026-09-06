@@ -89,6 +89,8 @@ void setup_set_indicator( icon_t *setup, icon_indicator_t indicator ) {
                                     break;
         case ICON_INDICATOR_UPDATE: lv_img_set_src( setup->icon_indicator, &info_update_16px );
                                     break;
+        case ICON_INDICATOR_WAIT:   lv_img_set_src( setup->icon_indicator, &info_wait_16px );
+                                    break;
         case ICON_INDICATOR_1:      lv_img_set_src( setup->icon_indicator, &info_1_16px );
                                     break;
         case ICON_INDICATOR_2:      lv_img_set_src( setup->icon_indicator, &info_2_16px );

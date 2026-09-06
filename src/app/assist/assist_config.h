@@ -44,6 +44,7 @@
         char token[ ASSIST_TOKEN_LEN ] = "";                        /** @brief long lived access token */
         char pipeline[ ASSIST_PIPELINE_LEN ] = "";                  /** @brief empty selects the preferred pipeline, json only */
         uint8_t gain = ASSIST_GAIN_DEFAULT;                         /** @brief index into ASSIST_GAIN_OPTIONS */
+        bool widget = false;                                        /** @brief show the widget icon on the main tile */
 
         protected:
         ////////////// Available for overloading: //////////////

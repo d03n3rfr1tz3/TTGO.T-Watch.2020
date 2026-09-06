@@ -49,6 +49,7 @@ bool assist_config_t::onSave( JsonDocument& doc ) {
     doc["token"] = token;
     doc["pipeline"] = pipeline;
     doc["gain"] = gain;
+    doc["widget"] = widget;
 
     return( true );
 }
@@ -59,6 +60,7 @@ bool assist_config_t::onLoad( JsonDocument& doc ) {
     snprintf( token, sizeof( token ), "%s", doc["token"] | "" );
     snprintf( pipeline, sizeof( pipeline ), "%s", doc["pipeline"] | "" );
     gain = doc["gain"] | ASSIST_GAIN_DEFAULT;
+    widget = doc["widget"] | false;
 
     if( gain >= ASSIST_GAIN_COUNT )
         gain = ASSIST_GAIN_DEFAULT;
@@ -72,6 +74,7 @@ bool assist_config_t::onDefault( void ) {
     token[ 0 ] = '\0';
     pipeline[ 0 ] = '\0';
     gain = ASSIST_GAIN_DEFAULT;
+    widget = false;
 
     return( true );
 }

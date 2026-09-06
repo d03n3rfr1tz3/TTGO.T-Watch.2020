@@ -25,6 +25,7 @@
     LV_IMG_DECLARE(info_ok_16px);
     LV_IMG_DECLARE(info_fail_16px);
     LV_IMG_DECLARE(info_update_16px);
+    LV_IMG_DECLARE(info_wait_16px);
     LV_IMG_DECLARE(info_1_16px);
     LV_IMG_DECLARE(info_2_16px);
     LV_IMG_DECLARE(info_3_16px);
@@ -36,6 +37,7 @@
         ICON_INDICATOR_OK = 0,
         ICON_INDICATOR_FAIL,
         ICON_INDICATOR_UPDATE,
+        ICON_INDICATOR_WAIT,
         ICON_INDICATOR_1,
         ICON_INDICATOR_2,
         ICON_INDICATOR_3,

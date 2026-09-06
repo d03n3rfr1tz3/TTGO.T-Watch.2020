@@ -28,6 +28,7 @@
 #include "assist_config.h"
 #include "assist_stream.h"
 #include "assist_tts.h"
+#include "assist_widget.h"
 #include "assist_ws.h"
 
 #include "gui/mainbar/mainbar.h"
@@ -63,6 +64,7 @@ void assist_app_setup( void ) {
     assist_ws_setup();
     assist_stream_setup();
     assist_tts_setup();
+    assist_widget_setup();
 
     assist_app_main_tile_num = mainbar_add_app_tile( 1, 1, "assist app" );
     assist_app_setup_tile_num = mainbar_add_setup_tile( ASSIST_SETUP_TILES, 1, "assist setup" );

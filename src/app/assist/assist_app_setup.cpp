@@ -25,6 +25,7 @@
 #include "assist_app_pair.h"
 #include "assist_app_setup.h"
 #include "assist_config.h"
+#include "assist_widget.h"
 #include "assist_ws.h"
 
 #include "gui/keyboard.h"
@@ -45,6 +46,7 @@ static lv_obj_t *assist_port_textfield = NULL;
 static lv_obj_t *assist_pair_button = NULL;
 static lv_obj_t *assist_pair_state_label = NULL;
 static lv_obj_t *assist_pipeline_list = NULL;
+static lv_obj_t *assist_widget_switch = NULL;
 static lv_obj_t *assist_setup_state_label = NULL;
 static lv_task_t *assist_app_setup_task = NULL;
 static bool assist_setup_connect_wanted = false;
@@ -57,9 +59,11 @@ static bool assist_app_setup_is_visible( void );
 static void assist_app_setup_store( void );
 static lv_obj_t *assist_app_setup_add_row( lv_obj_t *above, const char *text, lv_obj_t **ret_textfield, const char *value, lv_event_cb_t event_cb );
 static lv_obj_t *assist_app_setup_add_pair_row( lv_obj_t *above );
+static lv_obj_t *assist_app_setup_add_switch_row( lv_obj_t *above );
 static void assist_app_setup_fill_pipelines( void );
 static void assist_app_setup_pair_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_pipeline_event_cb( lv_obj_t * obj, lv_event_t event );
+static void assist_app_setup_widget_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_exit_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_textarea_event_cb( lv_obj_t * obj, lv_event_t event );
 static void assist_app_setup_num_textarea_event_cb( lv_obj_t * obj, lv_event_t event );
@@ -85,18 +89,22 @@ void assist_app_setup_setup( uint32_t tile_num ) {
 
     lv_obj_t *pipeline_cont = wf_add_labeled_list( assist_app_setup_tile, "pipeline", &assist_pipeline_list, ASSIST_SETUP_PIPELINE_PREFERRED, assist_app_setup_pipeline_event_cb, SETUP_STYLE );
     lv_dropdown_set_max_height( assist_pipeline_list, ASSIST_SETUP_LIST_HEIGHT );
-    lv_obj_align( pipeline_cont, pair_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
+    lv_obj_align( pipeline_cont, pair_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, ASSIST_SETUP_ROW_GAP );
+
+    lv_obj_t *widget_cont = assist_app_setup_add_switch_row( pipeline_cont );
 
     assist_setup_state_label = wf_add_label( assist_app_setup_tile, "", SETUP_STYLE );
     lv_label_set_long_mode( assist_setup_state_label, LV_LABEL_LONG_BREAK );
     lv_label_set_align( assist_setup_state_label, LV_LABEL_ALIGN_CENTER );
     lv_obj_set_width( assist_setup_state_label, lv_disp_get_hor_res( NULL ) - 2 * THEME_ICON_PADDING );
-    lv_obj_align( assist_setup_state_label, pipeline_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
+    lv_obj_align( assist_setup_state_label, widget_cont, LV_ALIGN_OUT_BOTTOM_MID, 0, ASSIST_SETUP_ROW_GAP );
 
     lv_tileview_add_element( assist_app_setup_tile, host_cont );
     lv_tileview_add_element( assist_app_setup_tile, port_cont );
     lv_tileview_add_element( assist_app_setup_tile, pair_cont );
     lv_tileview_add_element( assist_app_setup_tile, pipeline_cont );
+    lv_tileview_add_element( assist_app_setup_tile, widget_cont );
+    lv_tileview_add_element( assist_app_setup_tile, assist_widget_switch );
     lv_tileview_add_element( assist_app_setup_tile, assist_setup_state_label );
 
     assist_app_setup_task = lv_task_create( assist_app_setup_lv_task, ASSIST_SETUP_PERIOD, LV_TASK_PRIO_OFF, NULL );
@@ -160,7 +168,7 @@ static lv_obj_t *assist_app_setup_add_row( lv_obj_t *above, const char *text, lv
     lv_obj_t *cont = lv_obj_create( assist_app_setup_tile, NULL );
     lv_obj_set_size( cont, lv_disp_get_hor_res( NULL ), ASSIST_SETUP_CONT_HEIGHT );
     lv_obj_add_style( cont, LV_OBJ_PART_MAIN, SETUP_STYLE );
-    lv_obj_align( cont, above, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
+    lv_obj_align( cont, above, LV_ALIGN_OUT_BOTTOM_MID, 0, ASSIST_SETUP_ROW_GAP );
 
     lv_obj_t *label = lv_label_create( cont, NULL );
     lv_obj_add_style( label, LV_OBJ_PART_MAIN, SETUP_STYLE );
@@ -185,7 +193,7 @@ static lv_obj_t *assist_app_setup_add_pair_row( lv_obj_t *above ) {
     lv_obj_t *cont = lv_obj_create( assist_app_setup_tile, NULL );
     lv_obj_set_size( cont, lv_disp_get_hor_res( NULL ), ASSIST_SETUP_CONT_HEIGHT );
     lv_obj_add_style( cont, LV_OBJ_PART_MAIN, SETUP_STYLE );
-    lv_obj_align( cont, above, LV_ALIGN_OUT_BOTTOM_MID, 0, THEME_ICON_PADDING );
+    lv_obj_align( cont, above, LV_ALIGN_OUT_BOTTOM_MID, 0, ASSIST_SETUP_ROW_GAP );
 
     lv_obj_t *label = lv_label_create( cont, NULL );
     lv_obj_add_style( label, LV_OBJ_PART_MAIN, SETUP_STYLE );
@@ -200,6 +208,24 @@ static lv_obj_t *assist_app_setup_add_pair_row( lv_obj_t *above ) {
     lv_obj_add_style( assist_pair_state_label, LV_OBJ_PART_MAIN, SETUP_STYLE );
     lv_label_set_text( assist_pair_state_label, "" );
     lv_obj_align( assist_pair_state_label, assist_pair_button, LV_ALIGN_OUT_LEFT_MID, -THEME_ICON_PADDING, 0 );
+
+    return( cont );
+}
+
+static lv_obj_t *assist_app_setup_add_switch_row( lv_obj_t *above ) {
+    lv_obj_t *cont = lv_obj_create( assist_app_setup_tile, NULL );
+    lv_obj_set_size( cont, lv_disp_get_hor_res( NULL ), ASSIST_SETUP_CONT_HEIGHT );
+    lv_obj_add_style( cont, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    lv_obj_align( cont, above, LV_ALIGN_OUT_BOTTOM_MID, 0, ASSIST_SETUP_ROW_GAP );
+
+    lv_obj_t *label = lv_label_create( cont, NULL );
+    lv_obj_add_style( label, LV_OBJ_PART_MAIN, SETUP_STYLE );
+    lv_label_set_text( label, "widget" );
+    lv_obj_align( label, cont, LV_ALIGN_IN_LEFT_MID, THEME_ICON_PADDING, 0 );
+
+    assist_widget_switch = wf_add_switch( cont, assist_widget_active(), assist_app_setup_widget_event_cb );
+    lv_obj_set_size( assist_widget_switch, ASSIST_SETUP_SWITCH_WIDTH, ASSIST_SETUP_SWITCH_HEIGHT );
+    lv_obj_align( assist_widget_switch, cont, LV_ALIGN_IN_RIGHT_MID, -THEME_ICON_PADDING, 0 );
 
     return( cont );
 }
@@ -286,6 +312,28 @@ static void assist_app_setup_pipeline_event_cb( lv_obj_t * obj, lv_event_t event
 
                                                 if( strcmp( assist_config->pipeline, id ) ) {
                                                     snprintf( assist_config->pipeline, sizeof( assist_config->pipeline ), "%s", id );
+                                                    assist_config_set_dirty();
+                                                }
+                                                break;
+                                            }
+    }
+}
+
+static void assist_app_setup_widget_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    assist_config_t *assist_config = assist_get_config();
+
+    switch( event ) {
+        case( LV_EVENT_VALUE_CHANGED ):     {
+                                                bool enable = lv_switch_get_state( obj );
+
+                                                if( !assist_widget_enable( enable ) ) {
+                                                    log_e("assist: no free widget slot");
+                                                    lv_switch_off( obj, LV_ANIM_OFF );
+                                                    enable = false;
+                                                }
+
+                                                if( assist_config->widget != enable ) {
+                                                    assist_config->widget = enable;
                                                     assist_config_set_dirty();
                                                 }
                                                 break;

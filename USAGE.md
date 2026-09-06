@@ -317,6 +317,12 @@ Pairing works with a QR code, so no long token has to be typed on the watch. The
 the code, your phone confirms it in Home Assistant and the watch issues its own token afterwards.
 Only the pipeline is left to choose, if you have more than one.
 
+The `widget` switch on the setup tile puts an assist icon on the main tile. A short tap on it starts
+recording right there, with your stored settings and the answer always spoken, a second tap sends and
+a third one cancels. A long press opens the app instead. With the system sound turned off there would
+be nothing to hear and nothing to read, so a short tap opens the app as well. The main tile holds
+three widgets at most, and the switch turns itself back off if none of them is free.
+
 Needs a microphone, so this app is only built for the T-Watch 2020 V3.
 
 ![screenshot](images/assist.png)
