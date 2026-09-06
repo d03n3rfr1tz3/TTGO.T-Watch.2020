@@ -146,25 +146,15 @@ void tiltmouse_app_task( lv_task_t * task )
     
     int16_t acc_x = 0;
     int16_t acc_y = 0;
-    int16_t acc_z = 0;
 
-    if ( !bma_get_accel( acc_x, acc_y, acc_z ) ) return;
+    if ( !bma_get_accel_rotated( acc_x, acc_y ) ) return;
 
     // simple low pass
     tiltmouse_acc_x += ( acc_x - tiltmouse_acc_x ) / MOUSE_SMOOTHING;
     tiltmouse_acc_y += ( acc_y - tiltmouse_acc_y ) / MOUSE_SMOOTHING;
 
-    int16_t x = 0;
-    int16_t y = 0;
-    switch( display_get_rotation() ) {
-        case 90:    x =  tiltmouse_acc_y; y = -tiltmouse_acc_x; break;
-        case 180:   x =  tiltmouse_acc_x; y =  tiltmouse_acc_y; break;
-        case 270:   x = -tiltmouse_acc_y; y =  tiltmouse_acc_x; break;
-        default:    x = -tiltmouse_acc_x; y = -tiltmouse_acc_y; break;
-    }
-
-    x = x * MOUSE_SENSIVITY;
-    y = y * MOUSE_SENSIVITY;
+    int16_t x = tiltmouse_acc_x * MOUSE_SENSIVITY;
+    int16_t y = tiltmouse_acc_y * MOUSE_SENSIVITY;
     if ( abs( x ) < MOUSE_DEADZONE ) x = 0;
     if ( abs( y ) < MOUSE_DEADZONE ) y = 0;
     if ( x > 127 ) x = 127; else if ( x < -127 ) x = -127;

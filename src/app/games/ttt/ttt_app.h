@@ -22,6 +22,7 @@
 #pragma once
 
 #include "app/games/gamebase.h"
+#include "app/games/firework.h"
 
 /*
  * Tic Tac Toe: move and game ending tones.
@@ -40,8 +41,6 @@ class TicTacToeApp : public GameBase
 
 private:
     static constexpr int NUM_SQUARES = 9;
-    static constexpr int NUM_SPARKS = 16;
-    static constexpr int NUM_BURSTS = 3;
 
     TicTacToeIcon *mParentIcon = 0;
     bool ttt_inited = false;
@@ -78,9 +77,7 @@ private:
     lv_obj_t *mButtons[NUM_SQUARES] = {0};
     lv_obj_t *mOverlay = 0;
     lv_obj_t *mResultLabel = 0;
-    lv_obj_t *mSparks[NUM_SPARKS] = {0};
-    lv_task_t *mFireworkTask = 0;
-    int mBurstsLeft = 0;
+    GameFirework mFirework;
 
     void NextPlayer() { mCurrentPlayer = (mCurrentPlayer == Red) ? Blue : Red; };
 
@@ -88,12 +85,8 @@ private:
 
     int CheckWinner();
     void EndGame(GameState state);
-    void StartFirework();
-    void StopFirework();
 
 public:
-    void OnFireworkTick();
-
     enum MenuItem : uint8_t
     {
         Reset,

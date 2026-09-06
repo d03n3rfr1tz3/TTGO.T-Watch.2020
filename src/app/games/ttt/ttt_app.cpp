@@ -169,21 +169,6 @@ static void OnOverlay(struct _lv_obj_t *obj, lv_event_t event)
     }
 }
 
-static void FireworkTask(lv_task_t *task)
-{
-    gameInstance->OnFireworkTick();
-}
-
-static void SetSparkOpa(void *obj, lv_anim_value_t value)
-{
-    lv_obj_set_style_local_bg_opa((lv_obj_t *)obj, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, value);
-}
-
-static void HideSpark(lv_anim_t *anim)
-{
-    lv_obj_set_hidden((lv_obj_t *)anim->var, true);
-}
-
 static void OnExit(struct _lv_obj_t *obj, lv_event_t event)
 {
     if (!gameInstance) return;
@@ -353,7 +338,7 @@ TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
         offset += buttonSpacing;
 
         label = lv_label_create(menuTile, NULL);
-        lv_label_set_text_static(label, "Swipe left for the play area.");
+        lv_label_set_text_static(label, "Two players, tap a square.\nSwipe left for the play area.");
         lv_obj_align(label, menuTile, LV_ALIGN_IN_TOP_MID, 0, offset);
         lv_label_set_align(label, LV_LABEL_ALIGN_CENTER);
         offset += buttonSpacing;
@@ -408,15 +393,7 @@ TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
         lv_label_set_text_static(mResultLabel, "");
         lv_obj_set_click(mResultLabel, false);
 
-        for (int i = 0; i < NUM_SPARKS; i++)
-        {
-            mSparks[i] = lv_obj_create(gameplayTile, NULL);
-            lv_obj_set_size(mSparks[i], 8, 8);
-            lv_obj_set_click(mSparks[i], false);
-            lv_obj_reset_style_list(mSparks[i], LV_OBJ_PART_MAIN);
-            lv_obj_set_style_local_radius(mSparks[i], LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
-            lv_obj_set_style_local_border_width(mSparks[i], LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, 0);
-        }
+        mFirework.Create(gameplayTile);
     }
 
     ClearBoard();
@@ -427,7 +404,7 @@ TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
 
 TicTacToeApp::~TicTacToeApp()
 {
-    StopFirework();
+    mFirework.Stop();
     // LVGL Objects parented to the tiles should be deleted when the tiles are destroyed.
     FreeAppTiles();
     gameInstance = nullptr;
@@ -442,7 +419,7 @@ void TicTacToeApp::OnLaunch()
 void TicTacToeApp::OnExitClicked()
 {
     log_d("Exiting...");
-    StopFirework();
+    mFirework.Stop();
     // Pass along the message for differed deletion and return to main menu
     mParentIcon->OnExitClicked();
     FreeAppTiles();
@@ -523,7 +500,17 @@ void TicTacToeApp::EndGame(GameState state)
 
         sound_play_rtttl(SND_TTT_WIN, SOUND_TYPE_BACKGROUND);
         motor_vibe(10);
-        StartFirework();
+
+        // burst from the middle of the winning line
+        lv_coord_t cx = 0;
+        lv_coord_t cy = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            const uint8_t square = WIN_LINES[mWinLine][i];
+            cx += SQUARE_POS[square % 3] + (SQUARE_SIZE / 2);
+            cy += SQUARE_POS[square / 3] + (SQUARE_SIZE / 2);
+        }
+        mFirework.Start(cx / 3, cy / 3, red ? LV_COLOR_RED : LV_COLOR_BLUE);
     }
     else
     {
@@ -540,98 +527,9 @@ void TicTacToeApp::EndGame(GameState state)
     lv_obj_set_hidden(mOverlay, false);
 }
 
-void TicTacToeApp::StartFirework()
-{
-    mBurstsLeft = NUM_BURSTS;
-
-    if (!mFireworkTask)
-        mFireworkTask = lv_task_create(FireworkTask, 400, LV_TASK_PRIO_MID, NULL);
-
-    OnFireworkTick();
-}
-
-void TicTacToeApp::OnFireworkTick()
-{
-    if (mBurstsLeft <= 0 || mWinLine < 0)
-    {
-        StopFirework();
-        return;
-    }
-    mBurstsLeft--;
-
-    // burst from the middle of the winning line
-    lv_coord_t cx = 0;
-    lv_coord_t cy = 0;
-    for (int i = 0; i < 3; i++)
-    {
-        const uint8_t square = WIN_LINES[mWinLine][i];
-        cx += SQUARE_POS[square % 3] + (SQUARE_SIZE / 2);
-        cy += SQUARE_POS[square / 3] + (SQUARE_SIZE / 2);
-    }
-    cx /= 3;
-    cy /= 3;
-
-    const lv_color_t player = (mCurrentPlayer == Owner::Red) ? LV_COLOR_RED : LV_COLOR_BLUE;
-
-    lv_anim_path_t path = {0};
-    lv_anim_path_set_cb(&path, lv_anim_path_ease_out);
-
-    for (int i = 0; i < NUM_SPARKS; i++)
-    {
-        lv_obj_t *spark = mSparks[i];
-        const float angle = (float)i * 2 * PI / NUM_SPARKS;
-        const int radius = 50 + (rand() % 30);
-
-        lv_obj_set_style_local_bg_color(spark, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, (i % 3 == 0) ? LV_COLOR_WHITE : ((i % 3 == 1) ? LV_COLOR_YELLOW : player));
-        lv_obj_set_style_local_bg_opa(spark, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_COVER);
-        lv_obj_set_pos(spark, cx - 4, cy - 4);
-        lv_obj_set_hidden(spark, false);
-
-        lv_anim_t anim;
-        lv_anim_init(&anim);
-        lv_anim_set_var(&anim, spark);
-        lv_anim_set_time(&anim, 500);
-        lv_anim_set_path(&anim, &path);
-
-        lv_anim_set_exec_cb(&anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
-        lv_anim_set_values(&anim, cx - 4, cx - 4 + (lv_coord_t)(radius * cos(angle)));
-        lv_anim_start(&anim);
-
-        lv_anim_set_exec_cb(&anim, (lv_anim_exec_xcb_t)lv_obj_set_y);
-        lv_anim_set_values(&anim, cy - 4, cy - 4 + (lv_coord_t)(radius * sin(angle)));
-        lv_anim_start(&anim);
-
-        lv_anim_set_exec_cb(&anim, SetSparkOpa);
-        lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
-        lv_anim_set_ready_cb(&anim, HideSpark);
-        lv_anim_start(&anim);
-    }
-
-    motor_vibe(2);
-}
-
-void TicTacToeApp::StopFirework()
-{
-    if (mFireworkTask)
-    {
-        lv_task_del(mFireworkTask);
-        mFireworkTask = 0;
-    }
-    mBurstsLeft = 0;
-
-    // the animations must not outlive the objects they drive
-    for (lv_obj_t *spark : mSparks)
-    {
-        if (!spark)
-            continue;
-        lv_anim_del(spark, NULL);
-        lv_obj_set_hidden(spark, true);
-    }
-}
-
 void TicTacToeApp::ClearBoard()
 {
-    StopFirework();
+    mFirework.Stop();
 
     for (Owner &c : mBoard)
     {

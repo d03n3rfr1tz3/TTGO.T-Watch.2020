@@ -24,6 +24,7 @@
 #include <time.h>
 
 #include "motion.h"
+#include "display.h"
 #include "powermgm.h"
 #include "callback.h"
 #include "utils/alloc.h"
@@ -697,4 +698,23 @@ bool bma_get_accel( int16_t &x, int16_t &y, int16_t &z ) {
         #endif
     #endif
     return( false );
+}
+
+bool bma_get_accel_rotated( int16_t &x, int16_t &y ) {
+    int16_t acc_x = 0;
+    int16_t acc_y = 0;
+    int16_t acc_z = 0;
+
+    x = 0;
+    y = 0;
+    if( !bma_get_accel( acc_x, acc_y, acc_z ) )
+        return( false );
+
+    switch( display_get_rotation() ) {
+        case 90:    x =  acc_y; y = -acc_x; break;
+        case 180:   x =  acc_x; y =  acc_y; break;
+        case 270:   x = -acc_y; y =  acc_x; break;
+        default:    x = -acc_x; y = -acc_y; break;
+    }
+    return( true );
 }

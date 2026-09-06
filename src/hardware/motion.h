@@ -103,5 +103,14 @@
      * @return true if the board has an axis sensor and the values are valid
      */
     bool bma_get_accel( int16_t &x, int16_t &y, int16_t &z );
+    /**
+     * @brief read the current acceleration mapped onto the display orientation
+     *
+     * @param x     acceleration along the screen x axis, positive to the right
+     * @param y     acceleration along the screen y axis, positive downwards
+     *
+     * @return true if the board has an axis sensor and the values are valid
+     */
+    bool bma_get_accel_rotated( int16_t &x, int16_t &y );
 
 #endif // _MOTION_H

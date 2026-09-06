@@ -33,10 +33,12 @@
 #define PLAYER_BOUNDARY ((FIELD_HEIGHT / 2) - (PLAYER_HEIGHT / 2))
 #define PLAYER_SPEED_MAX 10
 #define PLAYER_SMOOTHING 2
+#define PLAYER_ANGLE_MAX 45
 #define BALL_WIDTH 8
 #define BALL_HEIGHT 8
-#define BALL_SPEED_MIN 3
-#define BALL_SPEED_MAX 15
+#define BALL_SPEED_MIN 3.5f
+#define BALL_SPEED_MAX 15.0f
+#define BALL_ANGLE_MIN 25
 
 /*
  * Pong: the original 1972 sound circuit divided the 15720Hz line frequency by
@@ -60,12 +62,10 @@ private:
     PongIcon *mParentIcon = 0;
     bool pong_inited = false;
     bool pong_active = false;
-    uint32_t control_orientation;
-    int16_t control_acc_x = 0;
     int16_t control_acc_y = 0;
 
     // Gameplay data
-    uint8_t ball_speed = BALL_SPEED_MIN;
+    float ball_speed = BALL_SPEED_MIN;
     uint16_t ball_bounce = 0;
     uint16_t ball_degree = 0;
     float ball_x = (FIELD_WIDTH / 2);
@@ -90,7 +90,9 @@ private:
 
     bool CheckCollision();
 
-    bool TurnDegree(uint16_t base_degree, int8_t altered_degree);
+    bool TurnDegree(uint16_t base_degree);
+
+    bool SetDegree(int16_t degree);
 
     void UpdateBall();
 

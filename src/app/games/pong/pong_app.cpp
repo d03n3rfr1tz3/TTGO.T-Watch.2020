@@ -125,8 +125,7 @@ PongApp::PongApp(PongIcon *icon)
 {
     gameInstance = this;
     mParentIcon = icon;
-    control_orientation = display_get_rotation();
-    
+
     log_d("Creating game tiles...");
     if (!AllocateAppTiles(2, 1))
     {
@@ -239,7 +238,7 @@ PongApp::PongApp(PongIcon *icon)
         offset += buttonSpacing;
 
         label = lv_label_create(menuTile, NULL);
-        lv_label_set_text_static(label, "Swipe left for the play area.");
+        lv_label_set_text_static(label, "Tilt the watch to move.\nSwipe left for the play area.");
         lv_obj_align(label, menuTile, LV_ALIGN_IN_TOP_MID, 0, offset);
         lv_label_set_align(label, LV_LABEL_ALIGN_CENTER);
         offset += buttonSpacing;
@@ -335,29 +334,29 @@ bool PongApp::CheckCollision()
     return false;
 }
 
-bool PongApp::TurnDegree(uint16_t base_degree, int8_t altered_degree)
+/*
+ * Reflect the ball off a surface whose outward normal points at base_degree.
+ */
+bool PongApp::TurnDegree(uint16_t base_degree)
 {
-    int16_t new_degree = (base_degree * 2) - 180 - ball_degree + altered_degree;
-    while (new_degree < 0) new_degree += 360;
-    while (new_degree >= 360) new_degree -= 360;
-    log_d("Calculated new %d degree from incoming %d ball degree using %d base degree and altered %d degree", new_degree, ball_degree, base_degree, altered_degree);
+    return SetDegree((base_degree * 2) - 180 - ball_degree);
+}
 
-    int16_t base_degree_invert = base_degree - 180;
-    while (base_degree_invert < 0) base_degree_invert += 360;
-    while (base_degree_invert >= 360) base_degree_invert -= 360;
+/*
+ * Take an absolute direction, for surfaces that pick the angle themselves.
+ */
+bool PongApp::SetDegree(int16_t degree)
+{
+    while (degree < 0) degree += 360;
+    while (degree >= 360) degree -= 360;
 
-    int16_t base_degree_min = base_degree - 85;
-    int16_t base_degree_max = base_degree + 85;
-    while (base_degree_min < 0) base_degree_min += 360;
-    while (base_degree_max >= 360) base_degree_max -= 360;
-    if (base_degree_min < base_degree_max && new_degree < base_degree_min) new_degree = base_degree_min;
-    if (base_degree_min > base_degree_max && new_degree < base_degree_min && new_degree > base_degree_invert) new_degree = base_degree_min;
-    if (base_degree_min < base_degree_max && new_degree > base_degree_max) new_degree = base_degree_max;
-    if (base_degree_min > base_degree_max && new_degree > base_degree_max && new_degree < base_degree_invert) new_degree = base_degree_max;
-    log_d("Calculated min %d and max %d degree for %d base degree and changed degree to %d", base_degree_min, base_degree_max, base_degree, new_degree);
+    if (degree > 90 - BALL_ANGLE_MIN && degree <= 90) degree = 90 - BALL_ANGLE_MIN;
+    else if (degree > 90 && degree < 90 + BALL_ANGLE_MIN) degree = 90 + BALL_ANGLE_MIN;
+    else if (degree > 270 - BALL_ANGLE_MIN && degree <= 270) degree = 270 - BALL_ANGLE_MIN;
+    else if (degree > 270 && degree < 270 + BALL_ANGLE_MIN) degree = 270 + BALL_ANGLE_MIN;
 
-    log_d("Turn Degree from %d to %d", ball_degree, new_degree);
-    ball_degree = new_degree;
+    log_d("Turn Degree from %d to %d", ball_degree, degree);
+    ball_degree = degree;
 
     return true;
 }
@@ -369,7 +368,7 @@ bool PongApp::BounceWallTop()
 
     if (ball_bounce > 0 && ball_bounce % 3 == 0) ball_speed++;
 
-    TurnDegree(90, 0);
+    TurnDegree(90);
     motor_vibe(1);
 
     return true;
@@ -382,7 +381,7 @@ bool PongApp::BounceWallBottom()
 
     if (ball_bounce > 0 && ball_bounce % 3 == 0) ball_speed++;
 
-    TurnDegree(270, 0);
+    TurnDegree(270);
     motor_vibe(1);
 
     return true;
@@ -392,12 +391,15 @@ bool PongApp::BouncePlayer1()
 {
     if (ball_degree < 90 || ball_degree > 270) return false;
 
-    int8_t altered_degree = map(ball_y, player1_y - (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), player1_y + (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), -45, 45);
-    if (altered_degree < 5 && altered_degree > -5) altered_degree = 0;
+    // classic pong returns the ball by where it hit the paddle
+    int16_t offset = map(ball_y, player1_y - (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), player1_y + (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), -PLAYER_ANGLE_MAX, PLAYER_ANGLE_MAX);
+    offset = constrain(offset, -PLAYER_ANGLE_MAX, PLAYER_ANGLE_MAX);
+    if (offset < 5 && offset > -5) offset = 0;
 
-    log_d("Bounce Player 1 with altered Degree %d", altered_degree);
-    TurnDegree(0, altered_degree);
-    
+    log_d("Bounce Player 1 with offset %d", offset);
+    SetDegree(offset);
+
+
     if (ball_bounce > 0) ball_speed++;
     ball_bounce++;
 
@@ -411,11 +413,12 @@ bool PongApp::BouncePlayer2()
 {
     if (ball_degree > 90 && ball_degree < 270) return false;
 
-    int8_t altered_degree = map(ball_y, player2_y - (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), player2_y + (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), 45, -45);
-    if (altered_degree < 5 && altered_degree > -5) altered_degree = 0;
+    int16_t offset = map(ball_y, player2_y - (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), player2_y + (PLAYER_HEIGHT / 2) + (FIELD_HEIGHT / 2), -PLAYER_ANGLE_MAX, PLAYER_ANGLE_MAX);
+    offset = constrain(offset, -PLAYER_ANGLE_MAX, PLAYER_ANGLE_MAX);
+    if (offset < 5 && offset > -5) offset = 0;
 
-    log_d("Bounce Player 2 with altered Degree %d", altered_degree);
-    TurnDegree(180, altered_degree);
+    log_d("Bounce Player 2 with offset %d", offset);
+    SetDegree(180 - offset);
 
     if (ball_bounce > 0) ball_speed++;
     ball_bounce++;
@@ -469,31 +472,14 @@ void PongApp::UpdatePlayer1()
 {
     int16_t acc_x = 0;
     int16_t acc_y = 0;
-    int16_t acc_z = 0;
 
-    if ( !bma_get_accel( acc_x, acc_y, acc_z ) ) return;
+    if ( !bma_get_accel_rotated( acc_x, acc_y ) ) return;
 
     // simple low pass
-    control_acc_x += ( acc_x - control_acc_x ) / PLAYER_SMOOTHING;
     control_acc_y += ( acc_y - control_acc_y ) / PLAYER_SMOOTHING;
 
     // set new position by accelerator
-    int16_t new_position = 0;
-    switch (control_orientation) {
-        case 270:
-            new_position = 0 - control_acc_x * 0.2;
-            break;
-        case 180:
-            new_position = control_acc_y * 0.2;
-            break;
-        case 90:
-            new_position = control_acc_x * 0.2;
-            break;
-        case 0:
-        default:
-            new_position = 0 - control_acc_y * 0.2;
-            break;
-    }
+    int16_t new_position = control_acc_y * 0.2;
 
     if (new_position > 0 + PLAYER_BOUNDARY) new_position = 0 + PLAYER_BOUNDARY;
     if (new_position < 0 - PLAYER_BOUNDARY) new_position = 0 - PLAYER_BOUNDARY;
@@ -549,8 +535,7 @@ void PongApp::ResetBall()
     ball_speed = BALL_SPEED_MIN;
     ball_bounce = 0;
 
-    ball_degree = random(-45, 45);
-    if (ball_degree < 0) ball_degree += 360;
+    SetDegree(random(-45, 45));
 
     ball_x = (FIELD_WIDTH / 2);
     ball_y = (FIELD_WIDTH / 2);
