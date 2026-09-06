@@ -23,6 +23,7 @@
 #pragma once
 
 #include "app/games/gamebase.h"
+#include "app/games/firework.h"
 
 #define FIELD_WIDTH 240
 #define FIELD_HEIGHT 240
@@ -34,11 +35,20 @@
 #define PLAYER_SPEED_MAX 10
 #define PLAYER_SMOOTHING 2
 #define PLAYER_ANGLE_MAX 45
+#define CPU_LOOKAHEAD 12
+#define CPU_REACTION 3
+#define CPU_AIM_MAX 30
+#define CPU_ERROR_MIN 10
+#define CPU_ERROR_MAX 35
+#define CPU_ACCEL 4
+#define CPU_DAMPING 3
 #define BALL_WIDTH 8
 #define BALL_HEIGHT 8
 #define BALL_SPEED_MIN 3.5f
-#define BALL_SPEED_MAX 15.0f
+#define BALL_SPEED_MAX 14.0f
 #define BALL_ANGLE_MIN 25
+
+#define PONG_WIN_SCORE 11
 
 /*
  * Pong: the original 1972 sound circuit divided the 15720Hz line frequency by
@@ -50,6 +60,7 @@
 #define SND_PONG_BOUNCE_P2      "p2:d=16,o=6,b=180:a"
 #define SND_PONG_SCORE_P1       "s1:d=16,o=5,b=180:b,b6"
 #define SND_PONG_SCORE_P2       "s2:d=16,o=6,b=180:b,b5"
+#define SND_PONG_WIN            "pw:d=32,o=6,b=200:16p,b,d7,f7,8b7"
 
 void pong_app_setup();
 
@@ -64,6 +75,13 @@ private:
     bool pong_active = false;
     int16_t control_acc_y = 0;
 
+    enum GameState : uint8_t
+    {
+        Playing,
+        Won,
+        Lost,
+    };
+
     // Gameplay data
     float ball_speed = BALL_SPEED_MIN;
     uint16_t ball_bounce = 0;
@@ -73,9 +91,13 @@ private:
     int16_t player1_y = 0;
     int16_t player2_y = 0;
     int8_t cpu_velocity = 0;
+    int16_t cpu_target = 0;
+    int16_t cpu_aim = 0;
+    uint8_t cpu_reaction = 0;
     uint8_t score_p1 = 0;
     uint8_t score_p2 = 0;
-    
+    GameState mState = Playing;
+
     // Visual data
     lv_style_t mStyleApp;
     lv_style_t mStyleMenu;
@@ -83,10 +105,14 @@ private:
     lv_style_t style_player1;
     lv_style_t style_player2;
     lv_style_t style_scoreboard;
+    lv_style_t mStyleResult;
     lv_obj_t* bar_ball;
     lv_obj_t* bar_player1;
     lv_obj_t* bar_player2;
     lv_obj_t* label_scoreboard;
+    lv_obj_t* mOverlay = 0;
+    lv_obj_t* mResultLabel = 0;
+    GameFirework mFirework;
 
     bool CheckCollision();
 
@@ -113,6 +139,8 @@ private:
     bool ScorePlayer1();
 
     bool ScorePlayer2();
+
+    void EndGame(GameState state);
 
     void ResetBall();
 
@@ -146,6 +174,9 @@ public:
 
     // A menu item was clicked.
     void OnMenuClicked(MenuItem item);
+
+    // The game over overlay was clicked.
+    void OnOverlayClicked();
 
     // A menu item was clicked.
     void OnTileChanged();

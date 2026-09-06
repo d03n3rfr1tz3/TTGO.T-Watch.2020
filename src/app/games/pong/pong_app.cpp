@@ -63,6 +63,7 @@
     static const lv_img_dsc_t * menu_bg = &bg1_240px;
     static const lv_img_dsc_t * gameplay_bg = &bg2_240px;
 #endif
+LV_FONT_DECLARE(Ubuntu_32px);
 LV_FONT_DECLARE(Ubuntu_48px);
 
 /* These would be unnecessary if LVGL supported a data param... */
@@ -88,6 +89,18 @@ static void OnReset(struct _lv_obj_t *obj, lv_event_t event)
     {
         case (LV_EVENT_CLICKED):
             gameInstance->OnMenuClicked(PongApp::Reset);
+            break;
+    }
+}
+
+static void OnOverlay(struct _lv_obj_t *obj, lv_event_t event)
+{
+    if (!gameInstance) return;
+
+    switch (event)
+    {
+        case (LV_EVENT_CLICKED):
+            gameInstance->OnOverlayClicked();
             break;
     }
 }
@@ -276,9 +289,42 @@ PongApp::PongApp(PongIcon *icon)
         lv_label_set_long_mode(label_scoreboard, LV_LABEL_LONG_CROP);
         lv_obj_set_click(label_scoreboard, false);
 	    lv_obj_set_size(label_scoreboard, 240, 60);
-
-        ResetGame();
     }
+
+    log_d("Initializing game over overlay");
+    {
+        mOverlay = lv_obj_create(gameplayTile, NULL);
+        lv_obj_set_size(mOverlay, LV_HOR_RES, LV_VER_RES);
+        lv_obj_set_pos(mOverlay, 0, 0);
+        lv_obj_reset_style_list(mOverlay, LV_OBJ_PART_MAIN);
+        lv_obj_set_style_local_bg_opa(mOverlay, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_TRANSP);
+        lv_obj_set_click(mOverlay, true);
+        lv_obj_set_event_cb(mOverlay, OnOverlay);
+        lv_tileview_add_element(GetTileView(), mOverlay);
+
+        lv_style_init(&mStyleResult);
+        lv_style_set_text_font(&mStyleResult, LV_STATE_DEFAULT, &Ubuntu_32px);
+        lv_style_set_text_color(&mStyleResult, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+        lv_style_set_bg_opa(&mStyleResult, LV_STATE_DEFAULT, LV_OPA_70);
+        lv_style_set_bg_color(&mStyleResult, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+        lv_style_set_radius(&mStyleResult, LV_STATE_DEFAULT, 6);
+        lv_style_set_pad_left(&mStyleResult, LV_STATE_DEFAULT, 10);
+        lv_style_set_pad_right(&mStyleResult, LV_STATE_DEFAULT, 10);
+        lv_style_set_pad_top(&mStyleResult, LV_STATE_DEFAULT, 6);
+        lv_style_set_pad_bottom(&mStyleResult, LV_STATE_DEFAULT, 6);
+
+        mResultLabel = lv_label_create(mOverlay, NULL);
+        lv_obj_add_style(mResultLabel, LV_LABEL_PART_MAIN, &mStyleResult);
+        lv_label_set_align(mResultLabel, LV_LABEL_ALIGN_CENTER);
+        lv_label_set_text_static(mResultLabel, "");
+        lv_obj_set_click(mResultLabel, false);
+
+        mFirework.Create(gameplayTile);
+
+        lv_obj_set_hidden(mOverlay, true);
+    }
+
+    ResetGame();
     
     pong_inited = true;
     log_d("Construction complete");
@@ -286,6 +332,7 @@ PongApp::PongApp(PongIcon *icon)
 
 PongApp::~PongApp()
 {
+    mFirework.Stop();
     // LVGL Objects parented to the tiles should be deleted when the tiles are destroyed.
     FreeAppTiles();
     gameInstance = nullptr;
@@ -300,6 +347,7 @@ void PongApp::OnLaunch()
 void PongApp::OnExitClicked()
 {
     log_d("Exiting...");
+    mFirework.Stop();
     // Pass along the message for differed deletion and return to main menu
     mParentIcon->OnExitClicked();
     FreeAppTiles();
@@ -307,7 +355,7 @@ void PongApp::OnExitClicked()
 
 void PongApp::Loop()
 {
-    if ( !pong_inited || !pong_active ) return;
+    if ( !pong_inited || !pong_active || mState != Playing ) return;
 
     UpdateBall();
     UpdatePlayer1();
@@ -435,6 +483,13 @@ bool PongApp::ScorePlayer1()
 
     score_p1++;
     UpdateBoard();
+
+    if (score_p1 >= PONG_WIN_SCORE)
+    {
+        EndGame(Won);
+        return true;
+    }
+
     ResetBall();
 
     sound_play_rtttl( SND_PONG_SCORE_P1, SOUND_TYPE_BACKGROUND );
@@ -449,12 +504,49 @@ bool PongApp::ScorePlayer2()
 
     score_p2++;
     UpdateBoard();
+
+    if (score_p2 >= PONG_WIN_SCORE)
+    {
+        EndGame(Lost);
+        return true;
+    }
+
     ResetBall();
 
     sound_play_rtttl( SND_PONG_SCORE_P2, SOUND_TYPE_BACKGROUND );
     motor_vibe(10);
 
     return true;
+}
+
+void PongApp::EndGame(GameState state)
+{
+    mState = state;
+    lv_disp_trig_activity(NULL);
+
+    char temp[32];
+    if (state == Won)
+    {
+        snprintf(temp, sizeof(temp), "YOU WIN!\n%d : %d", score_p1, score_p2);
+        lv_label_set_text(mResultLabel, temp);
+        lv_obj_set_style_local_text_color(mResultLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_YELLOW);
+
+        sound_play_rtttl(SND_PONG_WIN, SOUND_TYPE_BACKGROUND);
+        motor_vibe(10);
+        mFirework.Start(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, LV_COLOR_ORANGE);
+    }
+    else
+    {
+        snprintf(temp, sizeof(temp), "CPU WINS\n%d : %d", score_p1, score_p2);
+        lv_label_set_text(mResultLabel, temp);
+        lv_obj_set_style_local_text_color(mResultLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+
+        sound_play_rtttl(SND_PONG_SCORE_P2, SOUND_TYPE_BACKGROUND);
+        motor_vibe(10);
+    }
+
+    lv_obj_align(mResultLabel, mOverlay, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_hidden(mOverlay, false);
 }
 
 void PongApp::UpdateBall()
@@ -494,25 +586,50 @@ void PongApp::UpdatePlayer1()
 
 void PongApp::UpdatePlayer2()
 {
-    // determine ball future position
-    int16_t new_target = ball_y + (((float)ball_speed * 2) * sin((float)ball_degree * PI / 180)) - (FIELD_HEIGHT / 2);
+    if (cpu_reaction > 0) {
+        cpu_reaction--;
+    }
+    else {
+        // the faster the ball, the more often he answers late or misjudges it
+        uint8_t chance = map((int16_t)ball_speed, (int16_t)BALL_SPEED_MIN, (int16_t)BALL_SPEED_MAX, CPU_ERROR_MIN, CPU_ERROR_MAX);
+        cpu_reaction = random(0, 100) < chance ? CPU_REACTION * 2 : CPU_REACTION;
 
-    // determine direction of movement to get to target and slowly increase speed
-    if (new_target < player2_y) {
-        uint8_t speed = cpu_velocity > 0 ? 3 : 2;
-        if (cpu_velocity > 0 - PLAYER_SPEED_MAX && random(0, 3) > 0) cpu_velocity -= speed;
+        cpu_aim -= cpu_aim / 4;
+        cpu_aim += random(-4, 5);
+        if (random(0, 100) < chance) {
+            int16_t kick = random(12, 25);
+            cpu_aim += random(0, 2) ? kick : 0 - kick;
+        }
+        cpu_aim = constrain(cpu_aim, 0 - CPU_AIM_MAX, 0 + CPU_AIM_MAX);
+
+        float step_x = cos((float)ball_degree * PI / 180) * ball_speed;
+        float step_y = sin((float)ball_degree * PI / 180) * ball_speed;
+        float target = (FIELD_HEIGHT / 2);
+
+        if (step_x > 0.5f) {
+            float frames = (PLAYER2_X - ball_x) / step_x;
+            if (frames > CPU_LOOKAHEAD) frames = CPU_LOOKAHEAD;
+
+            target = ball_y + (step_y * frames);
+            while (target < 0 || target > FIELD_HEIGHT) {
+                if (target < 0) target = 0 - target;
+                if (target > FIELD_HEIGHT) target = (2 * FIELD_HEIGHT) - target;
+            }
+        }
+
+        cpu_target = target - (FIELD_HEIGHT / 2) + cpu_aim;
+        cpu_target = constrain(cpu_target, 0 - PLAYER_BOUNDARY, 0 + PLAYER_BOUNDARY);
     }
-    if (new_target > player2_y) {
-        uint8_t speed = cpu_velocity < 0 ? 3 : 2;
-        if (cpu_velocity < 0 + PLAYER_SPEED_MAX && random(0, 3) > 0) cpu_velocity += speed;
-    }
+
+    // accelerate towards the target and bleed off speed
+    int16_t distance = cpu_target - player2_y;
+    cpu_velocity += constrain(distance, 0 - CPU_ACCEL, 0 + CPU_ACCEL) - (cpu_velocity / CPU_DAMPING);
+    cpu_velocity = constrain(cpu_velocity, 0 - PLAYER_SPEED_MAX, 0 + PLAYER_SPEED_MAX);
 
     // set new position by ball position
     int16_t new_position = player2_y + cpu_velocity;
-    if (new_position > 0 + PLAYER_BOUNDARY) new_position = 0 + PLAYER_BOUNDARY;
-    if (new_position < 0 - PLAYER_BOUNDARY) new_position = 0 - PLAYER_BOUNDARY;
-    if (new_position < player2_y && player2_y - new_position > PLAYER_SPEED_MAX) new_position = player2_y - PLAYER_SPEED_MAX;
-    if (new_position > player2_y && new_position - player2_y > PLAYER_SPEED_MAX) new_position = player2_y + PLAYER_SPEED_MAX;
+    if (new_position > 0 + PLAYER_BOUNDARY) { new_position = 0 + PLAYER_BOUNDARY; cpu_velocity = 0; }
+    if (new_position < 0 - PLAYER_BOUNDARY) { new_position = 0 - PLAYER_BOUNDARY; cpu_velocity = 0; }
 
     player2_y = new_position;
 	lv_obj_set_pos(bar_player2, PLAYER2_X, PLAYER_BOUNDARY + player2_y);
@@ -562,10 +679,17 @@ void PongApp::ResetPlayer2()
     log_d("Resetting Player 2");
     player2_y = 0;
     cpu_velocity = 0;
+    cpu_target = 0;
+    cpu_aim = 0;
+    cpu_reaction = 0;
 }
 
 void PongApp::ResetGame()
 {
+    mFirework.Stop();
+    lv_obj_set_hidden(mOverlay, true);
+    mState = Playing;
+
     ResetBall();
     ResetBoard();
     ResetPlayer1();
@@ -588,6 +712,11 @@ void PongApp::OnMenuClicked(MenuItem item)
         default:
             log_e("Unknown menu command %d", item);
     }
+}
+
+void PongApp::OnOverlayClicked()
+{
+    ResetGame();
 }
 
 void PongApp::OnTileChanged()
