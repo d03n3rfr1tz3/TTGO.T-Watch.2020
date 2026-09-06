@@ -11,8 +11,12 @@ APPS_OFF = [
 
 # Apps that need certain hardware support.
 NEEDS_ACCEL = [
+    "app/games/breakout",
     "app/games/pong",
     "app/tiltmouse",
+]
+NEEDS_STEPCOUNTER = [
+    "app/activity",
 ]
 NEEDS_IR = [
     "app/IRController",
@@ -49,6 +53,7 @@ def has_board(boards):
 apps_off = list(APPS_OFF)
 if has_board(BOARDS_WITHOUT_ACCEL):
     apps_off += NEEDS_ACCEL
+    apps_off += NEEDS_STEPCOUNTER
 if not has_board(BOARDS_WITH_IR):
     apps_off += NEEDS_IR
 if not has_board(BOARDS_WITH_MIC):

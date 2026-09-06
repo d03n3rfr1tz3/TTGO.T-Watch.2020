@@ -333,6 +333,7 @@ void quickbar_hide( bool hide ) {
     }
     else {
         lv_obj_set_hidden( quickbar, hide );
+        lv_obj_move_foreground( quickbar );
         lv_obj_invalidate( lv_scr_act() );
 
         wf_image_button_fade_in( quickbar_maintile_btn, 300, 0 );

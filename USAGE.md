@@ -14,21 +14,6 @@ Widgets are:
 
  You can swipe with you fingers up, down, left and right between the four main screens. The four screens are organized in time, apps, note and setup tile.
 
-# Notes
-
-![screenshot](images/note.png)
-
-The note tile holds a few post-it notes, as many as fit on the screen at once. There is no list and
-no archive: what you see is all there is. The plus button adds a text note and opens the keyboard,
-tapping a note edits it again, and the check mark in its corner ticks it off. A note that is ticked
-off fades out and is deleted a minute later, so tapping the check again undoes it. When every slot
-is taken, the plus buttons grey out until you tick a note off.
-
-On watches with a microphone the recorder adds a second plus button. It takes you straight to the
-recording screen, and the finished take comes back as a voice note with a play button. The note
-only references the recording — checking it off removes the note, the file stays in the voice
-recorder app.
-
 # Quick Settings
 
 ![screenshot](images/screen2.png)
@@ -148,11 +133,26 @@ Here you can find some finish watchface packages:
 
 alternative [watchfaces](https://github.com/PGNetHun/PG-TTGO-Watchfaces)
 
+# Notes
+
+![screenshot](images/note.png)
+
+The note tile holds a few post-it notes, as many as fit on the screen at once. There is no list and
+no archive: what you see is all there is. The plus button adds a text note and opens the keyboard,
+tapping a note edits it again, and the check mark in its corner ticks it off. A note that is ticked
+off fades out and is deleted a minute later, so tapping the check again undoes it. When every slot
+is taken, the plus buttons grey out until you tick a note off.
+
+On watches with a microphone the recorder adds a second plus button. It takes you straight to the
+recording screen, and the finished take comes back as a voice note with a play button. The note
+only references the recording — checking it off removes the note, the file stays in the voice
+recorder app.
+
 # Applications
 
 ![screenshot](images/screen7.png)
 
-## weather app
+## Weather app
 
 ![screenshot](images/screen10.png)
 
@@ -326,6 +326,15 @@ three widgets at most, and the switch turns itself back off if none of them is f
 Needs a microphone, so this app is only built for the T-Watch 2020 V3.
 
 ![screenshot](images/assist.png)
+
+## Breakout
+
+Breakout with the accelerometer, in the same spirit as Pong. Tilt the watch to move the paddle,
+clear the wall, keep the ball off the floor. Three balls, no levels: every new game rolls a fresh
+brick map instead, mirrored around the middle so it still looks laid out by hand. Silver bricks
+take two hits. Clearing the whole wall ends the game with a firework.
+
+![screenshot](images/breakout.png)
 
 ## Calc
 
