@@ -21,6 +21,7 @@
  */
 #include "config.h"
 #include "move_settings.h"
+#include "move_axis_settings.h"
 
 #include "gui/mainbar/mainbar.h"
 #include "gui/mainbar/setup_tile/setup_tile.h"
@@ -44,6 +45,9 @@ LV_IMG_DECLARE(move_64px);
 
 static void enter_move_setup_event_cb( lv_obj_t * obj, lv_event_t event );
 static void exit_move_setup_event_cb( lv_obj_t * obj, lv_event_t event );
+#if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 ) || defined( LILYGO_WATCH_2021 )
+    static void enter_move_axis_setup_event_cb( lv_obj_t * obj, lv_event_t event );
+#endif
 static void stepcounter_onoff_event_handler(lv_obj_t * obj, lv_event_t event);
 static void doubleclick_onoff_event_handler(lv_obj_t * obj, lv_event_t event);
 static void tilt_onoff_event_handler(lv_obj_t * obj, lv_event_t event);
@@ -61,6 +65,12 @@ void move_settings_tile_setup( void ) {
 
     lv_obj_t *header = wf_add_settings_header( move_settings_tile, "movement settings", exit_move_setup_event_cb );
     lv_obj_align( header, move_settings_tile, LV_ALIGN_IN_TOP_LEFT, 10, STATUSBAR_HEIGHT + 10 );
+
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 ) || defined( LILYGO_WATCH_2021 )
+        move_axis_settings_tile_setup();
+        lv_obj_t *axis_btn = wf_add_setup_button( move_settings_tile, enter_move_axis_setup_event_cb, SETUP_STYLE );
+        lv_obj_align( axis_btn, move_settings_tile, LV_ALIGN_IN_TOP_RIGHT, -10, STATUSBAR_HEIGHT + 10 );
+    #endif
 
     lv_obj_t *stepcounter_cont = wf_add_labeled_switch( move_settings_tile, "step counter", &stepcounter_onoff, bma_get_config( BMA_STEPCOUNTER ), stepcounter_onoff_event_handler, ws_get_setup_tile_style() );
     lv_obj_align( stepcounter_cont, header, LV_ALIGN_OUT_BOTTOM_MID, 0, 8 );
@@ -89,6 +99,15 @@ static void exit_move_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
                                         break;
     }
 }
+
+#if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 ) || defined( LILYGO_WATCH_2021 )
+static void enter_move_axis_setup_event_cb( lv_obj_t * obj, lv_event_t event ) {
+    switch( event ) {
+        case( LV_EVENT_CLICKED ):       mainbar_jump_to_tilenumber( move_axis_settings_get_tile_num(), LV_ANIM_OFF );
+                                        break;
+    }
+}
+#endif
 
 static void stepcounter_onoff_event_handler(lv_obj_t * obj, lv_event_t event) {
     switch( event ) {

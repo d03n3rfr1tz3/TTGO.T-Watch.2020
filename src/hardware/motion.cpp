@@ -222,6 +222,10 @@ void bma_setup( void ) {
         #endif
     #endif
     /*
+     * apply the axis correction, needs the loaded config
+     */
+    bma_set_rotate_tilt( display_get_rotation() );
+    /*
      * load config setting for tilt, stepcounter and wakeup to enabled interrupts
      */
     bma_reload_settings();
@@ -549,19 +553,54 @@ void bma_set_config( int config, bool enable ) {
     bma_reload_settings();
 }
 
+bool bma_get_axis_config( int config ) {
+    return bma_config.get_axis_config( config );
+}
+
+void bma_set_axis_config( int config, bool enable ) {
+    bma_config.set_axis_config( config, enable );
+    bma_config.save();
+    bma_set_rotate_tilt( display_get_rotation() );
+}
+
+#ifdef NATIVE_64BIT
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 ) || defined( LILYGO_WATCH_2021 )
+        /**
+         * @brief apply the axis correction and write the remap into the sensor
+         *
+         * The remap register feeds the on chip tilt and wakeup detection only, the data registers
+         * stay raw and get the same correction in bma_get_accel_rotated().
+         */
+        static void bma_remap_axes( struct bma423_axes_remap *remap ) {
+            if ( bma_config.get_axis_config( BMA_AXIS_SWAP_XY ) ) {
+                uint8_t axis = remap->x_axis;
+                uint8_t sign = remap->x_axis_sign;
+                remap->x_axis = remap->y_axis;
+                remap->x_axis_sign = remap->y_axis_sign;
+                remap->y_axis = axis;
+                remap->y_axis_sign = sign;
+            }
+            if ( bma_config.get_axis_config( BMA_AXIS_INVERT_X ) )
+                remap->x_axis_sign = remap->x_axis_sign ? 0 : 1;
+            if ( bma_config.get_axis_config( BMA_AXIS_INVERT_Y ) )
+                remap->y_axis_sign = remap->y_axis_sign ? 0 : 1;
+            #if defined( LILYGO_WATCH_2021 )
+                bool done = bma.setRemapAxes( remap );
+            #else
+                bool done = TTGOClass::getWatch()->bma->set_remap_axes( remap );
+            #endif
+            log_i("bma axis remap x %d/%d, y %d/%d, %s", remap->x_axis, remap->x_axis_sign, remap->y_axis, remap->y_axis_sign, done ? "ok" : "failed" );
+        }
+    #endif
+#endif
+
 void bma_set_rotate_tilt( uint32_t rotation ) {
     #ifdef NATIVE_64BIT
     #else
         #ifdef M5PAPER
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
             struct bma423_axes_remap remap_data;
-            TTGOClass *ttgo = TTGOClass::getWatch();
-            #if defined( LILYGO_WATCH_2020_V2 )
-                /**
-                 * fix bma orientation on V2
-                 */
-                rotation = rotation + 270;
-            #endif
             rotation = rotation % 360;
             switch( rotation / 90 ) {
                 case 0:     remap_data.x_axis = 0;
@@ -570,7 +609,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 1;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            ttgo->bma->set_remap_axes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
                 case 1:     remap_data.x_axis = 1;
                             remap_data.x_axis_sign = 1;
@@ -578,7 +617,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 0;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            ttgo->bma->set_remap_axes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
                 case 2:     remap_data.x_axis = 0;
                             remap_data.x_axis_sign = 1;
@@ -586,7 +625,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 0;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            ttgo->bma->set_remap_axes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
                 case 3:     remap_data.x_axis = 1;
                             remap_data.x_axis_sign = 1;
@@ -594,7 +633,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 1;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            ttgo->bma->set_remap_axes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
             }
         #elif defined( LILYGO_WATCH_2021 )
@@ -607,7 +646,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 1;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            bma.setRemapAxes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
                 case 1:     remap_data.x_axis = 1;
                             remap_data.x_axis_sign = 1;
@@ -615,7 +654,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 0;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            bma.setRemapAxes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
                 case 2:     remap_data.x_axis = 0;
                             remap_data.x_axis_sign = 1;
@@ -623,7 +662,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 0;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            bma.setRemapAxes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
                 case 3:     remap_data.x_axis = 1;
                             remap_data.x_axis_sign = 1;
@@ -631,7 +670,7 @@ void bma_set_rotate_tilt( uint32_t rotation ) {
                             remap_data.y_axis_sign = 1;
                             remap_data.z_axis  = 2;
                             remap_data.z_axis_sign  = 1;
-                            bma.setRemapAxes(&remap_data);
+                            bma_remap_axes( &remap_data );
                             break;
             }
         #elif defined( WT32_SC01 )
@@ -709,6 +748,20 @@ bool bma_get_accel_rotated( int16_t &x, int16_t &y ) {
     y = 0;
     if( !bma_get_accel( acc_x, acc_y, acc_z ) )
         return( false );
+
+    /*
+     * the remap register only feeds the feature engine.
+     * the data registers stay raw, therefore correct them again.
+     */
+    if ( bma_config.get_axis_config( BMA_AXIS_SWAP_XY ) ) {
+        int16_t swap = acc_x;
+        acc_x = acc_y;
+        acc_y = swap;
+    }
+    if ( bma_config.get_axis_config( BMA_AXIS_INVERT_X ) )
+        acc_x = -acc_x;
+    if ( bma_config.get_axis_config( BMA_AXIS_INVERT_Y ) )
+        acc_y = -acc_y;
 
     switch( display_get_rotation() ) {
         case 90:    x =  acc_y; y = -acc_x; break;

@@ -24,6 +24,10 @@
 bma_config_t::bma_config_t() : BaseJsonConfig(BMA_JSON_COFIG_FILE) {
     for (int i = 0 ; i < BMA_CONFIG_NUM ; i++)
         enable[i]=true;
+
+    axis[ BMA_AXIS_SWAP_XY ] = BMA_SWAP_XY_DEFAULT;
+    axis[ BMA_AXIS_INVERT_X ] = BMA_INVERT_X_DEFAULT;
+    axis[ BMA_AXIS_INVERT_Y ] = BMA_INVERT_Y_DEFAULT;
 }
 
 bool bma_config_t::onSave(JsonDocument& doc) {
@@ -31,6 +35,9 @@ bool bma_config_t::onSave(JsonDocument& doc) {
     doc["doubleclick"] = enable[ BMA_DOUBLECLICK ];
     doc["tilt"] = enable[ BMA_TILT ];
     doc["daily_stepcounter"] = enable[ BMA_DAILY_STEPCOUNTER ];
+    doc["swap_xy"] = axis[ BMA_AXIS_SWAP_XY ];
+    doc["invert_x"] = axis[ BMA_AXIS_INVERT_X ];
+    doc["invert_y"] = axis[ BMA_AXIS_INVERT_Y ];
 
     return true;
 }
@@ -40,7 +47,10 @@ bool bma_config_t::onLoad(JsonDocument& doc) {
     enable[ BMA_DOUBLECLICK ] = doc["doubleclick"] | true;
     enable[ BMA_TILT ] = doc["tilt"] | false;
     enable[ BMA_DAILY_STEPCOUNTER ] = doc["daily_stepcounter"] | false;
-  
+    axis[ BMA_AXIS_SWAP_XY ] = doc["swap_xy"] | BMA_SWAP_XY_DEFAULT;
+    axis[ BMA_AXIS_INVERT_X ] = doc["invert_x"] | BMA_INVERT_X_DEFAULT;
+    axis[ BMA_AXIS_INVERT_Y ] = doc["invert_y"] | BMA_INVERT_Y_DEFAULT;
+
     return true;
 }
 

@@ -68,6 +68,19 @@
      */
     void bma_set_config( int config, bool enable );
     /**
+     * @brief get axis config
+     *
+     * @param   config     configitem: BMA_AXIS_SWAP_XY, BMA_AXIS_INVERT_X or BMA_AXIS_INVERT_Y
+     */
+    bool bma_get_axis_config( int config );
+    /**
+     * @brief set axis config, takes effect right away
+     *
+     * @param   config     configitem: BMA_AXIS_SWAP_XY, BMA_AXIS_INVERT_X or BMA_AXIS_INVERT_Y
+     * @param   bool    true or false
+     */
+    void bma_set_axis_config( int config, bool enable );
+    /**
      * @brief   rotate bma axis
      * 
      * @param   rotation on degree

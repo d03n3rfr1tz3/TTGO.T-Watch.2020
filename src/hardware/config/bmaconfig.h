@@ -24,13 +24,34 @@
 
     #include "utils/basejsonconfig.h"
     
-    enum {  
+    enum {
         BMA_STEPCOUNTER,
         BMA_DOUBLECLICK,
         BMA_TILT,
         BMA_DAILY_STEPCOUNTER,
         BMA_CONFIG_NUM
     };
+
+    enum {
+        BMA_AXIS_SWAP_XY,
+        BMA_AXIS_INVERT_X,
+        BMA_AXIS_INVERT_Y,
+        BMA_AXIS_CONFIG_NUM
+    };
+
+    #if defined( LILYGO_WATCH_2020_V2 )
+        #define BMA_SWAP_XY_DEFAULT     true
+        #define BMA_INVERT_X_DEFAULT    true
+        #define BMA_INVERT_Y_DEFAULT    false
+    #elif defined( LILYGO_WATCH_2020_V3 )
+        #define BMA_SWAP_XY_DEFAULT     true
+        #define BMA_INVERT_X_DEFAULT    false
+        #define BMA_INVERT_Y_DEFAULT    true
+    #else
+        #define BMA_SWAP_XY_DEFAULT     false
+        #define BMA_INVERT_X_DEFAULT    false
+        #define BMA_INVERT_Y_DEFAULT    false
+    #endif
 
     #define BMA_JSON_COFIG_FILE         "/bma.json"         /** @brief defines json config file name */
 
@@ -41,6 +62,7 @@
         public:
         bma_config_t();
         bool enable[BMA_CONFIG_NUM];
+        bool axis[BMA_AXIS_CONFIG_NUM];
 
         inline bool get_config( int config ) {
             if ( config < BMA_CONFIG_NUM ) {
@@ -52,6 +74,19 @@
         inline void bma_set_config( int config, bool ena ) {
             if ( config < BMA_CONFIG_NUM ) {
                 enable[ config ] = ena;
+            }
+        }
+
+        inline bool get_axis_config( int config ) {
+            if ( config < BMA_AXIS_CONFIG_NUM ) {
+                return axis[ config ];
+            }
+            return false;
+        }
+
+        inline void set_axis_config( int config, bool ena ) {
+            if ( config < BMA_AXIS_CONFIG_NUM ) {
+                axis[ config ] = ena;
             }
         }
 
