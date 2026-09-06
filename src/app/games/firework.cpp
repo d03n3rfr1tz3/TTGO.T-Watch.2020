@@ -42,6 +42,16 @@ static void HideSpark(lv_anim_t *anim)
     lv_obj_set_hidden((lv_obj_t *)anim->var, true);
 }
 
+static void SparkEvent(lv_obj_t *obj, lv_event_t event)
+{
+    if (event != LV_EVENT_DELETE)
+        return;
+
+    GameFirework *firework = static_cast<GameFirework *>(lv_obj_get_user_data(obj));
+    if (firework)
+        firework->OnSparkDeleted(obj);
+}
+
 GameFirework::~GameFirework()
 {
     if (mTask)
@@ -62,6 +72,30 @@ void GameFirework::Create(lv_obj_t *parent)
         lv_obj_set_style_local_radius(mSparks[i], LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
         lv_obj_set_style_local_border_width(mSparks[i], LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, 0);
         lv_obj_set_hidden(mSparks[i], true);
+        lv_obj_set_user_data(mSparks[i], this);
+        lv_obj_set_event_cb(mSparks[i], SparkEvent);
+    }
+}
+
+void GameFirework::OnSparkDeleted(lv_obj_t *spark)
+{
+    bool remaining = false;
+    for (int i = 0; i < NUM_SPARKS; i++)
+    {
+        if (mSparks[i] == spark)
+            mSparks[i] = 0;
+        else if (mSparks[i])
+            remaining = true;
+    }
+
+    if (remaining)
+        return;
+
+    mBurstsLeft = 0;
+    if (mTask)
+    {
+        lv_task_del(mTask);
+        mTask = 0;
     }
 }
 
@@ -99,6 +133,9 @@ void GameFirework::OnTick()
     for (int i = 0; i < NUM_SPARKS; i++)
     {
         lv_obj_t *spark = mSparks[i];
+        if (!spark)
+            continue;
+
         const float angle = (float)i * 2 * PI / NUM_SPARKS;
         const int radius = 50 + (rand() % 30);
 

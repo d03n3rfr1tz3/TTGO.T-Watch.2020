@@ -25,7 +25,8 @@
 
    USE:
    * Hold an instance in the game app and call Create() once the parent object exists.
-   * Call Start() to celebrate, Stop() before the parent objects go away.
+   * Call Start() to celebrate. The sparks drop themselves when the parent deletes
+     them, so Stop() and the destructor stay safe at any point.
 */
 
 #pragma once
@@ -44,9 +45,6 @@ private:
     lv_color_t mAccent = LV_COLOR_WHITE;
 
 public:
-    /* Only drops the task. By the time this runs the parent may already have
-       deleted the sparks, so they must not be touched here. Call Stop() while
-       the objects are still alive. */
     ~GameFirework();
 
     /* Allocate the spark objects. The parent keeps ownership of them. */
@@ -55,9 +53,12 @@ public:
     /* Fire bursts from (cx, cy), mixing white and yellow sparks with an accent color. */
     void Start(lv_coord_t cx, lv_coord_t cy, lv_color_t accent, int bursts = 3);
 
-    /* Cancel the running effect. Must run before the spark objects are deleted. */
+    /* Cancel the running effect. Safe to call more than once. */
     void Stop();
 
     /* Emit one burst, called by the internal task. */
     void OnTick();
+
+    /* A spark was deleted by its parent, called by the spark event callback. */
+    void OnSparkDeleted(lv_obj_t *spark);
 };
