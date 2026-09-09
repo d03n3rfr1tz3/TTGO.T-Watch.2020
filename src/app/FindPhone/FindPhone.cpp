@@ -64,9 +64,6 @@ void FindPhone_setup( void ) {
     if( !registed ) {
         return;
     }
-    #if defined( ONLY_ESSENTIAL )
-        return;
-    #endif
     /*
      * register 1 vertical tile and get the first tile number and save it for later use
      */

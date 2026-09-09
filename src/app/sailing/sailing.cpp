@@ -68,9 +68,6 @@ void sailing_setup( void ) {
     if( !registed ) {
         return;
     }
-    #if defined( ONLY_ESSENTIAL )
-        return;
-    #endif
     /*
      * register 2 vertical tiles and get the first tile number and save it for later use
      */

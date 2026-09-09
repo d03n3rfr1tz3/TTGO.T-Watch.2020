@@ -67,9 +67,6 @@ void powermeter_app_setup( void ) {
     if( !registed ) {
         return;
     }
-    #if defined( ONLY_ESSENTIAL )
-        return;
-    #endif
     /*
      * load config
      */

@@ -65,7 +65,6 @@
             #define RES_X_MAX       240
             #define RES_Y_MAX       240
             #define ENABLE_FTPSERVER                        /** @brief To disable built-in ftpserver, comment this line */
-            #define ONLY_ESSENTIAL
             #define ROUND_DISPLAY
             #define NO_UPDATES
         #elif defined( M5PAPER )

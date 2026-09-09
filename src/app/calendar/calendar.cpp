@@ -58,9 +58,6 @@ void calendar_app_setup( void ) {
         return;
     }
 
-    #if defined( ONLY_ESSENTIAL )
-        return;
-    #endif
     /**
      * register app icon on the app tile
      */

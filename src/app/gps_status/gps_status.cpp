@@ -68,9 +68,6 @@ void gps_status_setup( void ) {
     if( !registed ) {
         return;
     }
-    #if defined( ONLY_ESSENTIAL )
-        return;
-    #endif
     /*
      * register 1 and get the tile number and save it for later use
      */
