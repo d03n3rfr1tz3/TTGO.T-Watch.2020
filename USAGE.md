@@ -307,6 +307,18 @@ Set "Output filtering" to trasmit the sentences: RMB,RMC,APB
 Contact [fliuzzi02](https://github.com/fliuzzi02) for further info and help.
 Some improvements might come in the future.
 
+## 2048
+
+Slide the numbered tiles together until one of them reads 2048. Swipe anywhere on the screen to move
+the whole board in that direction; two equal tiles that meet merge into their sum and a new tile
+appears after every move. Reaching 2048 is celebrated with a firework, but the run continues from
+there — the game only ends once no move is left.
+
+The button in the top right corner opens the menu for a new game or to leave. Your best score and the
+game in progress are kept, so a game survives leaving the app and restarting the watch.
+
+![screenshot](images/2048.png)
+
 ## Assist
 
 The voice assistant of Home Assistant on your wrist. Tap the button, ask your question and the watch

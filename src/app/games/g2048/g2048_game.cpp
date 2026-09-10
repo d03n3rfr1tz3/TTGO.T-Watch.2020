@@ -1,0 +1,114 @@
+/****************************************************************************
+ *   September 09 12:00:00 2026
+ *   Copyright  2026  Dirk Sarodnick
+ *   Email: programmer@dirk-sarodnick.de
+ ****************************************************************************/
+
+/*
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ */
+
+#include "config.h"
+#include <Arduino.h>
+#include <memory>
+#include <utility>
+
+#include "gui/app.h"
+#include "gui/mainbar/mainbar.h"
+#include "gui/mainbar/app_tile/app_tile.h"
+#include "gui/statusbar.h"
+#include "hardware/display.h"
+#include "hardware/motor.h"
+
+#include "g2048_game.h"
+#include "g2048_app.h"
+
+// Use this icon image
+LV_IMG_DECLARE(g2048_64px);
+
+// The one and only.
+static G2048Icon iconInstance;
+
+/*
+ * automatic register the app setup function with explicit call in main.cpp
+ */
+static int registed = app_autocall_function( &g2048_game_setup, APP_PRIO( APP_GROUP_GAMES, 3 ) );           /** @brief app autocall function */
+
+void g2048_game_setup()
+{
+    /*
+     * check if app already registered for autocall
+     */
+    if( !registed ) {
+        return;
+    }
+
+    g2048_app_setup();
+    iconInstance.RegisterAppIcon();
+}
+
+static void startGame(struct _lv_obj_t *obj, lv_event_t event)
+{
+    switch (event)
+    {
+        case (LV_EVENT_CLICKED):
+            iconInstance.OnStartClicked();
+            break;
+    }
+}
+
+G2048Icon::G2048Icon()
+{
+    pAppname = "2048";
+    pMenuIcon = &g2048_64px;
+    pStartFunction = startGame;
+}
+
+void G2048Icon::OnStartClicked()
+{
+    motor_vibe(1);
+
+    if(!mGameInstance)
+    {
+        log_d("Creating game instance.");
+        mGameInstance = std::unique_ptr<G2048App>(new G2048App(this));
+    }
+
+    log_d("Launching game instance.");
+    mGameInstance->OnLaunch();
+}
+
+static void DelayedRelease(void* param)
+{
+    G2048Icon *me = reinterpret_cast<G2048Icon *>(param);
+
+    me->DoDelayedRelease();
+}
+
+void G2048Icon::OnExitClicked()
+{
+    motor_vibe(1);
+    ReturnToMenu();
+
+    /* Delay this until the next task handler cycle */
+    log_d("Queuing async release");
+    lv_async_call(DelayedRelease, this);
+}
+
+void G2048Icon::DoDelayedRelease()
+{
+    log_d("Triggering async release");
+    mGameInstance.reset();
+}
