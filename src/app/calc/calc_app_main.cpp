@@ -236,47 +236,56 @@ void calc_process_button(char cmd)
         case '7':
         case '8':
         case '9':
-        case '.':
+        case '.': {
             if ( op == '=') {
                 inputs[1] = 0;
                 oop = '\0';
                 op = '\0';
                 calc_show_history(inputs[1], oop, inputs[0], false, false);
             }
-            input[strlen(input)] = cmd;
-            input[strlen(input)] = '\0';
+
+            size_t len = strlen(input);
+            if ( len >= sizeof(input) - 1 )
+                break;
+            input[len] = cmd;
+            input[len + 1] = '\0';
             inputs[0] = atof(input);
             calc_show_result(inputs[0]);
             break;
-        case '+':
+        }
+        case '+': {
             calc_process_operator(cmd, op);
             oop = cmd;
             op = cmd;
             calc_show_result(inputs[1]);
             calc_show_history(inputs[1], oop, inputs[0], true, false);
             break;
-        case '-':
+        }
+        case '-': {
             calc_process_operator(cmd, op);
             oop = cmd;
             op = cmd;
             calc_show_result(inputs[1]);
             calc_show_history(inputs[1], oop, inputs[0], true, false);
             break;
-        case '*':
+        }
+        case '*': {
             calc_process_operator(cmd, op);
             oop = cmd;
             op = cmd;
             calc_show_result(inputs[1]);
             calc_show_history(inputs[1], oop, inputs[0], true, false);
             break;
-        case '/':
+        }
+        case '/': {
             calc_process_operator(cmd, op);
             oop = cmd;
             op = cmd;
             calc_show_result(inputs[1]);
             calc_show_history(inputs[1], oop, inputs[0], true, false);
             break;
-        case 'C':
+        }
+        case 'C': {
             memset(input, '\0', sizeof(input)/sizeof(char));
             if ( op == '=') {
                 inputs[1] = 0;
@@ -289,7 +298,8 @@ void calc_process_button(char cmd)
             }
             calc_show_result(inputs[0]);
             break;
-        case 'D':
+        }
+        case 'D': {
             memset(input, '\0', sizeof(input)/sizeof(char));
             inputs[1] = 0;
             inputs[0] = 0;
@@ -298,12 +308,14 @@ void calc_process_button(char cmd)
             calc_show_result(inputs[0]);
             calc_show_history(inputs[1], oop, inputs[0], false, false);
             break;
-        case '=':
+        }
+        case '=': {
             calc_show_history(inputs[1], oop, inputs[0], true, true, true);
             calc_process_operator(cmd, op);
             op = cmd;
             calc_show_result(inputs[1]);
             break;
+        }
     }
 }
 
