@@ -232,7 +232,7 @@ void bma_setup( void ) {
     /*
      * register powermgm callback funtions
      */
-    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_ENABLE_INTERRUPTS | POWERMGM_DISABLE_INTERRUPTS , bma_powermgm_event_cb, "powermgm bma" );
+    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP , bma_powermgm_event_cb, "powermgm bma" );
     powermgm_register_loop_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP, bma_powermgm_loop_cb, "powermgm bma loop" );
 }
 
@@ -244,27 +244,6 @@ bool bma_powermgm_event_cb( EventBits_t event, void *arg ) {
                                         break;
         case POWERMGM_SILENCE_WAKEUP:   bma_wakeup();
                                         break;
-        #ifdef NATIVE_64BIT
-        #else
-            #ifdef M5PAPER
-            #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                attachInterrupt( BMA423_INT1, bma_irq, GPIO_INTR_POSEDGE );
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
-                                                detachInterrupt( BMA423_INT1 );
-                                                break;
-            #elif defined( LILYGO_WATCH_2021 )
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                attachInterrupt( BMA_INT_1, bma_irq, GPIO_INTR_POSEDGE );
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
-                                                detachInterrupt( BMA_INT_1 );
-                                                break;
-            #elif defined( WT32_SC01 )
-
-            #endif
-        #endif
     }
     return( true );
 }

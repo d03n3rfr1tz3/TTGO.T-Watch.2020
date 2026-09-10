@@ -115,7 +115,7 @@ void button_setup( void ) {
     /*
      * register all powermem callback functions
      */
-    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_ENABLE_INTERRUPTS | POWERMGM_DISABLE_INTERRUPTS , button_powermgm_event_cb, "powermgm button" );
+    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP , button_powermgm_event_cb, "powermgm button" );
     powermgm_register_loop_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP , button_powermgm_loop_cb, "powermgm button loop" );
 }
 
@@ -430,14 +430,6 @@ bool button_powermgm_event_cb( EventBits_t event, void *arg ) {
                 case POWERMGM_SILENCE_WAKEUP:       log_d("button silence wakeup");
                                                     retval = true;
                                                     break;
-                case POWERMGM_ENABLE_INTERRUPTS:    log_d("button enable interrupts");
-                                                    attachInterrupt( M5EPD_KEY_PUSH_PIN, &button_irq, FALLING );
-                                                    retval = true;
-                                                    break;
-                case POWERMGM_DISABLE_INTERRUPTS:   log_d("button disable interrupts");
-                                                    detachInterrupt( M5EPD_KEY_PUSH_PIN );
-                                                    retval = true;
-                                                    break;
             }
         #elif defined( M5CORE2 )
             switch( event ) {
@@ -470,12 +462,6 @@ bool button_powermgm_event_cb( EventBits_t event, void *arg ) {
                                                     retval = true;
                                                     break;
                 case POWERMGM_SILENCE_WAKEUP:       log_d("button silence wakeup");
-                                                    retval = true;
-                                                    break;
-                case POWERMGM_ENABLE_INTERRUPTS:    log_d("button enable interrupts");
-                                                    retval = true;
-                                                    break;
-                case POWERMGM_DISABLE_INTERRUPTS:   log_d("button disable interrupts");
                                                     retval = true;
                                                     break;
             }

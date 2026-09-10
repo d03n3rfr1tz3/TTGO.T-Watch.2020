@@ -123,7 +123,7 @@ void rtcctl_setup( void ) {
     #endif
 #endif
 
-    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_ENABLE_INTERRUPTS | POWERMGM_DISABLE_INTERRUPTS , rtcctl_powermgm_event_cb, "powermgm rtcctl" );
+    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP , rtcctl_powermgm_event_cb, "powermgm rtcctl" );
     powermgm_register_loop_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP, rtcctl_powermgm_loop_cb, "powermgm rtcctl loop" );
     timesync_register_cb( TIME_SYNC_OK, rtcctl_timesync_event_cb, "timesync rtcctl" );
 
@@ -389,36 +389,6 @@ bool rtcctl_powermgm_event_cb( EventBits_t event, void *arg ) {
         case POWERMGM_WAKEUP:           log_d("go wakeup");
                                         break;
         case POWERMGM_SILENCE_WAKEUP:   log_d("go silence wakeup");
-                                        break;
-        case POWERMGM_ENABLE_INTERRUPTS:
-                                        #ifdef NATIVE_64BIT
-
-                                        #else
-                                            #if defined( M5PAPER )
-                                            #elif defined( M5CORE2 )
-                                            #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-                                                attachInterrupt( RTC_INT_PIN, &rtcctl_irq, FALLING );
-                                            #elif defined( LILYGO_WATCH_2021 )
-                                            #elif defined( WT32_SC01 )
-                                            #else
-                                                #warning "no rtcctl powermgm enable interrupts event"
-                                            #endif
-                                        #endif
-                                        break;
-        case POWERMGM_DISABLE_INTERRUPTS:
-                                        #ifdef NATIVE_64BIT
-
-                                        #else
-                                            #if defined( M5PAPER )
-                                            #elif defined( M5CORE2 )
-                                            #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-                                                detachInterrupt( RTC_INT_PIN );
-                                            #elif defined( LILYGO_WATCH_2021 )
-                                            #elif defined( WT32_SC01 )
-                                            #else
-                                                #warning "no rtcctl powermgm disable interrupts event"
-                                            #endif
-                                        #endif
                                         break;
     }
     return( true );

@@ -165,7 +165,7 @@ void touch_setup( void ) {
     /*
      * register powermgm callback function
      */
-    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP | POWERMGM_ENABLE_INTERRUPTS | POWERMGM_DISABLE_INTERRUPTS , touch_powermgm_event_cb, "touch" );
+    powermgm_register_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP , touch_powermgm_event_cb, "touch" );
     powermgm_register_loop_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP , touch_powermgm_loop_event_cb, "touch powermgm loop" );
 }
 
@@ -266,10 +266,6 @@ bool touch_powermgm_event_cb( EventBits_t event, void *arg ) {
             case POWERMGM_SILENCE_WAKEUP:       log_d("go silence wakeup");
                                                 retval = true;
                                                 break;
-            case POWERMGM_ENABLE_INTERRUPTS:    retval = true;
-                                                break;
-            case POWERMGM_DISABLE_INTERRUPTS:   retval = true;
-                                                break;
         }
     #else
         #if defined( M5PAPER ) || defined( LILYGO_WATCH_2021 )
@@ -281,12 +277,6 @@ bool touch_powermgm_event_cb( EventBits_t event, void *arg ) {
                                                 retval = true;
                                                 break;
                 case POWERMGM_SILENCE_WAKEUP:   log_d("go silence wakeup");
-                                                retval = true;
-                                                break;
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                retval = true;
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
                                                 retval = true;
                                                 break;
             }
@@ -304,12 +294,6 @@ bool touch_powermgm_event_cb( EventBits_t event, void *arg ) {
                                                 retval = true;
                                                 break;
                 case POWERMGM_SILENCE_WAKEUP:   log_d("go silence wakeup");
-                                                retval = true;
-                                                break;
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                retval = true;
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
                                                 retval = true;
                                                 break;
             }
@@ -335,14 +319,6 @@ bool touch_powermgm_event_cb( EventBits_t event, void *arg ) {
                                                 retval = true;
                                                 break;
                 case POWERMGM_SILENCE_WAKEUP:   log_d("go silence wakeup");
-                                                retval = true;
-                                                break;
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                attachInterrupt( TOUCH_INT, &touch_irq, FALLING );
-                                                retval = true;
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
-                                                detachInterrupt( TOUCH_INT );
                                                 retval = true;
                                                 break;
             }

@@ -39,8 +39,6 @@
     #define POWERMGM_SHUTDOWN                   _BV(12)        /** @brief event mask for powermgm shutdown */
     #define POWERMGM_RESET                      _BV(13)        /** @brief event mask for powermgm reset */
     #define POWERMGM_SAVE_CONFIG                _BV(14)        /** @brief event mask for powermgm save config */
-    #define POWERMGM_DISABLE_INTERRUPTS         _BV(15)        /** @brief event mask for disabling IRQ */
-    #define POWERMGM_ENABLE_INTERRUPTS          _BV(16)        /** @brief event mask for enabling IRQ */  
     /**
      * @brief setp power managment, coordinate managment beween CPU, wifictl, pmu, bma, display, backlight and lvgl
      */
@@ -119,14 +117,6 @@
      * @param   prio                prio from CALL_CB_FIRST to CALL_CB_LAST
      */
     bool powermgm_register_loop_cb_with_prio( EventBits_t event, CALLBACK_FUNC callback_func, const char *id, callback_prio_t prio );
-    /**
-     * @brief send an interrupt disable request
-     */
-    void powermgm_disable_interrupts( void );
-    /**
-     * @brief send an interrupt enable request
-     */
-    void powermgm_enable_interrupts( void );
     /**
      * @bried set performace mode 240/240Mhz (only custom framework)
      */

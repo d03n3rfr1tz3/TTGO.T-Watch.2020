@@ -285,16 +285,6 @@ bool gui_powermgm_event_cb( EventBits_t event, void *arg ) {
                                         #endif
                                         lv_disp_trig_activity( NULL );
                                         break;
-        case POWERMGM_DISABLE_INTERRUPTS:
-                                        /*
-                                         * stop LVGL ticks
-                                         */
-                                        break;
-        case POWERMGM_ENABLE_INTERRUPTS:
-                                        /*
-                                         * stop LVGL ticks
-                                         */
-                                        break;                                        
     }
     return( true );
 }

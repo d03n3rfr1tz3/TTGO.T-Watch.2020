@@ -185,7 +185,7 @@ void pmu_setup( void ) {
      * register all powermem callback functions
      */
     powermgm_register_cb_with_prio( POWERMGM_STANDBY , pmu_powermgm_event_cb, "powermgm pmu", CALL_CB_LAST );
-    powermgm_register_cb_with_prio( POWERMGM_SILENCE_WAKEUP | POWERMGM_WAKEUP | POWERMGM_ENABLE_INTERRUPTS | POWERMGM_DISABLE_INTERRUPTS , pmu_powermgm_event_cb, "powermgm pmu", CALL_CB_FIRST );
+    powermgm_register_cb_with_prio( POWERMGM_SILENCE_WAKEUP | POWERMGM_WAKEUP , pmu_powermgm_event_cb, "powermgm pmu", CALL_CB_FIRST );
     powermgm_register_loop_cb( POWERMGM_SILENCE_WAKEUP | POWERMGM_STANDBY | POWERMGM_WAKEUP , pmu_powermgm_loop_cb, "powermgm pmu loop" );
     // powermgm_set_resume_interval( pmu_config.powermgm_resume_interval );
     /*
@@ -239,29 +239,6 @@ bool pmu_powermgm_event_cb( EventBits_t event, void *arg ) {
         case POWERMGM_SILENCE_WAKEUP:   pmu_wakeup();
                                         retval = true;
                                         break;
-        #ifdef NATIVE_64BIT
-
-        #else
-            #if defined( M5PAPER )
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                attachInterrupt( M5EPD_KEY_PUSH_PIN, &pmu_irq, FALLING );
-                                                retval = true;
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
-                                                detachInterrupt( M5EPD_KEY_PUSH_PIN );
-                                                retval = true;
-                                                break;
-            #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                attachInterrupt( AXP202_INT, &pmu_irq, FALLING );
-                                                retval = true;
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
-                                                detachInterrupt( AXP202_INT );
-                                                retval = true;
-                                                break;
-            #endif
-        #endif
     }
     return( retval );
 }

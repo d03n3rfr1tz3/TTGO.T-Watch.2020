@@ -285,7 +285,6 @@ void powermgm_loop( void ) {
          * check if an standby callback block lightsleep in standby
          */
         standby = powermgm_send_event_cb( POWERMGM_STANDBY );
-        // powermgm_disable_interrupts();
         /*
          * print some memory stats
          */
@@ -552,12 +551,4 @@ bool powermgm_send_event_cb( EventBits_t event ) {
 
 bool powermgm_send_loop_event_cb( EventBits_t event ) {
     return( callback_send_no_log( powermgm_loop_callback, event, (void*)NULL ) );
-}
-
-void powermgm_disable_interrupts( void ) {
-    powermgm_send_event_cb( POWERMGM_DISABLE_INTERRUPTS );
-}
-
-void powermgm_enable_interrupts( void ) {
-    powermgm_send_event_cb( POWERMGM_ENABLE_INTERRUPTS );
 }

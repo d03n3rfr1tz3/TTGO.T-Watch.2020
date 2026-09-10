@@ -129,12 +129,6 @@ bool sensor_powermgm_event_cb( EventBits_t event, void *arg ) {
                                                     M5.SHT30.UpdateData();
                                                     retval = true;
                                                     break;
-                case POWERMGM_ENABLE_INTERRUPTS:    log_d("enable interrupts");
-                                                    retval = true;
-                                                    break;
-                case POWERMGM_DISABLE_INTERRUPTS:   log_d("disable interrupts");
-                                                    retval = true;
-                                                    break;
             }
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
             retval = true;

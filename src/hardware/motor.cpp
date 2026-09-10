@@ -32,35 +32,16 @@
         #include <TTGO.h>
 
         #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 )
-            volatile int DRAM_ATTR motor_run_time_counter=0;
             hw_timer_t * timer = NULL;
             portMUX_TYPE DRAM_ATTR timerMux = portMUX_INITIALIZER_UNLOCKED;
 
             void IRAM_ATTR onTimer();
             void IRAM_ATTR onTimer() {
                 /*
-                * set critical section
+                * one shot alarm, end of vibration
                 */
                 portENTER_CRITICAL_ISR(&timerMux);
-                /*
-                * check if timer counter > zero
-                */
-                if ( motor_run_time_counter >0 ) {
-                    /*
-                    * decrement timer counter and enable motor
-                    */
-                    motor_run_time_counter--;       
-                    digitalWrite(MOTOR_PIN, HIGH );
-                }
-                else {
-                    /*
-                    * disable motor
-                    */
-                    digitalWrite(MOTOR_PIN, LOW );              
-                }
-                /*
-                * leave critical section
-                */
+                digitalWrite(MOTOR_PIN, LOW );
                 portEXIT_CRITICAL_ISR(&timerMux);
             }
         #elif defined( LILYGO_WATCH_2020_V2 )
@@ -70,35 +51,16 @@
     #elif defined( LILYGO_WATCH_2021 )
         #include <twatch2021_config.h>  
         
-        volatile int DRAM_ATTR motor_run_time_counter=0;
         hw_timer_t * timer = NULL;
         portMUX_TYPE DRAM_ATTR timerMux = portMUX_INITIALIZER_UNLOCKED;
 
         void IRAM_ATTR onTimer();
         void IRAM_ATTR onTimer() {
             /*
-            * set critical section
+            * one shot alarm, end of vibration
             */
             portENTER_CRITICAL_ISR(&timerMux);
-            /*
-            * check if timer counter > zero
-            */
-            if ( motor_run_time_counter >0 ) {
-                /*
-                * decrement timer counter and enable motor
-                */
-                motor_run_time_counter--;       
-                digitalWrite(MOTOR_PIN, HIGH );
-            }
-            else {
-                /*
-                * disable motor
-                */
-                digitalWrite(MOTOR_PIN, LOW );              
-            }
-            /*
-            * leave critical section
-            */
+            digitalWrite(MOTOR_PIN, LOW );
             portEXIT_CRITICAL_ISR(&timerMux);
         }
     #elif defined( WT32_SC01 )
@@ -154,10 +116,13 @@ void motor_setup( void ) {
             }     
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 ) || defined( LILYGO_WATCH_2021 ) 
             pinMode(MOTOR_PIN, OUTPUT);
+            digitalWrite(MOTOR_PIN, LOW );
+            /*
+            * 1MHz timer, the alarm is armed per vibration in motor_vibe()
+            */
             timer = timerBegin(0, 80, true);
             timerAttachInterrupt(timer, &onTimer, true);
-            timerAlarmWrite(timer, 10000, true);
-            timerAlarmEnable(timer);
+            timerAlarmWrite(timer, 10000, false);
         #elif defined( WT32_SC01 )
 
         #endif
@@ -169,7 +134,7 @@ void motor_setup( void ) {
     /*
      * register powermgm callback function
      */
-    powermgm_register_cb( POWERMGM_STANDBY | POWERMGM_SILENCE_WAKEUP | POWERMGM_ENABLE_INTERRUPTS | POWERMGM_DISABLE_INTERRUPTS, &motor_powermgm_event_cb, "powermgm motor");
+    powermgm_register_cb( POWERMGM_STANDBY | POWERMGM_SILENCE_WAKEUP, &motor_powermgm_event_cb, "powermgm motor");
     /*
      * vibe for success
      */
@@ -185,20 +150,14 @@ bool motor_powermgm_event_cb( EventBits_t event, void *arg ) {
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 ) || defined( LILYGO_WATCH_2021 )
             switch( event ) {
                 case POWERMGM_SILENCE_WAKEUP:   portENTER_CRITICAL(&timerMux);
-                                                motor_run_time_counter = 0;
-                                                digitalWrite(MOTOR_PIN, LOW );   
-                                                portEXIT_CRITICAL(&timerMux);
-                                                break;
-                case POWERMGM_STANDBY:          portENTER_CRITICAL(&timerMux);
-                                                motor_run_time_counter = 0;
+                                                timerAlarmDisable( timer );
                                                 digitalWrite(MOTOR_PIN, LOW );
                                                 portEXIT_CRITICAL(&timerMux);
                                                 break;
-                case POWERMGM_ENABLE_INTERRUPTS:
-                                                timerAttachInterrupt(timer, &onTimer, true);
-                                                break;
-                case POWERMGM_DISABLE_INTERRUPTS:
-                                                timerDetachInterrupt(timer);
+                case POWERMGM_STANDBY:          portENTER_CRITICAL(&timerMux);
+                                                timerAlarmDisable( timer );
+                                                digitalWrite(MOTOR_PIN, LOW );
+                                                portEXIT_CRITICAL(&timerMux);
                                                 break;
             }
         #elif defined( WT32_SC01 )
@@ -224,14 +183,17 @@ void motor_vibe( int time, bool enforced ) {
         #if defined( M5PAPER )
 
         #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V3 ) || defined( LILYGO_WATCH_2021 )
+            if ( time <= 0 ) {
+                return;
+            }
             /*
-            * set critical section
-            */        
-            portENTER_CRITICAL(&timerMux);
-            motor_run_time_counter = time;
-            /*
-            * leave critical section
+            * run the motor and arm a one shot alarm, retrigger restarts the countdown
             */
+            portENTER_CRITICAL(&timerMux);
+            digitalWrite(MOTOR_PIN, HIGH );
+            timerAlarmWrite( timer, (uint64_t)time * 10000, false );
+            timerWrite( timer, 0 );
+            timerAlarmEnable( timer );
             portEXIT_CRITICAL(&timerMux);
         #elif defined( LILYGO_WATCH_2020_V2 )
             if (drv!=NULL) {
