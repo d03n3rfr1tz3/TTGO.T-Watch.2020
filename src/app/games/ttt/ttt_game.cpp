@@ -83,6 +83,12 @@ void TicTacToeIcon::OnStartClicked()
     {
         log_d("Creating game instance.");
         mGameInstance = std::unique_ptr<TicTacToeApp>(new TicTacToeApp(this));
+        if(!mGameInstance->IsValid())
+        {
+            log_e("Game instance is incomplete. Aborting.");
+            mGameInstance.reset();
+            return;
+        }
     }
 
     log_d("Launching game instance.");

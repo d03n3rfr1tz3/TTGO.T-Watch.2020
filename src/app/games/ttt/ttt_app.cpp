@@ -356,7 +356,11 @@ TicTacToeApp::TicTacToeApp(TicTacToeIcon *icon)
         {
             mButtons[i] = lv_btn_create(gameplayTile, NULL);
             if (!mButtons[i])
-                log_e("Error creating button %d. Crash is immenent.", i);
+            {
+                log_e("Error creating button %d. Aborting.", i);
+                FreeAppTiles();
+                return;
+            }
             lv_obj_set_pos(mButtons[i], SQUARE_POS[i % 3], SQUARE_POS[i / 3]);
             lv_obj_set_size(mButtons[i], SQUARE_SIZE, SQUARE_SIZE);
             lv_obj_reset_style_list(mButtons[i], LV_BTN_PART_MAIN);

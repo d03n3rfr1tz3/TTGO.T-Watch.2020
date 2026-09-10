@@ -84,6 +84,12 @@ void G2048Icon::OnStartClicked()
     {
         log_d("Creating game instance.");
         mGameInstance = std::unique_ptr<G2048App>(new G2048App(this));
+        if(!mGameInstance->IsValid())
+        {
+            log_e("Game instance is incomplete. Aborting.");
+            mGameInstance.reset();
+            return;
+        }
     }
 
     log_d("Launching game instance.");

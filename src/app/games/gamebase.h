@@ -53,4 +53,7 @@ public:
     GameBase(){};
     virtual ~GameBase();
 
+    /* False if construction failed, the instance must not be launched then */
+    bool IsValid() const { return mTileView != 0; }
+
 };

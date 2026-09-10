@@ -92,6 +92,12 @@ void BreakoutIcon::OnStartClicked()
     {
         log_d("Creating game instance.");
         mGameInstance = std::unique_ptr<BreakoutApp>(new BreakoutApp(this));
+        if(!mGameInstance->IsValid())
+        {
+            log_e("Game instance is incomplete. Aborting.");
+            mGameInstance.reset();
+            return;
+        }
     }
 
     log_d("Launching game instance.");

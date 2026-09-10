@@ -67,7 +67,11 @@ bool GameBase::AllocateAppTiles(int xCount, int yCount)
     {
         mTiles[i] = lv_obj_create(mTileView, NULL);
         if (!mTiles[i])
-            log_e("Error creating tile %d. Crashing...", i);
+        {
+            log_e("Error creating tile %d. Aborting.", i);
+            FreeAppTiles();
+            return false;
+        }
         lv_obj_set_size(mTiles[i], LV_HOR_RES, LV_VER_RES);
 
         lv_obj_set_pos(mTiles[i], mTilePositions[i].x * LV_HOR_RES, mTilePositions[i].y * LV_VER_RES);

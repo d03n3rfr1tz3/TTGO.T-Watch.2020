@@ -92,6 +92,12 @@ void PongIcon::OnStartClicked()
     {
         log_d("Creating game instance.");
         mGameInstance = std::unique_ptr<PongApp>(new PongApp(this));
+        if(!mGameInstance->IsValid())
+        {
+            log_e("Game instance is incomplete. Aborting.");
+            mGameInstance.reset();
+            return;
+        }
     }
 
     log_d("Launching game instance.");
