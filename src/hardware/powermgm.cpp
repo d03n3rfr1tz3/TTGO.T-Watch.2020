@@ -53,6 +53,12 @@ callback_t *powermgm_callback = NULL;
 callback_t *powermgm_loop_callback = NULL;
 static uint32_t lighsleep = 0;
 
+#ifndef NATIVE_64BIT
+    #define POWERMGM_LIGHTSLEEP_MIN_MS      5
+    #define POWERMGM_LIGHTSLEEP_RETRY_MS    1000
+    static uint32_t powermgm_lightsleep_retry = 0;
+#endif
+
 bool powermgm_button_event_cb( EventBits_t event, void *arg );
 bool powermgm_send_event_cb( EventBits_t event );
 bool powermgm_send_loop_event_cb( EventBits_t event );
@@ -97,6 +103,61 @@ bool powermgm_button_event_cb( EventBits_t event, void *arg ) {
     }
     return( true );
 }
+
+#ifndef NATIVE_64BIT
+/**
+ * @brief   go to light sleep and restore the cpu clock after wakeup
+ *
+ * @return  time spent in light sleep in ms
+ */
+static uint32_t powermgm_enter_lightsleep( void ) {
+    log_i("go standby");
+    /*
+     * set cpu speed
+     *
+     * note:    direct after change the CPU clock, we go to light sleep.
+     *          it is no difference in light sleep we have 80Mhz or 10Mhz
+     *          CPU clock. Current is the same.
+     */
+    setCpuFrequencyMhz( 80 );
+    log_d("CPU speed = 80MHz, start light sleep");
+    /*
+     * from here, the consumption is round about 2.5mA
+     * total standby time is 152h (6days) without use?
+     */
+    uint32_t sleep_start = millis();
+    esp_light_sleep_start();
+    uint32_t sleep_time = millis() - sleep_start;
+    /**
+     * check wakeup source
+     */
+    switch( esp_sleep_get_wakeup_cause() ) {
+        case ESP_SLEEP_WAKEUP_TIMER:
+            log_d("timer wakeup");
+            powermgm_set_event( POWERMGM_SILENCE_WAKEUP_REQUEST );
+            esp_sleep_disable_wakeup_source( ESP_SLEEP_WAKEUP_TIMER );
+            log_d("disable wakeup timer");
+            break;
+        default:
+            break;
+    }
+    /**
+     * after wakeup set to 240MHz
+     */
+    #if CONFIG_PM_ENABLE
+        pm_config.max_freq_mhz = 240;
+        pm_config.min_freq_mhz = 80;
+        pm_config.light_sleep_enable = lighsleep ? false : true ;
+        ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
+        log_i("custom arduino-esp32 framework detected, enable PM/DFS support, %d/%dMHz %s light sleep (%d)", pm_config.max_freq_mhz, pm_config.min_freq_mhz, lighsleep ? "without" : "with", lighsleep );
+    #else
+        setCpuFrequencyMhz(240);
+        log_d("CPU speed = 240MHz");
+    #endif
+
+    return( sleep_time );
+}
+#endif
 
 void powermgm_loop( void ) {
     static bool standby = true;
@@ -235,52 +296,11 @@ void powermgm_loop( void ) {
         #endif
 
         if ( standby ) {
-            log_i("go standby");
-            /*
-             * set cpu speed
-             * 
-             * note:    direct after change the CPU clock, we go to light sleep.
-             *          it is no difference in light sleep we have 80Mhz or 10Mhz
-             *          CPU clock. Current is the same.
-             */
             #ifdef NATIVE_64BIT
-
+                log_i("go standby");
             #else
-                setCpuFrequencyMhz( 80 );
-                log_d("CPU speed = 80MHz, start light sleep");
-                /*
-                * from here, the consumption is round about 2.5mA
-                * total standby time is 152h (6days) without use?
-                */
-                esp_light_sleep_start();
-                /**
-                 * check wakeup source
-                 */
-                switch( esp_sleep_get_wakeup_cause() ) {
-                    case ESP_SLEEP_WAKEUP_TIMER:
-                        log_d("timer wakeup");
-                        powermgm_set_event( POWERMGM_SILENCE_WAKEUP_REQUEST );
-                        esp_sleep_disable_wakeup_source( ESP_SLEEP_WAKEUP_TIMER );
-                        log_d("disable wakeup timer");
-                        break;
-                    default:
-                        break;
-                }
-                /**
-                 * after wakeup set to 240MHz
-                 */
-                #if CONFIG_PM_ENABLE
-                    pm_config.max_freq_mhz = 240;
-                    pm_config.min_freq_mhz = 80;
-                    pm_config.light_sleep_enable = lighsleep ? false : true ;
-                    ESP_ERROR_CHECK( esp_pm_configure(&pm_config) );
-                    log_i("custom arduino-esp32 framework detected, enable PM/DFS support, %d/%dMHz %s light sleep (%d)", pm_config.max_freq_mhz, pm_config.min_freq_mhz, lighsleep ? "without" : "with", lighsleep );
-                #else
-                    #ifndef NATIVE_64BIT
-                        setCpuFrequencyMhz(240);
-                        log_d("CPU speed = 240MHz");
-                    #endif
-                #endif
+                powermgm_lightsleep_retry = millis();
+                powermgm_enter_lightsleep();
             #endif
         }
         else {
@@ -328,6 +348,16 @@ void powermgm_loop( void ) {
          * call powermgm loop standby cb
          */
         powermgm_send_loop_event_cb( POWERMGM_STANDBY );
+        #ifndef NATIVE_64BIT
+            if ( standby && ( int32_t )( millis() - powermgm_lightsleep_retry ) >= 0 &&
+                 !powermgm_get_event( POWERMGM_STANDBY_REQUEST | POWERMGM_WAKEUP_REQUEST | POWERMGM_SILENCE_WAKEUP_REQUEST | POWERMGM_POWER_BUTTON ) ) {
+                if ( powermgm_enter_lightsleep() < POWERMGM_LIGHTSLEEP_MIN_MS &&
+                     !powermgm_get_event( POWERMGM_WAKEUP_REQUEST | POWERMGM_SILENCE_WAKEUP_REQUEST | POWERMGM_POWER_BUTTON ) ) {
+                    log_w("light sleep refused, retry in %dms", POWERMGM_LIGHTSLEEP_RETRY_MS );
+                    powermgm_lightsleep_retry = millis() + POWERMGM_LIGHTSLEEP_RETRY_MS;
+                }
+            }
+        #endif
     }
     else if ( powermgm_get_event( POWERMGM_WAKEUP ) ) {
         /**

@@ -62,6 +62,7 @@
      */
     typedef struct callback_t {
         uint32_t entrys;                    /** @brief count callback entrys */
+        uint32_t prio_mask;                 /** @brief bitmask of the prio levels in use, one bit per callback_prio_t */
         bool debug;                         /** @brief debug flag, if TRUE to get debug messages */
         callback_table_t *table;            /** @brief pointer to an callback table */
         const char *name;                   /** @brief id for the callback structure */

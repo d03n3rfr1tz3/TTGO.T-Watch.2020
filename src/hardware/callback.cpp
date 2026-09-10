@@ -98,6 +98,7 @@ callback_t *callback_init( const char *name ) {
      * clear callback table
      */
     callback->entrys = 0;
+    callback->prio_mask = 0;
     callback->debug = false;
     callback->table = NULL;
     callback->name = name;
@@ -161,6 +162,7 @@ bool callback_register( callback_t *callback, EventBits_t event, CALLBACK_FUNC c
     callback->table[ callback->entrys - 1 ].active = true;
     callback->table[ callback->entrys - 1 ].prio = CALL_CB_MIDDLE;
     callback->table[ callback->entrys - 1 ].counter = 0;
+    callback->prio_mask |= 1 << CALL_CB_MIDDLE;
     if ( callback->debug ) {
         log_d("register callback_func for %s success (%p:%s)", callback->name, callback->table[ callback->entrys - 1 ].callback_func, callback->table[ callback->entrys - 1 ].id );
     }
@@ -233,6 +235,7 @@ bool callback_register_with_prio( callback_t *callback, EventBits_t event, CALLB
     callback->table[ callback->entrys - 1 ].active = true;
     callback->table[ callback->entrys - 1 ].prio = prio;
     callback->table[ callback->entrys - 1 ].counter = 0;
+    callback->prio_mask |= 1 << prio;
     if ( callback->debug ) {
         log_d("register callback_func for %s success (%p:%s)", callback->name, callback->table[ callback->entrys - 1 ].callback_func, callback->table[ callback->entrys - 1 ].id );
     }
@@ -261,8 +264,14 @@ bool callback_send( callback_t *callback, EventBits_t event, void *arg ) {
      * crowl all callback entrys with their right mask and order
      */
     for( int prio = CALL_CB_NUM_START ; prio < CALL_CB_NUM ; prio++ ) {
+        /**
+         * skip prio levels without any entry
+         */
+        if ( !( callback->prio_mask & ( 1 << prio ) ) )
+            continue;
+        yield();
+        
         for ( int entry = 0 ; entry < callback->entrys ; entry++ ) {
-            yield();
             if ( event & callback->table[ entry ].event && callback->table[ entry ].prio == prio && callback->table[ entry ].active ) {
                 /**
                  * print out callback event
@@ -309,8 +318,14 @@ bool callback_send_reverse( callback_t *callback, EventBits_t event, void *arg )
      * crowl all callback entrys with their right mask
      */
     for( int prio = CALL_CB_NUM ; prio >= CALL_CB_NUM_START ; prio-- ) {
+        /**
+         * skip prio levels without any entry
+         */
+        if ( !( callback->prio_mask & ( 1 << prio ) ) )
+            continue;
+        yield();
+
         for ( int entry = callback->entrys - 1; entry >= 0 ; entry-- ) {
-            yield();
             if ( event & callback->table[ entry ].event  && callback->table[ entry ].prio == prio && callback->table[ entry ].active ) {
                 /**
                  * print out callback event
@@ -354,8 +369,14 @@ bool callback_send_no_log( callback_t *callback, EventBits_t event, void *arg ) 
      * crowl all callback entrys with their right mask
      */
     for( int prio = CALL_CB_NUM_START ; prio < CALL_CB_NUM ; prio++ ) {
+        /**
+         * skip prio levels without any entry
+         */
+        if ( !( callback->prio_mask & ( 1 << prio ) ) )
+            continue;
+        yield();
+
         for ( int entry = 0 ; entry < callback->entrys ; entry++ ) {
-            yield();
             if ( event & callback->table[ entry ].event  && callback->table[ entry ].prio == prio && callback->table[ entry ].active ) {
                 /**
                  * increment callback counter

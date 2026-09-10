@@ -71,10 +71,13 @@
     }
 #endif
 
+#define PMU_ADC_SAMPLING_RATE   25      /** @brief AXP202 adc sampling rate in Hz, must match AXP_ADC_SAMPLING_RATE_*HZ below */
+
 callback_t *pmu_callback = NULL;
 pmu_config_t pmu_config;
 
 static int32_t pmu_get_voltage2percent( float mV );
+static void pmu_set_vbus_adc( bool enable );
 bool pmu_powermgm_event_cb( EventBits_t event, void *arg );
 bool pmu_powermgm_loop_cb( EventBits_t event, void *arg );
 bool pmu_blectl_event_cb( EventBits_t event, void *arg );
@@ -101,12 +104,12 @@ void pmu_setup( void ) {
     #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
         TTGOClass *ttgo = TTGOClass::getWatch();
         /**
-         * if ADC sampling rate != 200, init charging current, samplingrate and coulomcounter
+         * if ADC sampling rate != PMU_ADC_SAMPLING_RATE, init charging current, samplingrate and coulomcounter
          */
         log_i("init AXP202 pmu controller");
-        if( ttgo->power->getAdcSamplingRate() != 200 ) {
+        if( ttgo->power->getAdcSamplingRate() != PMU_ADC_SAMPLING_RATE ) {
             int failCounter = 0;
-            log_i("init AXP charging settings and control to 200Hz, 300mA, Coulomcounter");
+            log_i("init AXP charging settings and control to %dHz, 300mA, Coulomcounter", PMU_ADC_SAMPLING_RATE );
 
             if ( ttgo->power->setChargeControlCur( 300 ) != AXP_PASS ) {
                 log_e("charge current set failed!");
@@ -118,10 +121,14 @@ void pmu_setup( void ) {
                 failCounter++;
             }
 
-            if ( ttgo->power->setAdcSamplingRate( AXP_ADC_SAMPLING_RATE_200HZ ) != AXP_PASS ) {
+            if ( ttgo->power->setAdcSamplingRate( AXP_ADC_SAMPLING_RATE_25HZ ) != AXP_PASS ) {
                 log_e("adc sample set failed!");
                 failCounter++;
             }
+            /**
+             * coulomb counts are scaled by the sampling rate, drop the old ones
+             */
+            ttgo->power->ClearCoulombcounter();
 
             if ( failCounter ) {
                 log_e("AXP202 setup failed, shutdown");
@@ -131,7 +138,9 @@ void pmu_setup( void ) {
         /*
          * Turn on the IRQ used
          */
-        ttgo->power->adc1Enable( AXP202_BATT_VOL_ADC1 | AXP202_BATT_CUR_ADC1 | AXP202_VBUS_VOL_ADC1 | AXP202_VBUS_CUR_ADC1, AXP202_ON);
+        ttgo->power->adc1Enable( AXP202_BATT_VOL_ADC1 | AXP202_BATT_CUR_ADC1, AXP202_ON );
+        ttgo->power->adc1Enable( AXP202_VBUS_VOL_ADC1 | AXP202_VBUS_CUR_ADC1, AXP202_OFF );
+        pmu_set_vbus_adc( ttgo->power->isVBUSPlug() );
         ttgo->power->enableIRQ( AXP202_VBUS_REMOVED_IRQ | AXP202_VBUS_CONNECT_IRQ
                                 | AXP202_CHARGING_FINISHED_IRQ | AXP202_CHARGING_IRQ
                                 | AXP202_TIMER_TIMEOUT_IRQ
@@ -183,6 +192,33 @@ void pmu_setup( void ) {
      * register blectl callback function
      */
     blectl_register_cb( BLECTL_CONNECT, pmu_blectl_event_cb, "pmu blectl" );
+}
+
+/**
+ * @brief switch the vbus adc channels, they only carry data while a charger is connected
+ */
+static void pmu_set_vbus_adc( bool enable ) {
+#ifdef NATIVE_64BIT
+
+#else
+    #if defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
+        /**
+         * pmu_setup() turns both channels off before the first call
+         */
+        static bool enabled = false;
+
+        if ( enabled == enable )
+            return;
+
+        TTGOClass *ttgo = TTGOClass::getWatch();
+        if ( ttgo->power->adc1Enable( AXP202_VBUS_VOL_ADC1 | AXP202_VBUS_CUR_ADC1, enable ? AXP202_ON : AXP202_OFF ) != AXP_PASS ) {
+            log_e("vbus adc %s failed", enable ? "enable" : "disable" );
+            return;
+        }
+        enabled = enable;
+        log_d("vbus adc %s", enable ? "enabled" : "disabled" );
+    #endif
+#endif
 }
 
 bool pmu_powermgm_loop_cb( EventBits_t event, void *arg ) {
@@ -315,6 +351,7 @@ void pmu_loop( void ) {
                 */
                 log_d("AXP202: VBusPlugInIRQ");
                 powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
+                pmu_set_vbus_adc( true );
                 if ( pmu_config.high_charging_target_voltage ) {
                     log_w("set target voltage to 4.36V for high target charging");
                     if ( ttgo->power->setChargingTargetVoltage( AXP202_TARGET_VOL_4_36V ) )
@@ -335,6 +372,7 @@ void pmu_loop( void ) {
                 */
                 log_d("AXP202: VBusRemoteInIRQ");
                 powermgm_set_event( POWERMGM_WAKEUP_REQUEST );
+                pmu_set_vbus_adc( false );
                 charging = false;
                 plug = false;
             }
@@ -460,6 +498,10 @@ void pmu_loop( void ) {
          */
         if( pmu_get_battery_voltage() == 0.0 && powermgm_get_event( POWERMGM_WAKEUP ) )
             nextmillis = millis();
+        /**
+         * resync the vbus adc, in case a plug irq was missed
+         */
+        pmu_set_vbus_adc( pmu_is_vbus_plug() );
         /*
          * only update if an change is detected
          */
