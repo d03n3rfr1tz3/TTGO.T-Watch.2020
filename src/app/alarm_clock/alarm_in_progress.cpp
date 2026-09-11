@@ -47,6 +47,7 @@ static const int vibe_time = 500; //ms
 
 static lv_obj_t *tile=NULL;
 static uint32_t tile_num = 0;
+static lv_task_t *alarm_task = NULL;
 static bool in_progress = false;
 static bool highlighted = false;
 static lv_obj_t *label = NULL;
@@ -91,6 +92,7 @@ static void alarm_task_function(lv_task_t * task){
 
     if (!in_progress){ //last turn
         lv_task_del(task);
+        alarm_task = NULL;
         highlighted = false; //set default value
     }
 
@@ -159,8 +161,11 @@ void alarm_in_progress_start_alarm(){
     in_progress = true;
     vibe_delay_coutdown = alarm_clock_get_properties()->vibe ? BEEP_TO_VIBE_DELAY : 0;
     beep_often_countown = BEEP_OFTEN_DELAY;
-    brightness = display_get_brightness();
-    lv_task_create( alarm_task_function, highlight_time, LV_TASK_PRIO_MID, NULL );
+
+    if ( !alarm_task ) {
+        brightness = display_get_brightness();
+        alarm_task = lv_task_create( alarm_task_function, highlight_time, LV_TASK_PRIO_MID, NULL );
+    }
 }
 
 void alarm_in_progress_finish_alarm(){

@@ -179,13 +179,16 @@ static void voicerec_patch_u32( uint32_t offset, uint32_t value ) {
 
 bool voicerec_recorder_start( bool low_quality, float gain ) {
     uint32_t bps = voicerec_bytes_per_second( low_quality );
-    uint32_t free_bytes = voicerec_get_free_bytes( true );
+    uint32_t free_bytes = voicerec_get_free_bytes( false );
     time_t now;
     struct tm info;
     char icrd[ VOICEREC_ICRD_SIZE ];
     uint8_t header[ VOICEREC_HEADER_SIZE ];
 
     if( voicerec_state != VOICEREC_IDLE && voicerec_state != VOICEREC_ERROR )
+        return( false );
+
+    if( voicerec_writer_task || voicerec_reader_task )
         return( false );
 
     if( !micctl_get_available() )

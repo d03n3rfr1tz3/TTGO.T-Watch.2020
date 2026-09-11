@@ -384,7 +384,7 @@ void gpsctl_on( void ) {
      * enable gps if gps disabled
      */
     if( !gpsctl_enable ) {
-        powermgm_set_lightsleep( true );
+        powermgm_set_lightsleep( false );
         #ifdef NATIVE_64BIT
         #else
             #if defined( M5PAPER )
@@ -488,7 +488,7 @@ void gpsctl_autoon_on( void ) {
             gpsctl_cpu_boost_set( true );
             gpsctl_send_cb( GPSCTL_ENABLE, NULL );
             gpsctl_send_cb( GPSCTL_NOFIX, NULL );
-            powermgm_set_lightsleep( true );
+            powermgm_set_lightsleep( false );
         }
     }
     else {
